@@ -46,9 +46,9 @@
 
 - [x] `DATA-01` 管理员导出完整备份 ZIP，覆盖 SQLite 数据库、上传目录和全局自定义样式目录。实现：版本化 manifest、SHA-256 校验、管理员下载 API 与前端入口。
 - [x] `DATA-02` 从备份 ZIP 恢复/迁移上述数据，并给出明确的成功、失败与重启提示。实现：上传校验、恢复前快照、重启前排队、启动时原子替换与失败回滚。
-- [x] `DATA-03` 覆盖所有账号的配置、图标和壁纸；对外部 MySQL 明确提示并提供本 Fork 的可移植逻辑导出方案。实现：SQLite 使用一致性快照；MySQL 将 7 张核心业务表导出为带白名单和模式校验的逻辑 JSON，在目标 MySQL 实例事务内恢复；上传目录与自定义目录随同迁移。代码：`service/lib/backup/logical.go`、`service/api/api_v1/system/backup.go`、`service/initialize/pendingRestore.go`。测试：逻辑格式/模式拒绝、真实 SQLite 往返、MySQL 布局和恢复钩子失败回滚。
+- [x] `DATA-03` 覆盖所有账号的配置、图标和壁纸；对外部 MySQL 明确提示并提供 Panel Next 的可移植逻辑导出方案。实现：SQLite 使用一致性快照；MySQL 将 7 张核心业务表导出为带白名单和模式校验的逻辑 JSON，在目标 MySQL 实例事务内恢复；上传目录与自定义目录随同迁移。代码：`service/lib/backup/logical.go`、`service/api/api_v1/system/backup.go`、`service/initialize/pendingRestore.go`。测试：逻辑格式/模式拒绝、真实 SQLite 往返、MySQL 布局和恢复钩子失败回滚。
 
-本 Fork 必做安全增强（不计入 53 个官方能力包）：版本化 manifest、哈希校验、压缩炸弹限制、路径穿越防护、未知未来格式拒绝、恢复前自动快照、SQLite/MySQL 一致性恢复和失败回滚。
+Panel Next 必做安全增强（不计入 53 个官方能力包）：版本化 manifest、哈希校验、压缩炸弹限制、路径穿越防护、未知未来格式拒绝、恢复前自动快照、SQLite/MySQL 一致性恢复和失败回滚。
 
 ### B. 全局品牌与个性化（6）
 

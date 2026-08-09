@@ -28,7 +28,7 @@ A server, NAS navigation panel, Homepage, Browser homepage.
 </div>
 
 > [!NOTE]
-> 本 Fork 正在独立补齐 MIT 开源基线之后的公开能力，并建设共用后端的 Web/Chrome 新标签页双端架构。继续开发请先阅读 [主待办清单](./TODO.md)、[双端架构](./doc/web_extension_architecture.md) 和 [开放功能对齐路线图](./OPEN_FEATURE_PARITY.md)。
+> Panel Next 基于 Sun-Panel 最后一个 MIT 开源版本独立演进，正在补齐公开能力并建设共用后端的 Web/Chrome 新标签页双端架构。继续开发请先阅读 [主待办清单](./TODO.md)、[双端架构](./doc/web_extension_architecture.md) 和 [开放功能对齐路线图](./OPEN_FEATURE_PARITY.md)。
 
 
 ![](./doc/images/main-dark.png)

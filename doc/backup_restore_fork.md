@@ -1,6 +1,6 @@
-# 本 Fork 的完整备份与恢复
+# Panel Next 的完整备份与恢复
 
-本功能独立实现于 MIT 开源基线之上。管理员可在应用启动器中打开“备份与恢复”，下载完整 ZIP，或上传由本 Fork 生成且数据库驱动一致的 ZIP 并在重启后恢复。
+本功能独立实现于 MIT 开源基线之上。管理员可在应用启动器中打开“备份与恢复”，下载完整 ZIP，或上传由 Panel Next 生成且数据库驱动一致的 ZIP 并在重启后恢复。
 
 ## 数据范围
 
@@ -22,7 +22,7 @@
 
 ### MySQL
 
-不得复制外部 MySQL 的数据文件。本 Fork 在可重复读事务中读取以下业务表，并写入 `database/database.json`：
+不得复制外部 MySQL 的数据文件。Panel Next 在可重复读事务中读取以下业务表，并写入 `database/database.json`：
 
 - `user`
 - `system_setting`

@@ -1,4 +1,4 @@
-# Sun-Panel Fork 主待办清单
+# Panel Next 主待办清单
 
 本文是跨设备继续开发的唯一执行入口。功能对齐的详细证据见 `OPEN_FEATURE_PARITY.md`，双端设计见 `doc/web_extension_architecture.md`。
 
@@ -111,8 +111,8 @@ P1 验收门槛：不得修改生产数据库结构；不得发布到 Chrome 商
 ## 在另一台设备继续
 
 ```powershell
-git clone https://github.com/RoaycL/sun-panel.git
-cd sun-panel
+git clone https://github.com/RoaycL/panel-next.git
+cd panel-next
 git fetch origin
 git switch codex/open-feature-parity
 corepack enable
