@@ -82,6 +82,20 @@
       "vague": "模糊",
       "wallpaper": "壁纸"
     },
+	"backupRestore": {
+		"appName": "备份与恢复",
+		"warning": "恢复会替换全部账号、配置、图标、壁纸和自定义样式。系统会先自动创建恢复前备份，并在下次服务启动时执行恢复。",
+		"exportTitle": "完整备份",
+		"exportDescription": "导出 SQLite 数据库、所有上传文件和全局自定义样式。备份包包含版本清单与 SHA-256 校验。",
+		"exportButton": "下载完整备份",
+		"exportSuccess": "备份已生成",
+		"restoreTitle": "恢复或迁移",
+		"restoreDescription": "选择由本项目生成的 ZIP 备份包。上传完成后必须重启服务才能应用。",
+		"restoreButton": "选择备份并恢复",
+		"restoreConfirmTitle": "确认完整恢复",
+		"restoreConfirmText": "此操作将在下次启动时替换当前数据。确认已经妥善保存下载到本地的备份吗？",
+		"restoreQueued": "恢复已排队，请重启服务。恢复前备份：{name}"
+	},
     "exportImport": {
       "appName": "导出导入",
       "errorConfigFileFormat": "配置文件格式不正确，无法导入",

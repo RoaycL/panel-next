@@ -36,7 +36,6 @@
   
 <script setup lang="ts">
 import { SvgIcon } from '@/components/common'
-import { defineProps } from "vue"
 defineProps<{
     items: Array<any>,
     isChilden?: boolean

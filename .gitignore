@@ -28,6 +28,7 @@ coverage
 *.sln
 *.sw?
 .pnpm-store
+.tools/
 
 # Environment variables files
 /service/.env

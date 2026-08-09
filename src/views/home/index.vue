@@ -26,7 +26,7 @@ const dialog = useDialog()
 const panelState = usePanelState()
 const authStore = useAuthStore()
 
-const scrollContainerRef = ref<HTMLElement | undefined>(undefined)
+const scrollContainerRef = ref<HTMLElement | null>(null)
 
 const editItemInfoShow = ref<boolean>(false)
 const editItemInfoData = ref<Panel.ItemInfo | null>(null)
@@ -34,7 +34,6 @@ const windowShow = ref<boolean>(false)
 const windowSrc = ref<string>('')
 const windowTitle = ref<string>('')
 
-const windowIframeRef = ref(null)
 const windowIframeIsLoad = ref<boolean>(false)
 
 const dropdownMenuX = ref(0)
@@ -542,7 +541,7 @@ function handleAddItem(itemIconGroupId?: number) {
     </div>
 
     <NBackTop
-      :listen-to="() => scrollContainerRef"
+      :listen-to="() => scrollContainerRef!"
       :right="10"
       :bottom="10"
       style="background-color:transparent;border: none;box-shadow: none;"
@@ -580,7 +579,7 @@ function handleAddItem(itemIconGroupId?: number) {
           <NSkeleton height="180px" width="100%" class="mt-[20px] rounded-lg" />
         </div>
         <iframe
-          v-show="!windowIframeIsLoad" id="windowIframeId" ref="windowIframeRef" :src="windowSrc"
+          v-show="!windowIframeIsLoad" id="windowIframeId" :src="windowSrc"
           class="w-full h-full" frameborder="0" @load="handWindowIframeIdLoad"
         />
       </div>

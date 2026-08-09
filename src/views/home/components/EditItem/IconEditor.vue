@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { NButton, NColorPicker, NInput, NRadio, NUpload } from 'naive-ui'
 import type { UploadFileInfo } from 'naive-ui'
-import { computed, defineProps } from 'vue'
+import { computed } from 'vue'
 import { ItemIcon } from '@/components/common'
 import { useAuthStore } from '@/store'
 import { apiRespErrMsg } from '@/utils/request/apiMessage'

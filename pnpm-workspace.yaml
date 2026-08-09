@@ -1,0 +1,9 @@
+allowBuilds:
+  esbuild: true
+  vue-demi: true
+strictPeerDependencies: false
+publicHoistPattern:
+  - '*eslint*'
+  - '*prettier*'
+verifyDepsBeforeRun: warn
+enableGlobalVirtualStore: false

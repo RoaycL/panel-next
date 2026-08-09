@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineEmits, defineProps, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { NButton, NModal, NTabPane, NTabs, useMessage } from 'naive-ui'
 import { MonitorType } from '../typings'
 import type { DiskExtendParam, GenericProgressStyleExtendParam, MonitorData } from '../typings'

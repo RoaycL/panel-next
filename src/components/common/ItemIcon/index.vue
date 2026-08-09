@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { NAvatar, NImage } from 'naive-ui'
-import { computed, ref, withDefaults } from 'vue'
+import { computed, ref } from 'vue'
 import { SvgIconOnline } from '@/components/common'
 
 interface Prop {

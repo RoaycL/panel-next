@@ -98,9 +98,18 @@ onMounted(() => {
     icon: 'lucide-users',
     auth: 1,
   }
+
+  const backupApp: App = {
+    name: t('apps.backupRestore.appName'),
+    componentName: 'BackupRestore',
+    icon: 'clarity-hard-disk-solid',
+    auth: 1,
+  }
   // 初始化
-  if (authStore.userInfo?.role === 1)
+  if (authStore.userInfo?.role === 1) {
+    apps.value.push(backupApp)
     apps.value.push(adminApp)
+  }
 
   window.addEventListener('resize', handleResize)
   handleResize()

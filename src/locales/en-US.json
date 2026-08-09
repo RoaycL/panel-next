@@ -82,6 +82,20 @@
       "vague": "Blur",
       "wallpaper": "Wallpaper"
     },
+	"backupRestore": {
+		"appName": "Backup & Restore",
+		"warning": "A restore replaces all accounts, settings, icons, wallpapers, and custom styles. A pre-restore backup is created automatically, and the restore is applied on the next service start.",
+		"exportTitle": "Full backup",
+		"exportDescription": "Export the SQLite database, all uploaded files, and global custom styles. The archive includes a versioned manifest and SHA-256 checksums.",
+		"exportButton": "Download full backup",
+		"exportSuccess": "Backup created",
+		"restoreTitle": "Restore or migrate",
+		"restoreDescription": "Select a ZIP backup created by this project. Restart the service after the upload to apply it.",
+		"restoreButton": "Choose backup and restore",
+		"restoreConfirmTitle": "Confirm full restore",
+		"restoreConfirmText": "This operation will replace the current data on the next start. Have you safely stored a downloaded backup?",
+		"restoreQueued": "Restore queued. Restart the service. Pre-restore backup: {name}"
+	},
     "exportImport": {
       "appName": "Export/Import",
       "errorConfigFileFormat": "The configuration file format is incorrect and cannot be imported",

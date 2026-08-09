@@ -54,6 +54,13 @@ func InitApp() error {
 		}
 	}
 
+	// A validated restore is applied before the database is opened so files can
+	// be replaced atomically on every supported operating system.
+	if err := ApplyPendingRestore(); err != nil {
+		global.Logger.Errorln("Pending restore failed", err)
+		return err
+	}
+
 	// 多语言初始化
 	lang.LangInit("zh-cn") // en-us
 
