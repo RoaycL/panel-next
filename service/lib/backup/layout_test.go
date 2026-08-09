@@ -24,3 +24,20 @@ func TestValidateSunPanelLayout(t *testing.T) {
 		t.Fatalf("expected invalid archive, got %v", err)
 	}
 }
+
+func TestValidateSunPanelLogicalLayout(t *testing.T) {
+	valid := Manifest{
+		Database: Database{Driver: "mysql", Mode: "logical"},
+		Entries: []Entry{
+			{Path: DatabaseLogicalPath},
+			{Path: "uploads/2026/icon.png"},
+		},
+	}
+	if err := ValidateSunPanelLayout(valid); err != nil {
+		t.Fatal(err)
+	}
+	valid.Entries[0].Path = DatabaseSQLitePath
+	if err := ValidateSunPanelLayout(valid); !errors.Is(err, ErrInvalidArchive) {
+		t.Fatalf("expected invalid archive, got %v", err)
+	}
+}

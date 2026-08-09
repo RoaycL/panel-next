@@ -6,22 +6,34 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
+
 	"sun-panel/api/api_v1/common/apiReturn"
+	"sun-panel/api/api_v1/common/base"
 	"sun-panel/global"
 	backuplib "sun-panel/lib/backup"
 	"sun-panel/lib/cmn"
-	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
 const maxBackupUploadSize int64 = 20 << 30
 
+var backupOperationMutex sync.Mutex
+
 type BackupApi struct{}
 
 func (a *BackupApi) Export(c *gin.Context) {
+	if !backupOperationMutex.TryLock() {
+		apiReturn.Error(c, "Another backup or restore operation is already running")
+		return
+	}
+	defer backupOperationMutex.Unlock()
+	auditBackupOperation(c, "export", "started", nil)
 	archivePath, cleanup, err := createCurrentBackup(c)
 	if err != nil {
+		auditBackupOperation(c, "export", "failed", err)
 		apiReturn.Error(c, "Unable to create backup: "+err.Error())
 		return
 	}
@@ -29,15 +41,17 @@ func (a *BackupApi) Export(c *gin.Context) {
 
 	filename := "sun-panel-backup-" + time.Now().UTC().Format("20060102-150405") + ".zip"
 	c.Header("Cache-Control", "no-store")
+	auditBackupOperation(c, "export", "completed", nil)
 	c.FileAttachment(archivePath, filename)
 }
 
 func (a *BackupApi) Restore(c *gin.Context) {
-	if databaseDriver() != "sqlite" {
-		apiReturn.Error(c, "Restore currently supports SQLite only")
+	if !backupOperationMutex.TryLock() {
+		apiReturn.Error(c, "Another backup or restore operation is already running")
 		return
 	}
-
+	defer backupOperationMutex.Unlock()
+	auditBackupOperation(c, "restore", "started", nil)
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxBackupUploadSize)
 	upload, err := c.FormFile("backup")
 	if err != nil {
@@ -78,6 +92,7 @@ func (a *BackupApi) Restore(c *gin.Context) {
 
 	manifest, err := validateBackupFile(temporaryPath)
 	if err != nil {
+		auditBackupOperation(c, "restore", "validation_failed", err)
 		apiReturn.Error(c, "Backup validation failed: "+err.Error())
 		return
 	}
@@ -100,9 +115,11 @@ func (a *BackupApi) Restore(c *gin.Context) {
 	}
 
 	if err := os.Rename(temporaryPath, pendingPath); err != nil {
+		auditBackupOperation(c, "restore", "failed", err)
 		apiReturn.Error(c, "Unable to queue restore: "+err.Error())
 		return
 	}
+	auditBackupOperation(c, "restore", "queued", nil)
 	apiReturn.SuccessData(c, gin.H{
 		"restartRequired":  true,
 		"preRestoreBackup": preRestoreName,
@@ -110,10 +127,16 @@ func (a *BackupApi) Restore(c *gin.Context) {
 	})
 }
 
-func createCurrentBackup(c *gin.Context) (archivePath string, cleanup func(), err error) {
-	if databaseDriver() != "sqlite" {
-		return "", func() {}, fmt.Errorf("backup currently supports SQLite only")
+func auditBackupOperation(c *gin.Context, operation, status string, operationErr error) {
+	user, _ := base.GetCurrentUserInfo(c)
+	if operationErr != nil {
+		global.Logger.Errorf("AUDIT backup operation=%s status=%s user_id=%d ip=%s error=%v", operation, status, user.ID, c.ClientIP(), operationErr)
+		return
 	}
+	global.Logger.Infof("AUDIT backup operation=%s status=%s user_id=%d ip=%s", operation, status, user.ID, c.ClientIP())
+}
+
+func createCurrentBackup(c *gin.Context) (archivePath string, cleanup func(), err error) {
 	runtimePath, err := ensureRuntimePath()
 	if err != nil {
 		return "", func() {}, err
@@ -124,14 +147,31 @@ func createCurrentBackup(c *gin.Context) (archivePath string, cleanup func(), er
 	}
 	cleanup = func() { _ = os.RemoveAll(workspace) }
 
-	databaseSnapshot := filepath.Join(workspace, "database.db")
-	escapedSnapshot := strings.ReplaceAll(filepath.ToSlash(databaseSnapshot), "'", "''")
-	if result := global.Db.Exec("VACUUM INTO '" + escapedSnapshot + "'"); result.Error != nil {
+	driver := databaseDriver()
+	databaseInfo := backuplib.Database{Driver: driver}
+	var sources []backuplib.Source
+	switch driver {
+	case "sqlite":
+		databaseSnapshot := filepath.Join(workspace, "database.db")
+		escapedSnapshot := strings.ReplaceAll(filepath.ToSlash(databaseSnapshot), "'", "''")
+		if result := global.Db.Exec("VACUUM INTO '" + escapedSnapshot + "'"); result.Error != nil {
+			cleanup()
+			return "", func() {}, result.Error
+		}
+		databaseInfo.Mode = "snapshot"
+		sources = append(sources, backuplib.Source{ArchivePath: backuplib.DatabaseSQLitePath, LocalPath: databaseSnapshot})
+	case "mysql":
+		logicalPath := filepath.Join(workspace, "database.json")
+		if err := backuplib.ExportLogicalDatabase(c.Request.Context(), global.Db, logicalPath, backuplib.SunPanelLogicalTables); err != nil {
+			cleanup()
+			return "", func() {}, err
+		}
+		databaseInfo.Mode = "logical"
+		sources = append(sources, backuplib.Source{ArchivePath: backuplib.DatabaseLogicalPath, LocalPath: logicalPath})
+	default:
 		cleanup()
-		return "", func() {}, result.Error
+		return "", func() {}, fmt.Errorf("unsupported database driver %q", driver)
 	}
-
-	sources := []backuplib.Source{{ArchivePath: backuplib.DatabaseSQLitePath, LocalPath: databaseSnapshot}}
 	uploadPath := global.Config.GetValueStringOrDefault("base", "source_path")
 	if info, statErr := os.Stat(uploadPath); statErr == nil && info.IsDir() {
 		sources = append(sources, backuplib.Source{ArchivePath: "uploads", LocalPath: uploadPath})
@@ -157,7 +197,7 @@ func createCurrentBackup(c *gin.Context) (archivePath string, cleanup func(), er
 	_, createErr := backuplib.Create(c.Request.Context(), archive, backuplib.CreateOptions{
 		Application:        "sun-panel",
 		ApplicationVersion: version,
-		Database:           backuplib.Database{Driver: "sqlite", Mode: "snapshot"},
+		Database:           databaseInfo,
 		Sources:            sources,
 	})
 	closeErr := archive.Close()

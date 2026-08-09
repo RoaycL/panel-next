@@ -56,15 +56,24 @@ func InitApp() error {
 
 	// A validated restore is applied before the database is opened so files can
 	// be replaced atomically on every supported operating system.
-	if err := ApplyPendingRestore(); err != nil {
-		global.Logger.Errorln("Pending restore failed", err)
-		return err
+	databaseDriver := global.Config.GetValueStringOrDefault("base", "database_drive")
+	if databaseDriver == database.SQLITE {
+		if err := ApplyPendingRestore(); err != nil {
+			global.Logger.Errorln("Pending restore failed", err)
+			return err
+		}
 	}
 
 	// 多语言初始化
 	lang.LangInit("zh-cn") // en-us
 
 	DatabaseConnect()
+	if databaseDriver == database.MYSQL {
+		if err := ApplyPendingRestore(); err != nil {
+			global.Logger.Errorln("Pending restore failed", err)
+			return err
+		}
+	}
 
 	// Redis 连接
 	{

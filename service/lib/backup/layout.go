@@ -6,22 +6,26 @@ import (
 )
 
 const (
-	DatabaseSQLitePath = "database/database.db"
-	UploadsPrefix      = "uploads/"
-	CustomPrefix       = "custom/"
+	DatabaseSQLitePath  = "database/database.db"
+	DatabaseLogicalPath = "database/database.json"
+	UploadsPrefix       = "uploads/"
+	CustomPrefix        = "custom/"
 )
 
 func ValidateSunPanelLayout(manifest Manifest) error {
-	if manifest.Database.Driver != "sqlite" {
-		return fmt.Errorf("%w: unsupported database driver %q", ErrInvalidArchive, manifest.Database.Driver)
-	}
-	if manifest.Database.Mode != "snapshot" {
-		return fmt.Errorf("%w: unsupported database backup mode %q", ErrInvalidArchive, manifest.Database.Mode)
+	databasePath := ""
+	switch {
+	case manifest.Database.Driver == "sqlite" && manifest.Database.Mode == "snapshot":
+		databasePath = DatabaseSQLitePath
+	case manifest.Database.Driver == "mysql" && manifest.Database.Mode == "logical":
+		databasePath = DatabaseLogicalPath
+	default:
+		return fmt.Errorf("%w: unsupported database backup %q/%q", ErrInvalidArchive, manifest.Database.Driver, manifest.Database.Mode)
 	}
 	foundDatabase := false
 	for _, entry := range manifest.Entries {
 		switch {
-		case entry.Path == DatabaseSQLitePath:
+		case entry.Path == databasePath:
 			foundDatabase = true
 		case strings.HasPrefix(entry.Path, UploadsPrefix):
 		case strings.HasPrefix(entry.Path, CustomPrefix):
@@ -30,7 +34,7 @@ func ValidateSunPanelLayout(manifest Manifest) error {
 		}
 	}
 	if !foundDatabase {
-		return fmt.Errorf("%w: missing SQLite database snapshot", ErrInvalidArchive)
+		return fmt.Errorf("%w: missing database payload", ErrInvalidArchive)
 	}
 	return nil
 }

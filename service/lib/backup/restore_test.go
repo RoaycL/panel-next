@@ -68,3 +68,42 @@ func TestApplyArchiveRejectsOverlappingTargets(t *testing.T) {
 		t.Fatal("expected overlapping target error")
 	}
 }
+
+func TestApplyArchiveRollsBackFilesWhenHookFails(t *testing.T) {
+	root := t.TempDir()
+	sources := filepath.Join(root, "sources")
+	mustWrite(t, filepath.Join(sources, "database.json"), `{}`)
+	mustWrite(t, filepath.Join(sources, "uploads", "new.txt"), "new")
+
+	var buffer bytes.Buffer
+	_, err := Create(context.Background(), &buffer, CreateOptions{
+		Database: Database{Driver: "mysql", Mode: "logical"},
+		Sources: []Source{
+			{ArchivePath: DatabaseLogicalPath, LocalPath: filepath.Join(sources, "database.json")},
+			{ArchivePath: "uploads", LocalPath: filepath.Join(sources, "uploads")},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pending := filepath.Join(root, "restore-pending.zip")
+	if err := os.WriteFile(pending, buffer.Bytes(), 0600); err != nil {
+		t.Fatal(err)
+	}
+	uploads := filepath.Join(root, "current", "uploads")
+	mustWrite(t, filepath.Join(uploads, "old.txt"), "old")
+
+	_, err = ApplyArchiveWithHook(pending, []RestoreTarget{{ArchivePath: "uploads", Destination: uploads, Directory: true}}, DefaultLimits(), func(Manifest, string) error {
+		return bytes.ErrTooLarge
+	})
+	if err == nil {
+		t.Fatal("expected hook failure")
+	}
+	assertFile(t, filepath.Join(uploads, "old.txt"), "old")
+	if _, err := os.Stat(filepath.Join(uploads, "new.txt")); !os.IsNotExist(err) {
+		t.Fatalf("new upload should have been rolled back, got %v", err)
+	}
+	if _, err := os.Stat(pending); err != nil {
+		t.Fatalf("pending archive should remain after rollback: %v", err)
+	}
+}

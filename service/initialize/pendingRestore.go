@@ -1,6 +1,7 @@
 package initialize
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -16,14 +17,8 @@ func ApplyPendingRestore() error {
 	} else if err != nil {
 		return err
 	}
-	if global.Config.GetValueStringOrDefault("base", "database_drive") != "sqlite" {
-		return fmt.Errorf("pending restore requires the SQLite database driver")
-	}
-	_, err := backuplib.ApplyArchive(pendingPath, []backuplib.RestoreTarget{
-		{
-			ArchivePath: backuplib.DatabaseSQLitePath,
-			Destination: global.Config.GetValueStringOrDefault("sqlite", "file_path"),
-		},
+	driver := global.Config.GetValueStringOrDefault("base", "database_drive")
+	targets := []backuplib.RestoreTarget{
 		{
 			ArchivePath: "uploads",
 			Destination: global.Config.GetValueStringOrDefault("base", "source_path"),
@@ -34,6 +29,21 @@ func ApplyPendingRestore() error {
 			Destination: filepath.Join("web", "custom"),
 			Directory:   true,
 		},
-	}, backuplib.DefaultLimits())
-	return err
+	}
+	switch driver {
+	case "sqlite":
+		targets = append(targets, backuplib.RestoreTarget{
+			ArchivePath: backuplib.DatabaseSQLitePath,
+			Destination: global.Config.GetValueStringOrDefault("sqlite", "file_path"),
+		})
+		_, err := backuplib.ApplyArchive(pendingPath, targets, backuplib.DefaultLimits())
+		return err
+	case "mysql":
+		_, err := backuplib.ApplyArchiveWithHook(pendingPath, targets, backuplib.DefaultLimits(), func(_ backuplib.Manifest, extractRoot string) error {
+			return backuplib.ImportLogicalDatabase(context.Background(), global.Db, filepath.Join(extractRoot, filepath.FromSlash(backuplib.DatabaseLogicalPath)), backuplib.SunPanelLogicalTables)
+		})
+		return err
+	default:
+		return fmt.Errorf("pending restore uses unsupported database driver %q", driver)
+	}
 }

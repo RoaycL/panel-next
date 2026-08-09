@@ -16,6 +16,8 @@ type RestoreTarget struct {
 	Directory   bool
 }
 
+type ApplyHook func(manifest Manifest, extractRoot string) error
+
 type preparedTarget struct {
 	target          RestoreTarget
 	stageRoot       string
@@ -27,6 +29,10 @@ type preparedTarget struct {
 }
 
 func ApplyArchive(archivePath string, targets []RestoreTarget, limits Limits) (Manifest, error) {
+	return ApplyArchiveWithHook(archivePath, targets, limits, nil)
+}
+
+func ApplyArchiveWithHook(archivePath string, targets []RestoreTarget, limits Limits, hook ApplyHook) (Manifest, error) {
 	archiveFile, err := os.Open(archivePath)
 	if err != nil {
 		return Manifest{}, err
@@ -80,6 +86,15 @@ func ApplyArchive(archivePath string, targets []RestoreTarget, limits Limits) (M
 				return Manifest{}, fmt.Errorf("apply restore: %w; rollback: %v", err, rollbackErr)
 			}
 			return Manifest{}, fmt.Errorf("apply restore: %w", err)
+		}
+	}
+	if hook != nil {
+		if err := hook(manifest, extractRoot); err != nil {
+			rollbackErr := rollbackTargets(prepared)
+			if rollbackErr != nil {
+				return Manifest{}, fmt.Errorf("apply restore hook: %w; filesystem rollback: %v", err, rollbackErr)
+			}
+			return Manifest{}, fmt.Errorf("apply restore hook: %w", err)
 		}
 	}
 	for i := range prepared {

@@ -86,7 +86,7 @@
 		"appName": "备份与恢复",
 		"warning": "恢复会替换全部账号、配置、图标、壁纸和自定义样式。系统会先自动创建恢复前备份，并在下次服务启动时执行恢复。",
 		"exportTitle": "完整备份",
-		"exportDescription": "导出 SQLite 数据库、所有上传文件和全局自定义样式。备份包包含版本清单与 SHA-256 校验。",
+		"exportDescription": "导出 SQLite 数据库快照或 MySQL 逻辑数据、所有账号配置、上传文件和全局自定义样式。备份包包含版本清单与 SHA-256 校验。",
 		"exportButton": "下载完整备份",
 		"exportSuccess": "备份已生成",
 		"restoreTitle": "恢复或迁移",
