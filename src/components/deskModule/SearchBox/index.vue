@@ -5,6 +5,7 @@ import { SvgIcon } from '@/components/common'
 import { useModuleConfig } from '@/store/modules'
 import { useAuthStore } from '@/store'
 import { VisitMode } from '@/enums/auth'
+import { getRuntime } from '@/runtime'
 
 import SvgSrcBaidu from '@/assets/search_engine_svg/baidu.svg'
 import SvgSrcBing from '@/assets/search_engine_svg/bing.svg'
@@ -29,6 +30,7 @@ interface State {
 const moduleConfigName = 'deskModuleSearchBox'
 const moduleConfig = useModuleConfig()
 const authStore = useAuthStore()
+const runtime = getRuntime()
 const searchTerm = ref('')
 const isFocused = ref(false)
 const searchSelectListShow = ref(false)
@@ -86,9 +88,9 @@ function handleSearchClick() {
   const fullUrl = replaceOrAppendKeywordToUrl(url, keyword.value)
   handleClearSearchTerm()
   if (state.value.newWindowOpen)
-    window.open(fullUrl)
+    runtime.openUrl(fullUrl, 'tab')
   else
-    window.location.href = fullUrl
+    runtime.openUrl(fullUrl, 'current')
 }
 
 function replaceOrAppendKeywordToUrl(url: string, keyword: string) {

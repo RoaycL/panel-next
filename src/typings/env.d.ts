@@ -7,4 +7,6 @@ interface ImportMetaEnv {
 	readonly VITE_GLOB_APP_PWA: string;
 }
 
+declare const __PANEL_RUNTIME__: 'web' | 'extension'
+
 declare module 'virtual:svg-icons-register'

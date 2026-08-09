@@ -19,8 +19,8 @@
 
 ## P1：最小扩展原型
 
-- [ ] `EXT-01` 新建 Manifest V3 扩展入口，以 `newtab.html` 覆盖新标签页。
-- [ ] `EXT-02` 增加 `RuntimeAdapter`、`StorageAdapter` 和 Web 实现，不改变现有行为。
+- [x] `EXT-01` 新建 Manifest V3 扩展入口，以 `newtab.html` 覆盖新标签页。实现：`extension/manifest.json`、`extension/newtab.html`、Vite `extension` 模式；产物为 `dist/extension`。
+- [x] `EXT-02` 增加 `RuntimeAdapter`、`StorageAdapter` 和 Web 实现，不改变现有行为。实现：`src/runtime`；本地状态和 URL 打开行为已通过适配器访问，应用启动会等待运行环境就绪。
 - [ ] `EXT-03` 增加 Chrome 实现，使用 `chrome.storage.local` 保存非敏感配置和会话。
 - [ ] `EXT-04` 支持配置、验证并切换 Sun-Panel 服务器地址。
 - [ ] `EXT-05` 使用当前账号接口完成扩展登录验证，仅作为原型，明确标记待迁移认证。
@@ -131,4 +131,4 @@ pnpm run build-only
 
 ## 当前下一步
 
-从 `EXT-01` 开始，同时完成 `EXT-02`：先生成可加载但权限最小的 Chrome 新标签页包，并把现有 Web 存储和打开链接行为放到适配器后面。原型通过前不重构全部目录。
+从 `EXT-03` 和 `EXT-04` 开始：用预加载内存镜像实现 `chrome.storage.local` 适配器，并增加服务器地址配置、校验和按 Origin 请求权限。随后再让扩展使用当前登录接口完成 `EXT-05` 原型验证。

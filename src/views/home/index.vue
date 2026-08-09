@@ -14,6 +14,7 @@ import { PanelPanelConfigStyleEnum, PanelStateNetworkModeEnum } from '@/enums'
 import { VisitMode } from '@/enums/auth'
 import { router } from '@/router'
 import { t } from '@/locales'
+import { getRuntime } from '@/runtime'
 
 interface ItemGroup extends Panel.ItemIconGroup {
   sortStatus?: boolean
@@ -25,6 +26,7 @@ const ms = useMessage()
 const dialog = useDialog()
 const panelState = usePanelState()
 const authStore = useAuthStore()
+const runtime = getRuntime()
 
 const scrollContainerRef = ref<HTMLElement | null>(null)
 
@@ -50,10 +52,10 @@ const filterItems = ref<ItemGroup[]>([])
 function openPage(openMethod: number, url: string, title?: string) {
   switch (openMethod) {
     case 1:
-      window.location.href = url
+      runtime.openUrl(url, 'current')
       break
     case 2:
-      window.open(url)
+      runtime.openUrl(url, 'tab')
       break
     case 3:
       windowShow.value = true
@@ -118,7 +120,7 @@ function handleRightMenuSelect(key: string | number) {
     jumpUrl = currentRightSelectItem.value.url
   switch (key) {
     case 'newWindows':
-      window.open(jumpUrl)
+      runtime.openUrl(jumpUrl || '', 'tab')
       break
     case 'openWanUrl':
       if (currentRightSelectItem.value)

@@ -56,7 +56,7 @@ interface RuntimeAdapter {
 
 - 保持以 `/api` 为默认同源 API。
 - 保持现有 Hash Router，减少服务器回退路由和扩展页面差异。
-- 输出到 `dist/web`，后端镜像仍只托管 Web 产物。
+- P1 保持现有 `dist` 输出，避免破坏后端镜像和发布脚本；在 `DUAL-02` 确定兼容迁移方案后再调整为 `dist/web`。
 
 ### 扩展构建
 

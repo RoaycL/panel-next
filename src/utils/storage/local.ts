@@ -1,4 +1,5 @@
 import { deCrypto, enCrypto } from '../crypto'
+import { getRuntime } from '@/runtime'
 
 interface StorageData<T = any> {
   data: T
@@ -23,11 +24,11 @@ export function createLocalStorage(options?: { expire?: number | null; crypto?: 
     }
 
     const json = crypto ? enCrypto(storageData) : JSON.stringify(storageData)
-    window.localStorage.setItem(key, json)
+    getRuntime().storage.setItem(key, json)
   }
 
   function get(key: string) {
-    const json = window.localStorage.getItem(key)
+    const json = getRuntime().storage.getItem(key)
     if (json) {
       let storageData: StorageData | null = null
 
@@ -50,11 +51,11 @@ export function createLocalStorage(options?: { expire?: number | null; crypto?: 
   }
 
   function remove(key: string) {
-    window.localStorage.removeItem(key)
+    getRuntime().storage.removeItem(key)
   }
 
   function clear() {
-    window.localStorage.clear()
+    getRuntime().storage.clear()
   }
 
   return {
