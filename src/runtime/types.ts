@@ -13,5 +13,7 @@ export interface RuntimeAdapter {
   readonly storage: StorageAdapter
   ready: () => Promise<void>
   getApiBaseUrl: () => string
+  getServerOrigin: () => string | null
+  configureServer: (serverUrl: string) => Promise<string>
   openUrl: (url: string, mode: OpenUrlMode) => void
 }

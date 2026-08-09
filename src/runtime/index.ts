@@ -1,12 +1,12 @@
 import type { RuntimeAdapter } from './types'
+import { createExtensionRuntime } from './extension'
 import { createWebRuntime } from './web'
 
 export type { OpenUrlMode, RuntimeAdapter, RuntimeKind, StorageAdapter } from './types'
 
-// EXT-03 will replace the extension storage implementation with a preloadable
-// chrome.storage.local adapter. Keeping the platform choice here prevents the
-// shared UI from importing chrome.* directly.
-const runtime: RuntimeAdapter = createWebRuntime(__PANEL_RUNTIME__)
+const runtime: RuntimeAdapter = __PANEL_RUNTIME__ === 'extension'
+  ? createExtensionRuntime()
+  : createWebRuntime('web')
 
 export function getRuntime(): RuntimeAdapter {
   return runtime

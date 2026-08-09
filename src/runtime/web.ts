@@ -28,6 +28,12 @@ export function createWebRuntime(kind: RuntimeKind): RuntimeAdapter {
     getApiBaseUrl() {
       return import.meta.env.VITE_GLOB_API_URL
     },
+    getServerOrigin() {
+      return window.location.origin
+    },
+    async configureServer() {
+      throw new Error('Web mode always uses the current server.')
+    },
     openUrl(url, mode) {
       if (mode === 'current') {
         window.location.assign(url)
