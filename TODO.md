@@ -7,7 +7,7 @@
 - 当前开发分支：`codex/open-feature-parity`
 - 已完成：前端工具链升级、SQLite 完整备份恢复、MySQL 逻辑备份迁移。
 - 当前主线：先建立 Web/Chrome 双端基础，再继续品牌、图库、组件和官方公开能力对齐。
-- 最近验证：`go test ./...`、`go vet ./...`、`pnpm run type-check`、`pnpm run build-only` 均通过。
+- 最近验证：后端最近一次 `go test ./...`、`go vet ./...` 通过；本次 `pnpm run build:all` 通过 Web/Extension 类型检查、生产构建和扩展包校验。
 - 已知环境缺口：尚未在真实 MySQL 服务执行恢复演练。
 
 ## P0：架构与仓库准备
@@ -19,10 +19,10 @@
 
 ## P1：最小扩展原型
 
-- [ ] `EXT-01` 新建 Manifest V3 扩展入口，以 `newtab.html` 覆盖新标签页。
-- [ ] `EXT-02` 增加 `RuntimeAdapter`、`StorageAdapter` 和 Web 实现，不改变现有行为。
-- [ ] `EXT-03` 增加 Chrome 实现，使用 `chrome.storage.local` 保存非敏感配置和会话。
-- [ ] `EXT-04` 支持配置、验证并切换 Sun-Panel 服务器地址。
+- [x] `EXT-01` 新建 Manifest V3 扩展入口，以 `newtab.html` 覆盖新标签页。实现：`extension/manifest.json`、`extension/newtab.html`、Vite `extension` 模式；产物为 `dist/extension`。
+- [x] `EXT-02` 增加 `RuntimeAdapter`、`StorageAdapter` 和 Web 实现，不改变现有行为。实现：`src/runtime`；本地状态和 URL 打开行为已通过适配器访问，应用启动会等待运行环境就绪。
+- [x] `EXT-03` 增加 Chrome 实现，启动时将 `chrome.storage.local` 预加载到同步内存镜像；业务数据按服务器 Origin 隔离，配置和会话不跨实例混用。
+- [x] `EXT-04` 支持配置、验证并切换 Panel Next / Sun-Panel 服务器地址；仅在用户操作时申请目标 Origin 权限，通过公开登录配置接口验证兼容性，切换后撤销旧 Origin 权限。
 - [ ] `EXT-05` 使用当前账号接口完成扩展登录验证，仅作为原型，明确标记待迁移认证。
 - [ ] `EXT-06` 从现有 API 加载分组、卡片和面板配置，渲染共享首页。
 - [ ] `EXT-07` 增加 `pnpm build:web`、`pnpm build:extension` 和扩展 ZIP 打包命令。
@@ -131,4 +131,4 @@ pnpm run build-only
 
 ## 当前下一步
 
-从 `EXT-01` 开始，同时完成 `EXT-02`：先生成可加载但权限最小的 Chrome 新标签页包，并把现有 Web 存储和打开链接行为放到适配器后面。原型通过前不重构全部目录。
+从 `EXT-05` 和 `EXT-06` 开始：验证扩展使用当前登录接口建立原型会话，并确认分组、卡片和面板配置可从所选服务器加载到共享首页。原型凭据后续必须由 `SESSION-*` 的设备会话替换。

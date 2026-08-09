@@ -44,11 +44,15 @@ service/                  Go 后端
 interface RuntimeAdapter {
   readonly kind: 'web' | 'extension'
   storage: StorageAdapter
-  getApiBaseUrl(): Promise<string>
-  requestHostPermission(origin: string): Promise<boolean>
-  openUrl(url: string, mode: 'current' | 'tab' | 'embedded'): Promise<void>
+  ready(): Promise<void>
+  getApiBaseUrl(): string
+  getServerOrigin(): string | null
+  configureServer(url: string): Promise<string>
+  openUrl(url: string, mode: 'current' | 'tab'): void
 }
 ```
+
+`EXT-03/04` 的扩展实现会先预加载 Chrome 存储，再让现有同步存储调用读取内存镜像。服务器业务数据按 Origin 分区；Manifest 只把 HTTP/HTTPS 声明为可选主机权限，运行时申请并保留当前已验证 Origin 的权限。
 
 ## 4. 构建与运行
 
@@ -56,7 +60,7 @@ interface RuntimeAdapter {
 
 - 保持以 `/api` 为默认同源 API。
 - 保持现有 Hash Router，减少服务器回退路由和扩展页面差异。
-- 输出到 `dist/web`，后端镜像仍只托管 Web 产物。
+- P1 保持现有 `dist` 输出，避免破坏后端镜像和发布脚本；在 `DUAL-02` 确定兼容迁移方案后再调整为 `dist/web`。
 
 ### 扩展构建
 

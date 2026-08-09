@@ -1,12 +1,13 @@
-import axios, { type AxiosResponse } from 'axios'
+import type { AxiosResponse } from 'axios'
+import axios from 'axios'
+import { getRuntime } from '@/runtime'
 import { useAuthStore } from '@/store'
 
-const service = axios.create({
-  baseURL: import.meta.env.VITE_GLOB_API_URL,
-})
+const service = axios.create()
 
 service.interceptors.request.use(
   (config) => {
+    config.baseURL = getRuntime().getApiBaseUrl()
     const token = useAuthStore().token
     if (token)
       config.headers.Authorization = `Bearer ${token}`

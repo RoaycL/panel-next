@@ -6,10 +6,12 @@ import { useAuthStore, useNoticeStore, useUserStore } from '@/store'
 import { getAuthInfo } from '@/api/system/user'
 import type { VisitMode } from '@/enums/auth'
 import { getListByDisplayType as getListByDisplayTypeApi } from '@/api/notice'
+import { getRuntime } from '@/runtime'
 
 const noticeStore = useNoticeStore()
 const userStore = useUserStore()
 const authStore = useAuthStore()
+const runtime = getRuntime()
 
 const { notification } = createDiscreteApi(['notification'])
 /**
@@ -51,7 +53,7 @@ export function noticeCreate(info: Notice.NoticeInfo) {
           text: true,
           type: 'info',
           onClick: () => {
-            window.open(info.url, '_blank')
+            runtime.openUrl(info.url, 'tab')
             n.destroy()
           },
         },

@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Panel Next",
+  "version": "0.0.1",
+  "description": "A self-hosted new-tab dashboard backed by your Panel Next server.",
+  "permissions": [
+    "storage"
+  ],
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "chrome_url_overrides": {
+    "newtab": "newtab.html"
+  },
+  "icons": {
+    "128": "logo.png"
+  }
+}

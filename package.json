@@ -1,12 +1,12 @@
 {
-  "name": "sun-panel",
+  "name": "panel-next",
   "version": "0.0.0",
   "packageManager": "pnpm@11.20.0",
   "engines": {
     "node": ">=22.13"
   },
   "private": false,
-  "description": "Sun-Panel Web",
+  "description": "Panel Next Web and Chrome new-tab dashboard",
   "author": "BraisedHunter <95302870@qq.com>",
   "keywords": [
     "Sun-Panel",
@@ -14,10 +14,15 @@
   ],
   "scripts": {
     "dev": "vite",
+    "dev:web": "vite",
     "build": "run-p add-version type-check build-only",
     "add-version": "node ./add-frontend-version.js",
     "preview": "vite preview",
-    "build-only": "vite build",
+    "build-only": "pnpm run build:web",
+    "build:web": "vite build",
+    "build:extension": "vite build --mode extension && node ./scripts/validate-extension.mjs",
+    "validate:extension": "node ./scripts/validate-extension.mjs",
+    "build:all": "pnpm run type-check && pnpm run build:web && pnpm run build:extension",
     "type-check": "vue-tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

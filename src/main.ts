@@ -4,10 +4,16 @@ import { setupI18n } from './locales'
 import { setupAssets, setupScrollbarStyle } from './plugins'
 import { setupStore } from './store'
 import { setupRouter } from './router'
+import { getRuntime } from './runtime'
 import 'virtual:svg-icons-register' // svg图标注册
 
 async function bootstrap() {
-  const app = createApp(App)
+  const runtime = getRuntime()
+  await runtime.ready()
+  const rootComponent = runtime.kind === 'extension'
+    ? (await import('./runtime/ExtensionRoot.vue')).default
+    : App
+  const app = createApp(rootComponent)
   setupAssets()
 
   setupScrollbarStyle()
@@ -16,7 +22,8 @@ async function bootstrap() {
 
   setupI18n(app)
 
-  await setupRouter(app)
+  if (runtime.kind === 'web' || runtime.getServerOrigin())
+    await setupRouter(app)
   app.mount('#app')
 }
 
