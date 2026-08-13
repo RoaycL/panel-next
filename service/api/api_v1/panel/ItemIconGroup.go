@@ -1,15 +1,17 @@
 package panel
 
 import (
+	"errors"
 	"math"
+	"strconv"
 	"sun-panel/api/api_v1/common/apiData/commonApiStructs"
 	"sun-panel/api/api_v1/common/apiReturn"
 	"sun-panel/api/api_v1/common/base"
 	"sun-panel/global"
+	"sun-panel/lib/syncstate"
 	"sun-panel/models"
 
 	"github.com/gin-gonic/gin"
-	"github.com/gin-gonic/gin/binding"
 	"gorm.io/gorm"
 )
 
@@ -18,30 +20,59 @@ type ItemIconGroup struct {
 
 func (a *ItemIconGroup) Edit(c *gin.Context) {
 	userInfo, _ := base.GetCurrentUserInfo(c)
-	req := models.ItemIconGroup{}
-
-	if err := c.ShouldBindBodyWith(&req, binding.JSON); err != nil {
-		apiReturn.ErrorParamFomat(c, err.Error())
+	req, expectedRevision, ok := bindSyncMutation[models.ItemIconGroup](c)
+	if !ok {
 		return
 	}
-
 	req.UserId = userInfo.ID
-
-	if req.ID != 0 {
-		// 修改
-		updateField := []string{"IconJson", "Icon", "Title", "Url", "LanUrl", "Description", "OpenMethod", "GroupId", "UserId"}
-		if req.Sort != 0 {
-			updateField = append(updateField, "Sort")
+	var revision int64
+	var stored models.ItemIconGroup
+	err := global.Db.WithContext(c.Request.Context()).Transaction(func(tx *gorm.DB) error {
+		if req.ID == 0 {
+			stored = req
+			if err := tx.Create(&stored).Error; err != nil {
+				return err
+			}
+		} else if err := tx.First(&stored, "id = ? AND user_id = ?", req.ID, userInfo.ID).Error; err != nil {
+			return err
 		}
-		global.Db.Model(&models.ItemIconGroup{}).
-			Select(updateField).
-			Where("id=?", req.ID).Updates(&req)
-	} else {
-		// 创建
-		global.Db.Create(&req)
+		var err error
+		revision, err = syncstate.MutateTx(tx, syncstate.MutationRequest{AppendRequest: syncstate.AppendRequest{
+			UserID: userInfo.ID, ResourceType: models.SyncResourceGroup,
+			ResourceID: strconv.FormatUint(uint64(stored.ID), 10), Operation: models.SyncOperationUpsert,
+		}, ExpectedRevision: expectedRevision}, func(next int64) (any, error) {
+			updates := map[string]any{"icon": req.Icon, "title": req.Title, "description": req.Description, "revision": next}
+			if req.Sort != 0 || req.ID == 0 {
+				updates["sort"] = req.Sort
+			}
+			result := tx.Model(&models.ItemIconGroup{}).Where("id = ? AND user_id = ?", stored.ID, userInfo.ID).Updates(updates)
+			if result.Error != nil {
+				return nil, result.Error
+			}
+			if err := tx.First(&stored, stored.ID).Error; err != nil {
+				return nil, err
+			}
+			return groupChangePayload(stored), nil
+		})
+		return err
+	})
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			apiReturn.ErrorDataNotFound(c)
+			return
+		}
+		returnSyncMutationError(c, err)
+		return
 	}
+	returnSyncMutation(c, revision, stored)
+}
 
-	apiReturn.SuccessData(c, req)
+func groupChangePayload(group models.ItemIconGroup) map[string]any {
+	return map[string]any{
+		"id": group.ID, "createTime": group.CreatedAt, "updateTime": group.UpdatedAt,
+		"icon": group.Icon, "title": group.Title, "description": group.Description,
+		"sort": group.Sort, "revision": strconv.FormatInt(group.Revision, 10), "items": []any{},
+	}
 }
 
 func (a *ItemIconGroup) GetList(c *gin.Context) {
@@ -89,13 +120,15 @@ func (a *ItemIconGroup) GetList(c *gin.Context) {
 }
 
 func (a *ItemIconGroup) Deletes(c *gin.Context) {
-	req := commonApiStructs.RequestDeleteIds[uint]{}
-
-	if err := c.ShouldBindBodyWith(&req, binding.JSON); err != nil {
-		apiReturn.ErrorParamFomat(c, err.Error())
+	req, expectedRevision, ok := bindSyncMutation[commonApiStructs.RequestDeleteIds[uint]](c)
+	if !ok {
 		return
 	}
 	userInfo, _ := base.GetCurrentUserInfo(c)
+	if len(req.Ids) == 0 {
+		apiReturn.ErrorParamFomat(c, "at least one group id is required")
+		return
+	}
 
 	var count int64
 	if err := global.Db.Model(&models.ItemIconGroup{}).Where(" user_id=?", userInfo.ID).Count(&count).Error; err != nil {
@@ -109,55 +142,114 @@ func (a *ItemIconGroup) Deletes(c *gin.Context) {
 
 	}
 
-	txErr := global.Db.Transaction(func(tx *gorm.DB) error {
-		mitemIcon := models.ItemIcon{}
-		if err := tx.Delete(&models.ItemIconGroup{}, "id in ? AND user_id=?", req.Ids, userInfo.ID).Error; err != nil {
+	var revision int64
+	txErr := global.Db.WithContext(c.Request.Context()).Transaction(func(tx *gorm.DB) error {
+		var groups []models.ItemIconGroup
+		if err := tx.Where("id in ? AND user_id = ?", req.Ids, userInfo.ID).Find(&groups).Error; err != nil {
 			return err
 		}
-
-		if err := mitemIcon.DeleteByItemIconGroupIds(tx, userInfo.ID, req.Ids); err != nil {
+		if len(groups) != len(req.Ids) {
+			return gorm.ErrRecordNotFound
+		}
+		var items []models.ItemIcon
+		if err := tx.Where("item_icon_group_id in ? AND user_id = ?", req.Ids, userInfo.ID).Find(&items).Error; err != nil {
 			return err
 		}
-
+		type deletion struct {
+			resourceType, resourceID string
+			delete                   func() error
+		}
+		deletions := make([]deletion, 0, len(items)+len(groups))
+		for _, item := range items {
+			item := item
+			deletions = append(deletions, deletion{models.SyncResourceItem, strconv.FormatUint(uint64(item.ID), 10), func() error {
+				return tx.Delete(&models.ItemIcon{}, "id = ? AND user_id = ?", item.ID, userInfo.ID).Error
+			}})
+		}
+		for _, group := range groups {
+			group := group
+			deletions = append(deletions, deletion{models.SyncResourceGroup, strconv.FormatUint(uint64(group.ID), 10), func() error {
+				return tx.Delete(&models.ItemIconGroup{}, "id = ? AND user_id = ?", group.ID, userInfo.ID).Error
+			}})
+		}
+		for index, deletion := range deletions {
+			appendRequest := syncstate.AppendRequest{UserID: userInfo.ID, ResourceType: deletion.resourceType,
+				ResourceID: deletion.resourceID, Operation: models.SyncOperationDelete}
+			mutation := func(int64) (any, error) { return nil, deletion.delete() }
+			var err error
+			if index == 0 {
+				revision, err = syncstate.MutateTx(tx, syncstate.MutationRequest{AppendRequest: appendRequest, ExpectedRevision: expectedRevision}, mutation)
+			} else {
+				revision, err = syncstate.ContinueMutationTx(tx, appendRequest, mutation)
+			}
+			if err != nil {
+				return err
+			}
+		}
 		return nil
 	})
 
 	if txErr != nil {
-		apiReturn.ErrorDatabase(c, txErr.Error())
+		if errors.Is(txErr, gorm.ErrRecordNotFound) {
+			apiReturn.ErrorDataNotFound(c)
+			return
+		}
+		returnSyncMutationError(c, txErr)
 		return
 	}
-
-	apiReturn.Success(c)
+	returnSyncMutation(c, revision, nil)
 }
 
 // 保存排序
 func (a *ItemIconGroup) SaveSort(c *gin.Context) {
-	req := commonApiStructs.SortRequest{}
-
-	if err := c.ShouldBindBodyWith(&req, binding.JSON); err != nil {
-		apiReturn.ErrorParamFomat(c, err.Error())
+	req, expectedRevision, ok := bindSyncMutation[commonApiStructs.SortRequest](c)
+	if !ok {
 		return
 	}
 
 	userInfo, _ := base.GetCurrentUserInfo(c)
 
-	transactionErr := global.Db.Transaction(func(tx *gorm.DB) error {
-		// 在事务中执行一些 db 操作（从这里开始，您应该使用 'tx' 而不是 'db'）
-		for _, v := range req.SortItems {
-			if err := tx.Model(&models.ItemIconGroup{}).Where("user_id=? AND id=?", userInfo.ID, v.Id).Update("sort", v.Sort).Error; err != nil {
-				// 返回任何错误都会回滚事务
+	if len(req.SortItems) == 0 {
+		apiReturn.ErrorParamFomat(c, "at least one sort item is required")
+		return
+	}
+	var revision int64
+	transactionErr := global.Db.WithContext(c.Request.Context()).Transaction(func(tx *gorm.DB) error {
+		for index, value := range req.SortItems {
+			var group models.ItemIconGroup
+			if err := tx.First(&group, "user_id = ? AND id = ?", userInfo.ID, value.Id).Error; err != nil {
+				return err
+			}
+			appendRequest := syncstate.AppendRequest{UserID: userInfo.ID, ResourceType: models.SyncResourceGroup,
+				ResourceID: strconv.FormatUint(uint64(group.ID), 10), Operation: models.SyncOperationUpsert}
+			mutation := func(next int64) (any, error) {
+				if err := tx.Model(&models.ItemIconGroup{}).Where("id = ? AND user_id = ?", group.ID, userInfo.ID).
+					Updates(map[string]any{"sort": value.Sort, "revision": next}).Error; err != nil {
+					return nil, err
+				}
+				group.Sort, group.Revision = int(value.Sort), next
+				return groupChangePayload(group), nil
+			}
+			var err error
+			if index == 0 {
+				revision, err = syncstate.MutateTx(tx, syncstate.MutationRequest{AppendRequest: appendRequest, ExpectedRevision: expectedRevision}, mutation)
+			} else {
+				revision, err = syncstate.ContinueMutationTx(tx, appendRequest, mutation)
+			}
+			if err != nil {
 				return err
 			}
 		}
-
-		// 返回 nil 提交事务
 		return nil
 	})
 
 	if transactionErr != nil {
-		apiReturn.ErrorDatabase(c, transactionErr.Error())
+		if errors.Is(transactionErr, gorm.ErrRecordNotFound) {
+			apiReturn.ErrorDataNotFound(c)
+			return
+		}
+		returnSyncMutationError(c, transactionErr)
 		return
 	}
-
-	apiReturn.Success(c)
+	returnSyncMutation(c, revision, nil)
 }

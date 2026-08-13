@@ -2,13 +2,14 @@ package panel
 
 import (
 	"encoding/json"
+	"strconv"
 	"sun-panel/api/api_v1/common/apiReturn"
 	"sun-panel/api/api_v1/common/base"
 	"sun-panel/global"
+	"sun-panel/lib/syncstate"
 	"sun-panel/models"
 
 	"github.com/gin-gonic/gin"
-	"github.com/gin-gonic/gin/binding"
 	"gorm.io/gorm"
 )
 
@@ -41,10 +42,8 @@ func (a *UserConfig) Get(c *gin.Context) {
 
 func (a *UserConfig) Set(c *gin.Context) {
 	userInfo, _ := base.GetCurrentUserInfo(c)
-	req := models.UserConfig{}
-
-	if err := c.ShouldBindBodyWith(&req, binding.JSON); err != nil {
-		apiReturn.ErrorParamFomat(c, err.Error())
+	req, expectedRevision, ok := bindSyncMutation[models.UserConfig](c)
+	if !ok {
 		return
 	}
 
@@ -61,27 +60,39 @@ func (a *UserConfig) Set(c *gin.Context) {
 		req.SearchEngineJson = string(jb)
 	}
 
-	// 保存操作
-	if err := global.Db.First(&models.UserConfig{}, "user_id=?", userInfo.ID).Error; err != nil {
-		req.UserId = userInfo.ID
-		if err == gorm.ErrRecordNotFound {
-			// 新增
-			if err := global.Db.Create(&req).Error; err != nil {
-				apiReturn.ErrorDatabase(c, err.Error())
-				return
+	req.UserId = userInfo.ID
+	var revision int64
+	err := global.Db.WithContext(c.Request.Context()).Transaction(func(tx *gorm.DB) error {
+		var stored models.UserConfig
+		if err := tx.First(&stored, "user_id = ?", userInfo.ID).Error; err != nil {
+			if err != gorm.ErrRecordNotFound {
+				return err
 			}
-		} else {
-			// 报错
-			apiReturn.ErrorDatabase(c, err.Error())
-			return
+			stored = models.UserConfig{UserId: userInfo.ID, PanelJson: "{}", SearchEngineJson: "{}"}
+			if err := tx.Create(&stored).Error; err != nil {
+				return err
+			}
 		}
-	} else {
-		// 修改
-		if err := global.Db.Where("user_id=?", userInfo.ID).Updates(&req).Error; err != nil {
-			apiReturn.ErrorDatabase(c, err.Error())
-			return
-		}
+		var err error
+		revision, err = syncstate.MutateTx(tx, syncstate.MutationRequest{AppendRequest: syncstate.AppendRequest{
+			UserID: userInfo.ID, ResourceType: models.SyncResourcePanel,
+			ResourceID: strconv.FormatUint(uint64(userInfo.ID), 10), Operation: models.SyncOperationUpsert,
+		}, ExpectedRevision: expectedRevision}, func(next int64) (any, error) {
+			result := tx.Model(&models.UserConfig{}).Where("user_id = ?", userInfo.ID).Updates(map[string]any{
+				"panel_json": req.PanelJson, "search_engine_json": req.SearchEngineJson, "revision": next,
+			})
+			if result.Error != nil {
+				return nil, result.Error
+			}
+			return map[string]any{
+				"revision": strconv.FormatInt(next, 10), "config": req.Panel, "searchEngine": req.SearchEngine,
+			}, nil
+		})
+		return err
+	})
+	if err != nil {
+		returnSyncMutationError(c, err)
+		return
 	}
-
-	apiReturn.Success(c)
+	returnSyncMutation(c, revision, nil)
 }

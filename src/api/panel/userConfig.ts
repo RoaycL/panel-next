@@ -1,10 +1,8 @@
 import { post } from '@/utils/request'
+import { mutationPost } from './mutation'
 
 export function set<T>(req: Panel.userConfig) {
-  return post<T>({
-    url: '/panel/userConfig/set',
-    data: req,
-  })
+  return mutationPost<T>('/panel/userConfig/set', req)
 }
 
 export function get<T>() {

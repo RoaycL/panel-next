@@ -29,6 +29,7 @@ func newTestManager(t *testing.T) (*gorm.DB, *Manager) {
 		t.Fatal(err)
 	}
 	sqlDB.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = sqlDB.Close() })
 	return db, NewManager(db)
 }
 
@@ -131,6 +132,70 @@ func TestAppendTxRollsBackRevisionAndChangeTogether(t *testing.T) {
 	}
 	if page.CurrentRevision != 0 || len(page.Changes) != 0 {
 		t.Fatalf("rolled-back sync state remained visible: %+v", page)
+	}
+}
+
+func TestMutateTxRejectsStaleRevisionAndRollsBackBusinessWrite(t *testing.T) {
+	db, manager := newTestManager(t)
+	if err := db.AutoMigrate(&models.ItemIconGroup{}); err != nil {
+		t.Fatal(err)
+	}
+	group := models.ItemIconGroup{Title: "Original", UserId: 7}
+	if err := db.Create(&group).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	mutate := func(expected int64, title string) (int64, error) {
+		var revision int64
+		err := db.Transaction(func(tx *gorm.DB) error {
+			var err error
+			revision, err = MutateTx(tx, MutationRequest{AppendRequest: AppendRequest{
+				UserID: 7, ResourceType: models.SyncResourceGroup, ResourceID: "group",
+				Operation: models.SyncOperationUpsert,
+			}, ExpectedRevision: expected}, func(next int64) (any, error) {
+				result := tx.Model(&models.ItemIconGroup{}).Where("id = ? AND user_id = ?", group.ID, 7).
+					Updates(map[string]any{"title": title, "revision": next})
+				return map[string]any{"title": title, "revision": next}, result.Error
+			})
+			return err
+		})
+		return revision, err
+	}
+
+	if revision, err := mutate(0, "First"); err != nil || revision != 1 {
+		t.Fatalf("first mutation revision=%d err=%v", revision, err)
+	}
+	if _, err := mutate(0, "Stale"); !errors.Is(err, ErrRevisionConflict) {
+		t.Fatalf("expected revision conflict, got %v", err)
+	}
+	var stored models.ItemIconGroup
+	if err := db.First(&stored, group.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.Title != "First" || stored.Revision != 1 {
+		t.Fatalf("stale mutation changed resource: %+v", stored)
+	}
+	page, err := manager.List(context.Background(), 7, 0, DefaultChangeLimit)
+	if err != nil || page.CurrentRevision != 1 || len(page.Changes) != 1 {
+		t.Fatalf("stale mutation changed sync log: page=%+v err=%v", page, err)
+	}
+}
+
+func TestMutateTxRollsBackAllocatedRevisionWhenBusinessWriteFails(t *testing.T) {
+	db, manager := newTestManager(t)
+	wanted := errors.New("business write failed")
+	err := db.Transaction(func(tx *gorm.DB) error {
+		_, err := MutateTx(tx, MutationRequest{AppendRequest: AppendRequest{
+			UserID: 7, ResourceType: models.SyncResourcePanel, ResourceID: "7", Operation: models.SyncOperationUpsert,
+		}, ExpectedRevision: 0}, func(int64) (any, error) { return nil, wanted })
+		return err
+	})
+	if !errors.Is(err, wanted) {
+		t.Fatalf("unexpected mutation error: %v", err)
+	}
+	page, err := manager.List(context.Background(), 7, 0, DefaultChangeLimit)
+	if err != nil || page.CurrentRevision != 0 || len(page.Changes) != 0 {
+		t.Fatalf("failed mutation remained visible: page=%+v err=%v", page, err)
 	}
 }
 

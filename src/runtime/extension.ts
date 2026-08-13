@@ -62,6 +62,7 @@ class ChromeStorageAdapter implements StorageAdapter {
   private readonly values = new Map<string, string>()
   private origin: string | null = null
   private writeQueue = Promise.resolve()
+  private writeFailure: unknown = null
 
   constructor(private readonly area: ChromeStorageArea, onChanged: ChromeRuntimeApi['storage']['onChanged']) {
     onChanged.addListener((changes, areaName) => {
@@ -114,6 +115,7 @@ class ChromeStorageAdapter implements StorageAdapter {
 
   private enqueue(operation: () => Promise<void>) {
     this.writeQueue = this.writeQueue.then(operation).catch((error) => {
+      this.writeFailure = error
       console.error('Failed to persist extension storage.', error)
     })
   }
@@ -151,6 +153,11 @@ class ChromeStorageAdapter implements StorageAdapter {
 
   async flush() {
     await this.writeQueue
+    if (this.writeFailure) {
+      const failure = this.writeFailure
+      this.writeFailure = null
+      throw failure
+    }
   }
 }
 

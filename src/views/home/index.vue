@@ -16,6 +16,8 @@ import { router } from '@/router'
 import { t } from '@/locales'
 import { getRuntime } from '@/runtime'
 import { readBootstrapSnapshot, refreshBootstrapSnapshot } from '@/sync/bootstrapCache'
+import { getBootstrap } from '@/api/sync'
+import { onSyncConflict, setSyncRevision } from '@/sync/revision'
 
 interface ItemGroup extends Panel.ItemIconGroup {
   sortStatus?: boolean
@@ -61,6 +63,7 @@ const extensionSyncStatus = ref<ExtensionSyncStatus>(runtime.kind === 'extension
 const lastSyncAt = ref<string | null>(null)
 let hasCachedSnapshot = false
 let extensionRefreshPromise: Promise<void> | null = null
+let removeSyncConflictListener: (() => void) | null = null
 
 const canEdit = computed(() => authStore.visitMode === VisitMode.VISIT_MODE_LOGIN
   && (runtime.kind !== 'extension' || extensionSyncStatus.value === 'online'))
@@ -285,6 +288,7 @@ function getDropdownMenuOptions() {
 }
 
 function applyBootstrapData(data: Sync.BootstrapResponseV1) {
+  setSyncRevision(data.revision)
   panelState.applyPanelConfig(data.panel.config)
   authStore.setUserInfo(data.account)
   authStore.setVisitMode(VisitMode.VISIT_MODE_LOGIN)
@@ -335,6 +339,16 @@ function handleBrowserOffline() {
     extensionSyncStatus.value = hasCachedSnapshot ? 'offline' : 'error'
 }
 
+async function handleSyncConflict() {
+  if (runtime.kind === 'extension') {
+    await refreshExtensionBootstrap()
+    return
+  }
+  const bootstrap = await getBootstrap()
+  if (bootstrap.code === 0)
+    applyBootstrapData(bootstrap.data)
+}
+
 if (runtime.kind === 'extension') {
   panelState.resetPanelConfig()
   const accountId = authStore.userInfo?.id
@@ -351,6 +365,7 @@ if (runtime.kind === 'extension') {
 }
 
 onMounted(async () => {
+  removeSyncConflictListener = onSyncConflict(handleSyncConflict)
   if (runtime.kind === 'extension') {
     window.addEventListener('online', handleBrowserOnline)
     window.addEventListener('offline', handleBrowserOffline)
@@ -361,6 +376,14 @@ onMounted(async () => {
   // 更新用户信息
   await updateLocalUserInfo()
 
+  if (authStore.visitMode === VisitMode.VISIT_MODE_LOGIN) {
+    const bootstrap = await getBootstrap()
+    if (bootstrap.code === 0) {
+      applyBootstrapData(bootstrap.data)
+      return
+    }
+  }
+
   // 分组、卡片和面板配置来自同一个已验证会话，可以并行加载。
   await Promise.all([getList(), panelState.updatePanelConfigByCloud()])
 
@@ -370,6 +393,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  removeSyncConflictListener?.()
   if (runtime.kind === 'extension') {
     window.removeEventListener('online', handleBrowserOnline)
     window.removeEventListener('offline', handleBrowserOffline)

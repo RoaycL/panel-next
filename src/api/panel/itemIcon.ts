@@ -1,17 +1,12 @@
 import { post } from '@/utils/request'
+import { mutationPost } from './mutation'
 
 export function addMultiple<T>(req: Panel.ItemInfo[]) {
-  return post<T>({
-    url: '/panel/itemIcon/addMultiple',
-    data: req,
-  })
+  return mutationPost<T>('/panel/itemIcon/addMultiple', req)
 }
 
 export function edit<T>(req: Panel.ItemInfo) {
-  return post<T>({
-    url: '/panel/itemIcon/edit',
-    data: req,
-  })
+  return mutationPost<T>('/panel/itemIcon/edit', req)
 }
 
 // export function getInfo<T>(id: number) {
@@ -29,17 +24,11 @@ export function getListByGroupId<T>(itemIconGroupId: number | undefined) {
 }
 
 export function deletes<T>(ids: number[]) {
-  return post<T>({
-    url: '/panel/itemIcon/deletes',
-    data: { ids },
-  })
+  return mutationPost<T>('/panel/itemIcon/deletes', { ids })
 }
 
 export function saveSort<T>(data: Panel.ItemIconSortRequest) {
-  return post<T>({
-    url: '/panel/itemIcon/saveSort',
-    data,
-  })
+  return mutationPost<T>('/panel/itemIcon/saveSort', data)
 }
 
 export function getSiteFavicon<T>(url: string) {

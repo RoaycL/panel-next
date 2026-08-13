@@ -2,10 +2,12 @@ package panel
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"sun-panel/api/api_v1/common/apiData/commonApiStructs"
 	"sun-panel/api/api_v1/common/apiData/panelApiStructs"
@@ -14,6 +16,7 @@ import (
 	"sun-panel/global"
 	"sun-panel/lib/cmn"
 	"sun-panel/lib/siteFavicon"
+	"sun-panel/lib/syncstate"
 	"sun-panel/models"
 	"time"
 
@@ -27,10 +30,8 @@ type ItemIcon struct {
 
 func (a *ItemIcon) Edit(c *gin.Context) {
 	userInfo, _ := base.GetCurrentUserInfo(c)
-	req := models.ItemIcon{}
-
-	if err := c.ShouldBindBodyWith(&req, binding.JSON); err != nil {
-		apiReturn.ErrorParamFomat(c, err.Error())
+	req, expectedRevision, ok := bindSyncMutation[models.ItemIcon](c)
+	if !ok {
 		return
 	}
 
@@ -47,32 +48,76 @@ func (a *ItemIcon) Edit(c *gin.Context) {
 		req.IconJson = string(j)
 	}
 
-	if req.ID != 0 {
-		// 修改
-		updateField := []string{"IconJson", "Icon", "Title", "Url", "LanUrl", "Description", "OpenMethod", "GroupId", "UserId", "ItemIconGroupId"}
-		if req.Sort != 0 {
-			updateField = append(updateField, "Sort")
+	var revision int64
+	var stored models.ItemIcon
+	err := global.Db.WithContext(c.Request.Context()).Transaction(func(tx *gorm.DB) error {
+		var group models.ItemIconGroup
+		if err := tx.First(&group, "id = ? AND user_id = ?", req.ItemIconGroupId, userInfo.ID).Error; err != nil {
+			return err
 		}
-		global.Db.Model(&models.ItemIcon{}).
-			Select(updateField).
-			Where("id=?", req.ID).Updates(&req)
-	} else {
-		req.Sort = 9999
-		// 创建
-		global.Db.Create(&req)
+		if req.ID == 0 {
+			req.Sort = 9999
+			stored = req
+			if err := tx.Create(&stored).Error; err != nil {
+				return err
+			}
+		} else if err := tx.First(&stored, "id = ? AND user_id = ?", req.ID, userInfo.ID).Error; err != nil {
+			return err
+		}
+		var err error
+		revision, err = syncstate.MutateTx(tx, syncstate.MutationRequest{AppendRequest: syncstate.AppendRequest{
+			UserID: userInfo.ID, ResourceType: models.SyncResourceItem,
+			ResourceID: strconv.FormatUint(uint64(stored.ID), 10), Operation: models.SyncOperationUpsert,
+		}, ExpectedRevision: expectedRevision}, func(next int64) (any, error) {
+			updates := map[string]any{
+				"icon_json": req.IconJson, "title": req.Title, "url": req.Url, "lan_url": req.LanUrl,
+				"description": req.Description, "open_method": req.OpenMethod,
+				"item_icon_group_id": req.ItemIconGroupId, "revision": next,
+			}
+			if req.Sort != 0 {
+				updates["sort"] = req.Sort
+			}
+			result := tx.Model(&models.ItemIcon{}).Where("id = ? AND user_id = ?", stored.ID, userInfo.ID).Updates(updates)
+			if result.Error != nil {
+				return nil, result.Error
+			}
+			if err := tx.First(&stored, stored.ID).Error; err != nil {
+				return nil, err
+			}
+			_ = json.Unmarshal([]byte(stored.IconJson), &stored.Icon)
+			return itemChangePayload(stored), nil
+		})
+		return err
+	})
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			apiReturn.ErrorDataNotFound(c)
+			return
+		}
+		returnSyncMutationError(c, err)
+		return
 	}
+	returnSyncMutation(c, revision, stored)
+}
 
-	apiReturn.SuccessData(c, req)
+func itemChangePayload(item models.ItemIcon) map[string]any {
+	return map[string]any{
+		"id": item.ID, "createTime": item.CreatedAt, "updateTime": item.UpdatedAt,
+		"icon": item.Icon, "title": item.Title, "url": item.Url, "lanUrl": item.LanUrl,
+		"description": item.Description, "openMethod": item.OpenMethod, "sort": item.Sort,
+		"revision": strconv.FormatInt(item.Revision, 10), "itemIconGroupId": item.ItemIconGroupId,
+	}
 }
 
 // 添加多个图标
 func (a *ItemIcon) AddMultiple(c *gin.Context) {
 	userInfo, _ := base.GetCurrentUserInfo(c)
-	// type Request
-	req := []models.ItemIcon{}
-
-	if err := c.ShouldBindBodyWith(&req, binding.JSON); err != nil {
-		apiReturn.ErrorParamFomat(c, err.Error())
+	req, expectedRevision, ok := bindSyncMutation[[]models.ItemIcon](c)
+	if !ok {
+		return
+	}
+	if len(req) == 0 {
+		apiReturn.ErrorParamFomat(c, "at least one item is required")
 		return
 	}
 
@@ -88,9 +133,51 @@ func (a *ItemIcon) AddMultiple(c *gin.Context) {
 		}
 	}
 
-	global.Db.Create(&req)
-
-	apiReturn.SuccessData(c, req)
+	var revision int64
+	err := global.Db.WithContext(c.Request.Context()).Transaction(func(tx *gorm.DB) error {
+		for i := range req {
+			var group models.ItemIconGroup
+			if err := tx.First(&group, "id = ? AND user_id = ?", req[i].ItemIconGroupId, userInfo.ID).Error; err != nil {
+				return err
+			}
+			if req[i].Sort == 0 {
+				req[i].Sort = 9999
+			}
+			if err := tx.Create(&req[i]).Error; err != nil {
+				return err
+			}
+			appendRequest := syncstate.AppendRequest{
+				UserID: userInfo.ID, ResourceType: models.SyncResourceItem,
+				ResourceID: strconv.FormatUint(uint64(req[i].ID), 10), Operation: models.SyncOperationUpsert,
+			}
+			mutation := func(next int64) (any, error) {
+				if err := tx.Model(&models.ItemIcon{}).Where("id = ? AND user_id = ?", req[i].ID, userInfo.ID).Update("revision", next).Error; err != nil {
+					return nil, err
+				}
+				req[i].Revision = next
+				return itemChangePayload(req[i]), nil
+			}
+			var err error
+			if i == 0 {
+				revision, err = syncstate.MutateTx(tx, syncstate.MutationRequest{AppendRequest: appendRequest, ExpectedRevision: expectedRevision}, mutation)
+			} else {
+				revision, err = syncstate.ContinueMutationTx(tx, appendRequest, mutation)
+			}
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			apiReturn.ErrorDataNotFound(c)
+			return
+		}
+		returnSyncMutationError(c, err)
+		return
+	}
+	returnSyncMutation(c, revision, req)
 }
 
 // // 获取详情
@@ -147,52 +234,106 @@ func (a *ItemIcon) GetListByGroupId(c *gin.Context) {
 }
 
 func (a *ItemIcon) Deletes(c *gin.Context) {
-	req := commonApiStructs.RequestDeleteIds[uint]{}
-
-	if err := c.ShouldBindBodyWith(&req, binding.JSON); err != nil {
-		apiReturn.ErrorParamFomat(c, err.Error())
+	req, expectedRevision, ok := bindSyncMutation[commonApiStructs.RequestDeleteIds[uint]](c)
+	if !ok {
 		return
 	}
-
 	userInfo, _ := base.GetCurrentUserInfo(c)
-	if err := global.Db.Delete(&models.ItemIcon{}, "id in ? AND user_id=?", req.Ids, userInfo.ID).Error; err != nil {
-		apiReturn.ErrorDatabase(c, err.Error())
+	if len(req.Ids) == 0 {
+		apiReturn.ErrorParamFomat(c, "at least one item id is required")
 		return
 	}
-
-	apiReturn.Success(c)
+	var revision int64
+	err := global.Db.WithContext(c.Request.Context()).Transaction(func(tx *gorm.DB) error {
+		var items []models.ItemIcon
+		if err := tx.Where("id in ? AND user_id = ?", req.Ids, userInfo.ID).Find(&items).Error; err != nil {
+			return err
+		}
+		if len(items) != len(req.Ids) {
+			return gorm.ErrRecordNotFound
+		}
+		for index, item := range items {
+			appendRequest := syncstate.AppendRequest{UserID: userInfo.ID, ResourceType: models.SyncResourceItem,
+				ResourceID: strconv.FormatUint(uint64(item.ID), 10), Operation: models.SyncOperationDelete}
+			mutation := func(int64) (any, error) {
+				return nil, tx.Delete(&models.ItemIcon{}, "id = ? AND user_id = ?", item.ID, userInfo.ID).Error
+			}
+			var err error
+			if index == 0 {
+				revision, err = syncstate.MutateTx(tx, syncstate.MutationRequest{AppendRequest: appendRequest, ExpectedRevision: expectedRevision}, mutation)
+			} else {
+				revision, err = syncstate.ContinueMutationTx(tx, appendRequest, mutation)
+			}
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			apiReturn.ErrorDataNotFound(c)
+			return
+		}
+		returnSyncMutationError(c, err)
+		return
+	}
+	returnSyncMutation(c, revision, nil)
 }
 
 // 保存排序
 func (a *ItemIcon) SaveSort(c *gin.Context) {
-	req := panelApiStructs.ItemIconSaveSortRequest{}
-
-	if err := c.ShouldBindBodyWith(&req, binding.JSON); err != nil {
-		apiReturn.ErrorParamFomat(c, err.Error())
+	req, expectedRevision, ok := bindSyncMutation[panelApiStructs.ItemIconSaveSortRequest](c)
+	if !ok {
 		return
 	}
 
 	userInfo, _ := base.GetCurrentUserInfo(c)
 
-	transactionErr := global.Db.Transaction(func(tx *gorm.DB) error {
-		// 在事务中执行一些 db 操作（从这里开始，您应该使用 'tx' 而不是 'db'）
-		for _, v := range req.SortItems {
-			if err := tx.Model(&models.ItemIcon{}).Where("user_id=? AND id=? AND item_icon_group_id=?", userInfo.ID, v.Id, req.ItemIconGroupId).Update("sort", v.Sort).Error; err != nil {
-				// 返回任何错误都会回滚事务
+	if len(req.SortItems) == 0 {
+		apiReturn.ErrorParamFomat(c, "at least one sort item is required")
+		return
+	}
+	var revision int64
+	transactionErr := global.Db.WithContext(c.Request.Context()).Transaction(func(tx *gorm.DB) error {
+		for index, value := range req.SortItems {
+			var item models.ItemIcon
+			if err := tx.First(&item, "user_id = ? AND id = ? AND item_icon_group_id = ?", userInfo.ID, value.Id, req.ItemIconGroupId).Error; err != nil {
+				return err
+			}
+			appendRequest := syncstate.AppendRequest{UserID: userInfo.ID, ResourceType: models.SyncResourceItem,
+				ResourceID: strconv.FormatUint(uint64(item.ID), 10), Operation: models.SyncOperationUpsert}
+			mutation := func(next int64) (any, error) {
+				if err := tx.Model(&models.ItemIcon{}).Where("id = ? AND user_id = ?", item.ID, userInfo.ID).
+					Updates(map[string]any{"sort": value.Sort, "revision": next}).Error; err != nil {
+					return nil, err
+				}
+				item.Sort, item.Revision = int(value.Sort), next
+				_ = json.Unmarshal([]byte(item.IconJson), &item.Icon)
+				return itemChangePayload(item), nil
+			}
+			var err error
+			if index == 0 {
+				revision, err = syncstate.MutateTx(tx, syncstate.MutationRequest{AppendRequest: appendRequest, ExpectedRevision: expectedRevision}, mutation)
+			} else {
+				revision, err = syncstate.ContinueMutationTx(tx, appendRequest, mutation)
+			}
+			if err != nil {
 				return err
 			}
 		}
-
-		// 返回 nil 提交事务
 		return nil
 	})
 
 	if transactionErr != nil {
-		apiReturn.ErrorDatabase(c, transactionErr.Error())
+		if errors.Is(transactionErr, gorm.ErrRecordNotFound) {
+			apiReturn.ErrorDataNotFound(c)
+			return
+		}
+		returnSyncMutationError(c, transactionErr)
 		return
 	}
-
-	apiReturn.Success(c)
+	returnSyncMutation(c, revision, nil)
 }
 
 // 支持获取并直接下载对方网站图标到服务器

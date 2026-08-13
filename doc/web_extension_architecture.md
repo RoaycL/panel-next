@@ -141,6 +141,8 @@ DELETE /api/v1/sessions/:id
 
 `bootstrap` 一次返回新标签页首屏所需的数据和全局 `revision`。写操作携带客户端已知 revision；服务端发现过期写入时返回冲突，不静默覆盖更新的数据。
 
+当前写入协议使用账号级 `expectedRevision`。每次分组、卡片或面板配置写操作都必须基于最近一次 bootstrap 或成功写响应返回的 revision；服务端在账号同步状态行上串行化事务，业务数据、资源 revision 与 changes 日志要么同时提交，要么同时回滚。错误码 `1502` 表示客户端版本陈旧，客户端必须重新 bootstrap，禁止用新游标重放旧表单。
+
 `SYNC-01` 固定首版 bootstrap 数据契约：
 
 ```json
@@ -191,7 +193,7 @@ DELETE /api/v1/sessions/:id
 
 - `resourceType` 只允许 `panel`、`group`、`item`，`operation` 只允许 `upsert`、`delete`；删除项的 `data` 固定为 `null`。
 - 客户端按 `nextRevision` 翻页，只有全部变更成功并持久化后才能推进本地游标；游标大于服务端 revision 时返回 `1501` 和 `fullBootstrapRequired=true`。
-- Extension 当前把通过完整校验且已经应用的 bootstrap 快照 revision 作为可信游标，不建立可独立超前的第二份游标。`SYNC-07` 接通所有写路径和原子应用之前，首页仍使用完整 bootstrap 后台刷新，不发布增量同步能力开关。
+- Extension 把通过完整校验且已经应用的快照 revision 作为可信游标，不建立可独立超前的第二份游标。后台刷新优先连续拉取 changes；只有全部分页在内存中原子应用成功并完成单键持久化，才提交 v2 信封中的 `cursorRevision`。缺页、损坏 payload、游标异常或写盘失败保留旧快照并回退完整 bootstrap；v1 信封读取后自动升级。
 - `user_sync_state` 与 `user_sync_change` 是派生同步状态，不进入 PostgreSQL/MySQL 可移植业务备份。逻辑恢复在同一事务清除旧日志，并按已恢复资源的最大 revision 重建账号基线；SQLite 完整快照则保留自洽的同步状态。
 
 ## 6. 客户端数据策略
@@ -203,7 +205,7 @@ DELETE /api/v1/sessions/:id
 - `chrome.storage.sync` 不保存 Sun-Panel 账号 Token，也不作为业务同步源。
 - Extension 的 bootstrap 快照使用独立缓存版本，先由服务器 Origin 的 StorageAdapter 分区，再按账号 ID 分键；快照信封同时记录 Origin 与账号，读取时必须双重匹配。
 - 快照写入前和读取后都校验 schemaVersion、十进制 revision、时间、字段类型、ID 唯一性、分组归属及数量/5 MiB 上限；损坏、跨实例、跨账号或未来不兼容的快照立即忽略并删除。
-- Extension 在组件首次渲染前同步读取可信快照并应用面板配置、分组和卡片；随后在后台请求 bootstrap，成功时原子替换界面与缓存。
+- Extension 在组件首次渲染前同步读取可信快照并应用面板配置、分组和卡片；随后在后台优先增量同步，无法安全应用时请求 bootstrap，成功后原子替换界面与缓存。
 - 可信快照的顶层 revision 同时是当前客户端游标；增量页只有在完整应用成功后才能提交新游标，失败时保留旧快照并允许安全重试。
 - 后台请求只对传输失败执行最多 3 次尝试，等待间隔为 0、1、3 秒；明确的认证或 API 响应不重试。浏览器恢复在线时可立即再次刷新，避免无限定时轮询。
 - 有缓存但刷新失败时保留内容并标记“离线 · 显示缓存”；没有缓存时明确显示不可用。离线、缓存和同步中状态关闭编辑入口，第一版不伪装支持离线写入。

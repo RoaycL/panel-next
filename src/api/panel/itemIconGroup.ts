@@ -1,10 +1,8 @@
 import { post } from '@/utils/request'
+import { mutationPost } from './mutation'
 
 export function edit<T>(req: Panel.ItemIconGroup) {
-  return post<T>({
-    url: '/panel/itemIconGroup/edit',
-    data: req,
-  })
+  return mutationPost<T>('/panel/itemIconGroup/edit', req)
 }
 
 export function getList<T>() {
@@ -14,15 +12,9 @@ export function getList<T>() {
 }
 
 export function deletes<T>(ids: number[]) {
-  return post<T>({
-    url: '/panel/itemIconGroup/deletes',
-    data: { ids },
-  })
+  return mutationPost<T>('/panel/itemIconGroup/deletes', { ids })
 }
 
 export function saveSort<T>(sortItems: Common.SortItemRequest[]) {
-  return post<T>({
-    url: '/panel/itemIconGroup/saveSort',
-    data: { sortItems },
-  })
+  return mutationPost<T>('/panel/itemIconGroup/saveSort', { sortItems })
 }

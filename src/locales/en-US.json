@@ -32,7 +32,8 @@
     "1300": "Upload failed",
     "1301": "Upload failed, unsupported file format",
     "1400": "Parameter format error",
-    "1501": "Sync state changed; refreshing the full snapshot"
+    "1501": "Sync state changed; refreshing the full snapshot",
+    "1502": "This dashboard changed on another device. The latest version is being loaded."
   },
   "appLauncher": {
     "title": "System Applications"

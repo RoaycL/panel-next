@@ -22,8 +22,9 @@ const (
 )
 
 var (
-	ErrInvalidChange = errors.New("invalid sync change")
-	ErrRevisionAhead = errors.New("sync revision is ahead of the server")
+	ErrInvalidChange    = errors.New("invalid sync change")
+	ErrRevisionAhead    = errors.New("sync revision is ahead of the server")
+	ErrRevisionConflict = errors.New("sync revision conflict")
 )
 
 type Manager struct {
@@ -37,6 +38,13 @@ type AppendRequest struct {
 	Operation    string
 	Payload      any
 }
+
+type MutationRequest struct {
+	AppendRequest
+	ExpectedRevision int64
+}
+
+type Mutation func(revision int64) (payload any, err error)
 
 type Change struct {
 	Revision     int64
@@ -73,16 +81,27 @@ func (m *Manager) Append(ctx context.Context, request AppendRequest) (int64, err
 }
 
 func AppendTx(tx *gorm.DB, request AppendRequest) (int64, error) {
+	return appendTx(tx, request, nil, func(int64) (any, error) { return request.Payload, nil })
+}
+
+// MutateTx serializes an account mutation behind its sync-state row. The
+// callback performs the business write with the newly allocated revision and
+// returns the exact public payload stored in the changes feed. Any callback or
+// log error rolls the state increment and business write back together.
+func MutateTx(tx *gorm.DB, request MutationRequest, mutation Mutation) (int64, error) {
+	return appendTx(tx, request.AppendRequest, &request.ExpectedRevision, mutation)
+}
+
+// ContinueMutationTx appends another resource mutation inside an operation
+// whose initial expected revision was already validated by MutateTx.
+func ContinueMutationTx(tx *gorm.DB, request AppendRequest, mutation Mutation) (int64, error) {
+	return appendTx(tx, request, nil, mutation)
+}
+
+func appendTx(tx *gorm.DB, request AppendRequest, expectedRevision *int64, mutation Mutation) (int64, error) {
 	if tx == nil || request.UserID == 0 || !validResourceType(request.ResourceType) ||
-		strings.TrimSpace(request.ResourceID) == "" || len(request.ResourceID) > 64 || !validOperation(request.Operation) {
+		strings.TrimSpace(request.ResourceID) == "" || len(request.ResourceID) > 64 || !validOperation(request.Operation) || mutation == nil {
 		return 0, ErrInvalidChange
-	}
-	payload, err := json.Marshal(request.Payload)
-	if err != nil || len(payload) > maximumPayloadBytes {
-		return 0, ErrInvalidChange
-	}
-	if request.Operation == models.SyncOperationDelete {
-		payload = []byte("null")
 	}
 
 	seed := models.UserSyncState{UserID: request.UserID, Revision: 0}
@@ -92,6 +111,9 @@ func AppendTx(tx *gorm.DB, request AppendRequest) (int64, error) {
 	var state models.UserSyncState
 	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&state, "user_id = ?", request.UserID).Error; err != nil {
 		return 0, err
+	}
+	if expectedRevision != nil && (*expectedRevision < 0 || state.Revision != *expectedRevision) {
+		return 0, ErrRevisionConflict
 	}
 	if state.Revision == math.MaxInt64 {
 		return 0, errors.New("sync revision exhausted")
@@ -105,6 +127,17 @@ func AppendTx(tx *gorm.DB, request AppendRequest) (int64, error) {
 	}
 	if result.RowsAffected != 1 {
 		return 0, errors.New("concurrent sync revision update")
+	}
+	publicPayload, err := mutation(next)
+	if err != nil {
+		return 0, err
+	}
+	payload, err := json.Marshal(publicPayload)
+	if err != nil || len(payload) > maximumPayloadBytes {
+		return 0, ErrInvalidChange
+	}
+	if request.Operation == models.SyncOperationDelete {
+		payload = []byte("null")
 	}
 	change := models.UserSyncChange{
 		UserID: request.UserID, Revision: next, ResourceType: request.ResourceType,
