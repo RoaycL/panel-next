@@ -1,8 +1,17 @@
-export const BOOTSTRAP_SNAPSHOT_CACHE_VERSION = 1
+export const BOOTSTRAP_SNAPSHOT_CACHE_VERSION = 2
 export const BOOTSTRAP_SCHEMA_VERSION = 1
 export const MAX_BOOTSTRAP_SNAPSHOT_BYTES = 5 * 1024 * 1024
 
 export interface BootstrapSnapshotEnvelope {
+  cacheVersion: 2
+  serverOrigin: string
+  accountId: number
+  savedAt: string
+  cursorRevision: Sync.Revision
+  data: Sync.BootstrapResponseV1
+}
+
+interface LegacyBootstrapSnapshotEnvelope {
   cacheVersion: 1
   serverOrigin: string
   accountId: number
@@ -65,7 +74,7 @@ function isIcon(value: unknown): value is Panel.ItemIcon {
     && (value.backgroundColor === undefined || isBoundedString(value.backgroundColor, 128))
 }
 
-function isBootstrapItem(value: unknown): value is Sync.BootstrapItem {
+export function isBootstrapItem(value: unknown): value is Sync.BootstrapItem {
   if (!isRecord(value))
     return false
   return isSafeId(value.id)
@@ -82,7 +91,7 @@ function isBootstrapItem(value: unknown): value is Sync.BootstrapItem {
     && isSafeId(value.itemIconGroupId)
 }
 
-function isBootstrapGroup(value: unknown): value is Sync.BootstrapGroup {
+export function isBootstrapGroup(value: unknown): value is Sync.BootstrapGroup {
   if (!isRecord(value) || !Array.isArray(value.items) || value.items.length > 100000)
     return false
   return isSafeId(value.id)
@@ -140,15 +149,40 @@ export function isBootstrapResponseV1(value: unknown): value is Sync.BootstrapRe
   return true
 }
 
-function matchesSnapshotScope(value: unknown, expectedOrigin: string, expectedAccountId: number): value is BootstrapSnapshotEnvelope {
+function matchesSnapshotScope(value: unknown, expectedOrigin: string, expectedAccountId: number) {
   if (!isRecord(value))
     return false
-  return value.cacheVersion === BOOTSTRAP_SNAPSHOT_CACHE_VERSION
-    && value.serverOrigin === expectedOrigin
+  return value.serverOrigin === expectedOrigin
     && value.accountId === expectedAccountId
     && isTimestamp(value.savedAt)
     && isBootstrapResponseV1(value.data)
     && value.data.account.id === expectedAccountId
+}
+
+function normalizeSnapshotEnvelope(
+  value: unknown,
+  expectedOrigin: string,
+  expectedAccountId: number,
+): BootstrapSnapshotEnvelope | null {
+  if (!matchesSnapshotScope(value, expectedOrigin, expectedAccountId))
+    return null
+  const scoped = value as unknown as LegacyBootstrapSnapshotEnvelope | BootstrapSnapshotEnvelope
+  if (scoped.cacheVersion === 1) {
+    return {
+      cacheVersion: BOOTSTRAP_SNAPSHOT_CACHE_VERSION,
+      serverOrigin: scoped.serverOrigin,
+      accountId: scoped.accountId,
+      savedAt: scoped.savedAt,
+      cursorRevision: scoped.data.revision,
+      data: scoped.data,
+    }
+  }
+  if (scoped.cacheVersion !== BOOTSTRAP_SNAPSHOT_CACHE_VERSION
+    || !isSyncRevision(scoped.cursorRevision)
+    || scoped.cursorRevision !== scoped.data.revision) {
+    return null
+  }
+  return scoped
 }
 
 export function serializeBootstrapSnapshot(
@@ -166,6 +200,7 @@ export function serializeBootstrapSnapshot(
     serverOrigin,
     accountId: expectedAccountId,
     savedAt,
+    cursorRevision: data.revision,
     data,
   }
   const serialized = JSON.stringify(envelope)
@@ -183,7 +218,7 @@ export function parseBootstrapSnapshot(
     return null
   try {
     const parsed: unknown = JSON.parse(raw)
-    return matchesSnapshotScope(parsed, expectedOrigin, expectedAccountId) ? parsed : null
+    return normalizeSnapshotEnvelope(parsed, expectedOrigin, expectedAccountId)
   }
   catch {
     return null

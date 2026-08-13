@@ -32,7 +32,8 @@
     "1300": "Upload failed",
     "1301": "Upload failed, unsupported file format",
     "1400": "Parameter format error",
-    "1501": "Sync state changed; refreshing the full snapshot"
+    "1501": "Sync state changed; refreshing the full snapshot",
+    "1502": "This dashboard changed on another device. The latest version is being loaded."
   },
   "appLauncher": {
     "title": "System Applications"
@@ -163,6 +164,7 @@
     "editSuccess": "Edited successfully",
     "export": "Export",
     "exportSuccess": "Exported successfully",
+    "invalidUrl": "The link is invalid or uses an unsupported protocol",
     "failed": "Operation failed",
     "icon": "Icon",
     "image": "Image",
@@ -264,6 +266,15 @@
     "goToLogin": "Go to login",
     "openLanUrl": "Open LAN URL",
     "openWanUrl": "Open WAN URL",
+    "networkOffline": "Network offline",
+    "networkOnline": "Network online",
+    "runtimeExtension": "Chrome extension",
+    "runtimeWeb": "Web",
+    "sessionDevice": "Device session",
+    "sessionExpiresAt": "Session expires: {time}",
+    "sessionLegacy": "Legacy session",
+    "sessionPublic": "Public access",
+    "statusOverview": "Runtime and sync status",
     "syncCached": "Cached · Refreshing",
     "syncing": "Syncing",
     "syncOnline": "Synced",

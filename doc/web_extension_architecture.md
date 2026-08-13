@@ -141,6 +141,8 @@ DELETE /api/v1/sessions/:id
 
 `bootstrap` 一次返回新标签页首屏所需的数据和全局 `revision`。写操作携带客户端已知 revision；服务端发现过期写入时返回冲突，不静默覆盖更新的数据。
 
+当前写入协议使用账号级 `expectedRevision`。每次分组、卡片或面板配置写操作都必须基于最近一次 bootstrap 或成功写响应返回的 revision；服务端在账号同步状态行上串行化事务，业务数据、资源 revision 与 changes 日志要么同时提交，要么同时回滚。错误码 `1502` 表示客户端版本陈旧，客户端必须重新 bootstrap，禁止用新游标重放旧表单。
+
 `SYNC-01` 固定首版 bootstrap 数据契约：
 
 ```json
@@ -191,37 +193,49 @@ DELETE /api/v1/sessions/:id
 
 - `resourceType` 只允许 `panel`、`group`、`item`，`operation` 只允许 `upsert`、`delete`；删除项的 `data` 固定为 `null`。
 - 客户端按 `nextRevision` 翻页，只有全部变更成功并持久化后才能推进本地游标；游标大于服务端 revision 时返回 `1501` 和 `fullBootstrapRequired=true`。
-- Extension 当前把通过完整校验且已经应用的 bootstrap 快照 revision 作为可信游标，不建立可独立超前的第二份游标。`SYNC-07` 接通所有写路径和原子应用之前，首页仍使用完整 bootstrap 后台刷新，不发布增量同步能力开关。
+- Extension 把通过完整校验且已经应用的快照 revision 作为可信游标，不建立可独立超前的第二份游标。后台刷新优先连续拉取 changes；只有全部分页在内存中原子应用成功并完成单键持久化，才提交 v2 信封中的 `cursorRevision`。缺页、损坏 payload、游标异常或写盘失败保留旧快照并回退完整 bootstrap；v1 信封读取后自动升级。
 - `user_sync_state` 与 `user_sync_change` 是派生同步状态，不进入 PostgreSQL/MySQL 可移植业务备份。逻辑恢复在同一事务清除旧日志，并按已恢复资源的最大 revision 重建账号基线；SQLite 完整快照则保留自洽的同步状态。
 
 ## 6. 客户端数据策略
 
+平台无关的面板状态转换位于 `src/dashboard/core.ts`：bootstrap 映射、分组规范化、搜索、排序请求和网络地址选择均为无浏览器依赖的纯函数。页面组件只保留 Vue 状态编排和 RuntimeAdapter 副作用，Web 与 Extension 不维护两套业务分支。
+
 - 服务器数据：账号、分组、卡片、面板配置、搜索引擎、组件布局和资源元数据。
 - 设备本地数据：服务器地址、设备 ID、会话、最近成功快照、最后同步 revision、设备专属偏好。
 - Web 使用 localStorage/IndexedDB 适配器；扩展使用 `chrome.storage.local`。
+- Pinia 与工具层只使用语义明确的 `persistentStorage` 包装器，包装器再调用当前 Runtime 的 StorageAdapter；历史 `ss`/`ls` 别名已移除，现有键名和 JSON 信封保持兼容。
 - 会话和缓存使用不同键空间；退出登录必须清除会话，用户可选择保留非敏感缓存。
 - `chrome.storage.sync` 不保存 Sun-Panel 账号 Token，也不作为业务同步源。
+- API、验证码与上传地址均通过 RuntimeAdapter 解析：Web 使用构建配置的同源 `/api`，Extension 使用用户授权的服务器 Origin；业务组件不得写死当前扩展页面的 `/api` action。
 - Extension 的 bootstrap 快照使用独立缓存版本，先由服务器 Origin 的 StorageAdapter 分区，再按账号 ID 分键；快照信封同时记录 Origin 与账号，读取时必须双重匹配。
 - 快照写入前和读取后都校验 schemaVersion、十进制 revision、时间、字段类型、ID 唯一性、分组归属及数量/5 MiB 上限；损坏、跨实例、跨账号或未来不兼容的快照立即忽略并删除。
-- Extension 在组件首次渲染前同步读取可信快照并应用面板配置、分组和卡片；随后在后台请求 bootstrap，成功时原子替换界面与缓存。
+- Extension 在组件首次渲染前同步读取可信快照并应用面板配置、分组和卡片；随后在后台优先增量同步，无法安全应用时请求 bootstrap，成功后原子替换界面与缓存。
 - 可信快照的顶层 revision 同时是当前客户端游标；增量页只有在完整应用成功后才能提交新游标，失败时保留旧快照并允许安全重试。
 - 后台请求只对传输失败执行最多 3 次尝试，等待间隔为 0、1、3 秒；明确的认证或 API 响应不重试。浏览器恢复在线时可立即再次刷新，避免无限定时轮询。
 - 有缓存但刷新失败时保留内容并标记“离线 · 显示缓存”；没有缓存时明确显示不可用。离线、缓存和同步中状态关闭编辑入口，第一版不伪装支持离线写入。
+- 双端首页右上角统一展示 Runtime、浏览器网络和会话类型；设备会话提供到期时间提示，Extension 在同一状态栏展示同步/缓存/离线状态并允许手动重试。
 
 ## 7. 新标签页性能预算
+
+共享小组件使用 v1 版本化布局信封与 WidgetRegistry。每个定义声明稳定 type、配置 schema、异步 loader、尺寸边界和连续迁移函数；每个实例记录稳定 ID、网格位置/尺寸、隐藏状态、定义版本与配置。未知、重复、损坏或未来版本实例在加载时隔离并报告，不阻塞其余组件渲染。
+
+首批内置定义为 `core.clock`、`core.date`、`core.search`。通用 WidgetHost 通过定义的异步 loader 渲染并透传配置/事件；首页历史时钟和搜索配置映射为注册表实例，保持升级兼容。
 
 - 有缓存时应立即绘制基本布局，不因后端离线显示空白页。
 - Extension 的缓存读取和应用发生在首次渲染前；网络刷新不阻塞已缓存首屏。
 - 首屏不加载管理页、备份页和不需要的小组件代码。
 - 小组件和设置面板动态导入。
+- 首页编辑器和管理启动器也只在首次打开时异步加载；管理器内部各应用继续独立动态分块，Web 与 Extension 首屏不静态携带后台管理实现。
 - 壁纸使用缩略图或适配尺寸，失败时回退到内置背景。
 - 天气、热搜等第三方数据由 Go 后端代理、限流和缓存，客户端不持有服务密钥。
 - 在路线图进入商店发布阶段前确定并自动检查具体体积和时间预算。
+- 响应式回归以 640px 为窄屏断点，状态栏允许换行且根面板裁剪模糊背景绘制溢出；图标保持 SVG 路径以适配高 DPI，主题继续复用系统浅色/深色响应钩子。
 
 ## 8. 安全要求
 
 - 扩展 CSP 禁止 `unsafe-eval` 和远程脚本。
 - 所有外部 URL 在打开前验证协议，拒绝 `javascript:`、`data:` 等可执行地址。
+- 模板链接和用户自定义 footer 链接在应用根节点统一拦截后交给 RuntimeAdapter；卡片 iframe 与新窗口打开共用 HTTP(S) 安全解析，Blob URL 仅保留给显式文件下载。
 - iframe 只是兼容能力；目标站点的 CSP 或 `X-Frame-Options` 禁止嵌入时回退到新标签页。
 - 扩展权限遵循最小权限原则，每项新增权限都在发布清单中说明用户价值。
 - 登录、刷新、撤销、同步冲突和权限变更写入不含敏感明文的安全日志。

@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { VueDraggable } from 'vue-draggable-plus'
 import { NBackTop, NButton, NButtonGroup, NDropdown, NModal, NSkeleton, NSpin, useDialog, useMessage } from 'naive-ui'
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
-import { AppIcon, AppStarter, EditItem } from './components'
-import { Clock, SearchBox, SystemMonitor } from '@/components/deskModule'
+import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { AppIcon } from './components'
+import { SystemMonitor } from '@/components/deskModule'
 import { SvgIcon } from '@/components/common'
 import { deletes, getListByGroupId, saveSort } from '@/api/panel/itemIcon'
 import { getList as getGroupList } from '@/api/panel/itemIconGroup'
@@ -16,12 +16,11 @@ import { router } from '@/router'
 import { t } from '@/locales'
 import { getRuntime } from '@/runtime'
 import { readBootstrapSnapshot, refreshBootstrapSnapshot } from '@/sync/bootstrapCache'
-
-interface ItemGroup extends Panel.ItemIconGroup {
-  sortStatus?: boolean
-  hoverStatus: boolean
-  items?: Panel.ItemInfo[]
-}
+import { getBootstrap } from '@/api/sync'
+import { onSyncConflict, setSyncRevision } from '@/sync/revision'
+import type { DashboardGroup } from '@/dashboard/core'
+import { createDashboardState, createItemSortRequest, filterDashboardGroups, normalizeDashboardGroups, selectItemUrl } from '@/dashboard/core'
+import { WidgetHost, createHeaderClockWidget, createHeaderSearchWidget } from '@/widgets'
 
 withDefaults(defineProps<{
   layout?: 'web' | 'extension'
@@ -35,6 +34,8 @@ const panelState = usePanelState()
 const authStore = useAuthStore()
 const userStore = useUserStore()
 const runtime = getRuntime()
+const AppStarter = defineAsyncComponent(() => import('./components/AppStarter/index.vue'))
+const EditItem = defineAsyncComponent(() => import('./components/EditItem/index.vue'))
 
 const scrollContainerRef = ref<HTMLElement | null>(null)
 
@@ -54,13 +55,16 @@ const currentAddItenIconGroupId = ref<number | undefined>()
 
 const settingModalShow = ref(false)
 
-const items = ref<ItemGroup[]>([])
-const filterItems = ref<ItemGroup[]>([])
+const items = ref<DashboardGroup[]>([])
+const filterItems = ref<DashboardGroup[]>([])
+const searchKeyword = ref('')
+const browserOnline = ref(navigator.onLine)
 type ExtensionSyncStatus = 'idle' | 'syncing' | 'online' | 'cached' | 'offline' | 'error'
 const extensionSyncStatus = ref<ExtensionSyncStatus>(runtime.kind === 'extension' ? 'syncing' : 'idle')
 const lastSyncAt = ref<string | null>(null)
 let hasCachedSnapshot = false
 let extensionRefreshPromise: Promise<void> | null = null
+let removeSyncConflictListener: (() => void) | null = null
 
 const canEdit = computed(() => authStore.visitMode === VisitMode.VISIT_MODE_LOGIN
   && (runtime.kind !== 'extension' || extensionSyncStatus.value === 'online'))
@@ -78,6 +82,18 @@ const extensionSyncLabel = computed(() => {
 const extensionSyncTitle = computed(() => lastSyncAt.value
   ? t('panelHome.syncLastAt', { time: new Date(lastSyncAt.value).toLocaleString() })
   : extensionSyncLabel.value)
+const runtimeLabel = computed(() => runtime.kind === 'extension' ? t('panelHome.runtimeExtension') : t('panelHome.runtimeWeb'))
+const networkLabel = computed(() => browserOnline.value ? t('panelHome.networkOnline') : t('panelHome.networkOffline'))
+const sessionLabel = computed(() => {
+  if (authStore.visitMode === VisitMode.VISIT_MODE_PUBLIC)
+    return t('panelHome.sessionPublic')
+  return authStore.authMode === 'device' ? t('panelHome.sessionDevice') : t('panelHome.sessionLegacy')
+})
+const sessionTitle = computed(() => authStore.accessExpiresAt
+  ? t('panelHome.sessionExpiresAt', { time: new Date(authStore.accessExpiresAt).toLocaleString() })
+  : sessionLabel.value)
+const headerClockWidget = computed(() => createHeaderClockWidget(!panelState.panelConfig.clockShowSecond))
+const headerSearchWidget = createHeaderSearchWidget()
 
 function openPage(openMethod: number, url: string, title?: string) {
   switch (openMethod) {
@@ -88,10 +104,15 @@ function openPage(openMethod: number, url: string, title?: string) {
       runtime.openUrl(url, 'tab')
       break
     case 3:
-      windowShow.value = true
-      windowSrc.value = url
-      windowTitle.value = title || url
-      windowIframeIsLoad.value = true
+      try {
+        windowSrc.value = runtime.resolveNavigationUrl(url)
+        windowShow.value = true
+        windowTitle.value = title || url
+        windowIframeIsLoad.value = true
+      }
+      catch {
+        ms.error(t('common.invalidUrl'))
+      }
       break
 
     default:
@@ -99,19 +120,12 @@ function openPage(openMethod: number, url: string, title?: string) {
   }
 }
 
-function handleItemClick(itemGroupIndex: number, item: Panel.ItemInfo) {
-  if (items.value[itemGroupIndex] && items.value[itemGroupIndex].sortStatus) {
+function handleItemClick(itemGroup: DashboardGroup, item: Panel.ItemInfo) {
+  if (itemGroup.sortStatus) {
     handleEditItem(item)
     return
   }
-
-  let jumpUrl = ''
-
-  if (item)
-    jumpUrl = (panelState.networkMode === PanelStateNetworkModeEnum.lan ? item.lanUrl : item.url) as string
-  if (item.lanUrl === '')
-    jumpUrl = item.url
-
+  const jumpUrl = selectItemUrl(item, panelState.networkMode === PanelStateNetworkModeEnum.lan)
   openPage(item.openMethod, jumpUrl, item.title)
 }
 
@@ -121,31 +135,33 @@ function handWindowIframeIdLoad(_payload: Event) {
 
 async function getList() {
   // 获取组数据
-  const { code, data } = await getGroupList<Common.ListResponse<ItemGroup[]>>()
+  const { code, data } = await getGroupList<Common.ListResponse<Panel.ItemIconGroup[]>>()
   if (code !== 0 || !data?.list)
     return false
-  items.value = data.list
+  items.value = normalizeDashboardGroups(data.list)
   await Promise.all(items.value.map(async (element, index) => {
     if (element.id)
       await updateItemIconGroupByNet(index, element.id)
   }))
-  filterItems.value = items.value
+  refreshFilteredItems()
   return true
 }
 
 // 从后端获取组下面的图标
 async function updateItemIconGroupByNet(itemIconGroupIndex: number, itemIconGroupId: number) {
   const res = await getListByGroupId<Common.ListResponse<Panel.ItemInfo[]>>(itemIconGroupId)
-  if (res.code === 0 && items.value[itemIconGroupIndex])
+  if (res.code === 0 && items.value[itemIconGroupIndex]) {
     items.value[itemIconGroupIndex].items = res.data.list
+    refreshFilteredItems()
+  }
 }
 
 function handleRightMenuSelect(key: string | number) {
   dropdownShow.value = false
   // console.log(currentRightSelectItem, key)
-  let jumpUrl = panelState.networkMode === PanelStateNetworkModeEnum.lan ? currentRightSelectItem.value?.lanUrl : currentRightSelectItem.value?.url
-  if (currentRightSelectItem.value?.lanUrl === '')
-    jumpUrl = currentRightSelectItem.value.url
+  const jumpUrl = currentRightSelectItem.value
+    ? selectItemUrl(currentRightSelectItem.value, panelState.networkMode === PanelStateNetworkModeEnum.lan)
+    : ''
   switch (key) {
     case 'newWindows':
       runtime.openUrl(jumpUrl || '', 'tab')
@@ -187,8 +203,8 @@ function handleRightMenuSelect(key: string | number) {
   }
 }
 
-function handleContextMenu(e: MouseEvent, itemGroupIndex: number, item: Panel.ItemInfo) {
-  if (items.value[itemGroupIndex] && items.value[itemGroupIndex].sortStatus)
+function handleContextMenu(e: MouseEvent, itemGroup: DashboardGroup, item: Panel.ItemInfo) {
+  if (itemGroup.sortStatus)
     return
 
   e.preventDefault()
@@ -225,18 +241,10 @@ function handleChangeNetwork(mode: PanelStateNetworkModeEnum) {
 //   // console.log(items.value)
 // }
 
-function handleSaveSort(itemGroup: ItemGroup) {
-  const saveItems: Common.SortItemRequest[] = []
-  if (itemGroup.items) {
-    for (let i = 0; i < itemGroup.items.length; i++) {
-      const element = itemGroup.items[i]
-      saveItems.push({
-        id: element.id as number,
-        sort: i + 1,
-      })
-    }
-
-    saveSort({ itemIconGroupId: itemGroup.id as number, sortItems: saveItems }).then(({ code, msg }) => {
+function handleSaveSort(itemGroup: DashboardGroup) {
+  const request = createItemSortRequest(itemGroup)
+  if (request) {
+    saveSort(request).then(({ code, msg }) => {
       if (code === 0) {
         ms.success(t('common.saveSuccess'))
         itemGroup.sortStatus = false
@@ -285,16 +293,14 @@ function getDropdownMenuOptions() {
 }
 
 function applyBootstrapData(data: Sync.BootstrapResponseV1) {
-  panelState.applyPanelConfig(data.panel.config)
-  authStore.setUserInfo(data.account)
+  const dashboard = createDashboardState(data)
+  setSyncRevision(dashboard.revision)
+  panelState.applyPanelConfig(dashboard.panelConfig)
+  authStore.setUserInfo(dashboard.account)
   authStore.setVisitMode(VisitMode.VISIT_MODE_LOGIN)
-  userStore.updateUserInfo(data.account)
-  items.value = data.panel.groups.map(group => ({
-    ...group,
-    hoverStatus: false,
-    items: group.items.map(item => ({ ...item })),
-  }))
-  filterItems.value = items.value
+  userStore.updateUserInfo(dashboard.account)
+  items.value = dashboard.groups
+  refreshFilteredItems()
   if (panelState.panelConfig.logoText)
     setTitle(panelState.panelConfig.logoText)
 }
@@ -327,12 +333,24 @@ async function refreshExtensionBootstrap() {
 }
 
 function handleBrowserOnline() {
+  browserOnline.value = true
   void refreshExtensionBootstrap()
 }
 
 function handleBrowserOffline() {
+  browserOnline.value = false
   if (runtime.kind === 'extension')
     extensionSyncStatus.value = hasCachedSnapshot ? 'offline' : 'error'
+}
+
+async function handleSyncConflict() {
+  if (runtime.kind === 'extension') {
+    await refreshExtensionBootstrap()
+    return
+  }
+  const bootstrap = await getBootstrap()
+  if (bootstrap.code === 0)
+    applyBootstrapData(bootstrap.data)
 }
 
 if (runtime.kind === 'extension') {
@@ -351,15 +369,24 @@ if (runtime.kind === 'extension') {
 }
 
 onMounted(async () => {
+  removeSyncConflictListener = onSyncConflict(handleSyncConflict)
+  window.addEventListener('online', handleBrowserOnline)
+  window.addEventListener('offline', handleBrowserOffline)
   if (runtime.kind === 'extension') {
-    window.addEventListener('online', handleBrowserOnline)
-    window.addEventListener('offline', handleBrowserOffline)
     void refreshExtensionBootstrap()
     return
   }
 
   // 更新用户信息
   await updateLocalUserInfo()
+
+  if (authStore.visitMode === VisitMode.VISIT_MODE_LOGIN) {
+    const bootstrap = await getBootstrap()
+    if (bootstrap.code === 0) {
+      applyBootstrapData(bootstrap.data)
+      return
+    }
+  }
 
   // 分组、卡片和面板配置来自同一个已验证会话，可以并行加载。
   await Promise.all([getList(), panelState.updatePanelConfigByCloud()])
@@ -370,49 +397,36 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  if (runtime.kind === 'extension') {
-    window.removeEventListener('online', handleBrowserOnline)
-    window.removeEventListener('offline', handleBrowserOffline)
-  }
+  removeSyncConflictListener?.()
+  window.removeEventListener('online', handleBrowserOnline)
+  window.removeEventListener('offline', handleBrowserOffline)
 })
 
 // 前端搜索过滤
 function itemFrontEndSearch(keyword?: string) {
-  keyword = keyword?.trim()
-  if (keyword !== '' && panelState.panelConfig.searchBoxSearchIcon) {
-    const filteredData = ref<ItemGroup[]>([])
-    for (let i = 0; i < items.value.length; i++) {
-      const element = items.value[i].items?.filter((item: Panel.ItemInfo) => {
-        return (
-          item.title.toLowerCase().includes(keyword?.toLowerCase() ?? '')
-          || item.url.toLowerCase().includes(keyword?.toLowerCase() ?? '')
-          || item.description?.toLowerCase().includes(keyword?.toLowerCase() ?? '')
-        )
-      })
-      if (element && element.length > 0)
-        filteredData.value.push({ items: element, hoverStatus: false })
-    }
-    filterItems.value = filteredData.value
-  }
-  else {
-    filterItems.value = items.value
-  }
+  searchKeyword.value = keyword ?? ''
+  refreshFilteredItems()
 }
 
-function handleSetHoverStatus(groupIndex: number, hoverStatus: boolean) {
-  if (items.value[groupIndex])
-    items.value[groupIndex].hoverStatus = hoverStatus
+function refreshFilteredItems() {
+  filterItems.value = filterDashboardGroups(items.value, searchKeyword.value, Boolean(panelState.panelConfig.searchBoxSearchIcon))
 }
 
-function handleSetSortStatus(groupIndex: number, sortStatus: boolean) {
-  if (items.value[groupIndex])
-    items.value[groupIndex].sortStatus = sortStatus
+function handleSetHoverStatus(group: DashboardGroup, hoverStatus: boolean) {
+  group.hoverStatus = hoverStatus
+}
 
-  // 并未保存排序重新更新数据
+function handleSetSortStatus(group: DashboardGroup, sortStatus: boolean) {
+  const source = items.value.find(item => item.id === group.id)
+  if (!source)
+    return
+  source.sortStatus = sortStatus
+  group.sortStatus = sortStatus
+
   if (!sortStatus) {
-    // 单独更新组
-    if (items.value[groupIndex] && items.value[groupIndex].id)
-      updateItemIconGroupByNet(groupIndex, items.value[groupIndex].id as number)
+    const sourceIndex = items.value.indexOf(source)
+    if (source.id)
+      updateItemIconGroupByNet(sourceIndex, source.id)
   }
 }
 
@@ -441,18 +455,24 @@ function handleAddItem(itemIconGroupId?: number) {
       }"
     />
     <div class="mask" :style="{ backgroundColor: `rgba(0,0,0,${panelState.panelConfig.backgroundMaskNumber})` }" />
-    <button
-      v-if="layout === 'extension'"
-      type="button"
-      class="sync-indicator"
-      :class="`sync-${extensionSyncStatus}`"
-      :title="extensionSyncTitle"
-      :disabled="extensionSyncStatus === 'syncing'"
-      @click="refreshExtensionBootstrap"
-    >
-      <span class="sync-dot" />
-      {{ extensionSyncLabel }}
-    </button>
+    <div class="runtime-status-bar" role="status" :aria-label="t('panelHome.statusOverview')">
+      <span class="status-chip">{{ runtimeLabel }}</span>
+      <span class="status-chip" :class="browserOnline ? 'status-online' : 'status-offline'">
+        <span class="status-dot" />{{ networkLabel }}
+      </span>
+      <button
+        v-if="layout === 'extension'"
+        type="button"
+        class="status-chip sync-indicator"
+        :class="`sync-${extensionSyncStatus}`"
+        :title="extensionSyncTitle"
+        :disabled="extensionSyncStatus === 'syncing'"
+        @click="refreshExtensionBootstrap"
+      >
+        <span class="sync-dot" />{{ extensionSyncLabel }}
+      </button>
+      <span class="status-chip" :title="sessionTitle">{{ sessionLabel }}</span>
+    </div>
     <div ref="scrollContainerRef" class="absolute w-full h-full overflow-auto">
       <div
         class="home-content p-2.5 mx-auto"
@@ -474,11 +494,11 @@ function handleAddItem(itemIconGroupId?: number) {
               |
             </div>
             <div class="text-shadow">
-              <Clock :hide-second="!panelState.panelConfig.clockShowSecond" />
+              <WidgetHost :instance="headerClockWidget" />
             </div>
           </div>
           <div v-if="panelState.panelConfig.searchBoxShow" class="home-search flex mt-[20px] mx-auto sm:w-full lg:w-[80%]">
-            <SearchBox @item-search="itemFrontEndSearch" />
+            <WidgetHost :instance="headerSearchWidget" @item-search="itemFrontEndSearch" />
           </div>
         </div>
 
@@ -507,8 +527,8 @@ function handleAddItem(itemIconGroupId?: number) {
             v-for="(itemGroup, itemGroupIndex) in filterItems" :key="itemGroupIndex"
             class="item-list mt-[50px]"
             :class="itemGroup.sortStatus ? 'shadow-2xl border shadow-[0_0_30px_10px_rgba(0,0,0,0.3)]  p-[10px] rounded-2xl' : ''"
-            @mouseenter="handleSetHoverStatus(itemGroupIndex, true)"
-            @mouseleave="handleSetHoverStatus(itemGroupIndex, false)"
+            @mouseenter="handleSetHoverStatus(itemGroup, true)"
+            @mouseleave="handleSetHoverStatus(itemGroup, false)"
           >
             <!-- 分组标题 -->
             <div class="text-white text-xl font-extrabold mb-[20px] ml-[10px] flex items-center">
@@ -523,7 +543,7 @@ function handleAddItem(itemIconGroupId?: number) {
                 <span class="mr-2 cursor-pointer" :title="t('common.add')" @click="handleAddItem(itemGroup.id)">
                   <SvgIcon class="text-white font-xl" icon="typcn:plus" />
                 </span>
-                <span class="mr-2 cursor-pointer " :title="t('common.sort')" @click="handleSetSortStatus(itemGroupIndex, !itemGroup.sortStatus)">
+                <span class="mr-2 cursor-pointer " :title="t('common.sort')" @click="handleSetSortStatus(itemGroup, !itemGroup.sortStatus)">
                   <SvgIcon class="text-white font-xl" icon="ri:drag-drop-line" />
                 </span>
               </div>
@@ -538,7 +558,7 @@ function handleAddItem(itemIconGroupId?: number) {
                   filter=".not-drag"
                   :disabled="!itemGroup.sortStatus"
                 >
-                  <div v-for="item, index in itemGroup.items" :key="index" :title="item.description" @contextmenu="(e) => handleContextMenu(e, itemGroupIndex, item)">
+                  <div v-for="item, index in itemGroup.items" :key="index" :title="item.description" @contextmenu="(e) => handleContextMenu(e, itemGroup, item)">
                     <AppIcon
                       :class="itemGroup.sortStatus ? 'cursor-move' : 'cursor-pointer'"
                       :item-info="item"
@@ -546,7 +566,7 @@ function handleAddItem(itemIconGroupId?: number) {
                       :icon-text-info-hide-description="panelState.panelConfig.iconTextInfoHideDescription || false"
                       :icon-text-icon-hide-title="panelState.panelConfig.iconTextIconHideTitle || false"
                       :style="0"
-                      @click="handleItemClick(itemGroupIndex, item)"
+                      @click="handleItemClick(itemGroup, item)"
                     />
                   </div>
 
@@ -575,7 +595,7 @@ function handleAddItem(itemIconGroupId?: number) {
                   filter=".not-drag"
                   :disabled="!itemGroup.sortStatus"
                 >
-                  <div v-for="item, index in itemGroup.items" :key="index" :title="item.description" @contextmenu="(e) => handleContextMenu(e, itemGroupIndex, item)">
+                  <div v-for="item, index in itemGroup.items" :key="index" :title="item.description" @contextmenu="(e) => handleContextMenu(e, itemGroup, item)">
                     <AppIcon
                       :class="itemGroup.sortStatus ? 'cursor-move' : 'cursor-pointer'"
                       :item-info="item"
@@ -583,7 +603,7 @@ function handleAddItem(itemIconGroupId?: number) {
                       :icon-text-info-hide-description="!panelState.panelConfig.iconTextInfoHideDescription"
                       :icon-text-icon-hide-title="panelState.panelConfig.iconTextIconHideTitle || false"
                       :style="1"
-                      @click="handleItemClick(itemGroupIndex, item)"
+                      @click="handleItemClick(itemGroup, item)"
                     />
                   </div>
 
@@ -649,7 +669,7 @@ function handleAddItem(itemIconGroupId?: number) {
           </template>
         </NButton>
 
-        <NButton v-if="canEdit" color="#2a2a2a6b" @click="settingModalShow = !settingModalShow">
+        <NButton v-if="canEdit" color="#2a2a2a6b" :title="t('appLauncher.title')" @click="settingModalShow = !settingModalShow">
           <template #icon>
             <SvgIcon class="text-white font-xl" icon="majesticons-applications" />
           </template>
@@ -662,7 +682,7 @@ function handleAddItem(itemIconGroupId?: number) {
         </NButton>
       </NButtonGroup>
 
-      <AppStarter v-model:visible="settingModalShow" />
+      <AppStarter v-if="settingModalShow" v-model:visible="settingModalShow" />
       <!-- <Setting v-model:visible="settingModalShow" /> -->
     </div>
 
@@ -681,7 +701,7 @@ function handleAddItem(itemIconGroupId?: number) {
       </div>
     </NBackTop>
 
-    <EditItem v-model:visible="editItemInfoShow" :item-info="editItemInfoData" :item-group-id="currentAddItenIconGroupId" @done="handleEditSuccess" />
+    <EditItem v-if="editItemInfoShow" v-model:visible="editItemInfoShow" :item-info="editItemInfoData" :item-group-id="currentAddItenIconGroupId" @done="handleEditSuccess" />
 
     <!-- 弹窗 -->
     <NModal
@@ -731,14 +751,23 @@ html {
 }
 
 .sun-main {
+  overflow: hidden;
   user-select: none;
 }
 
-.sync-indicator {
+.runtime-status-bar {
   position: fixed;
   z-index: 40;
   top: 16px;
   right: 18px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+  max-width: calc(100% - 36px);
+}
+
+.status-chip {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -750,6 +779,11 @@ html {
   box-shadow: 0 8px 28px rgb(0 0 0 / 16%);
   backdrop-filter: blur(14px);
   font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.sync-indicator {
   cursor: pointer;
 }
 
@@ -762,6 +796,21 @@ html {
   height: 7px;
   border-radius: 50%;
   background: #94a3b8;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+
+.status-online .status-dot {
+  background: #4ade80;
+}
+
+.status-offline .status-dot {
+  background: #f59e0b;
 }
 
 .sync-online .sync-dot {
@@ -777,6 +826,18 @@ html {
 .sync-offline .sync-dot,
 .sync-error .sync-dot {
   background: #f59e0b;
+}
+
+@media (max-width: 640px) {
+  .runtime-status-bar {
+    top: 10px;
+    right: 10px;
+    max-width: calc(100% - 20px);
+  }
+
+  .status-chip {
+    padding: 7px 9px;
+  }
 }
 
 .extension-home .home-content {

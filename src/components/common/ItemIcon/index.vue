@@ -2,6 +2,7 @@
 import { NAvatar, NImage } from 'naive-ui'
 import { computed, ref } from 'vue'
 import { SvgIconOnline } from '@/components/common'
+import { getRuntime } from '@/runtime'
 
 interface Prop {
   itemIcon?: Panel.ItemIcon | null
@@ -18,6 +19,7 @@ const defaultStyle = ref({
 const iconExt = computed(() => {
   return props.itemIcon?.src?.split('.').pop()
 })
+const iconSrc = computed(() => getRuntime().resolveUrl(props.itemIcon?.src ?? ''))
 </script>
 
 <template>
@@ -32,9 +34,9 @@ const iconExt = computed(() => {
 
         <template v-else-if="itemIcon?.itemType === 2">
           <div v-if="iconExt === 'svg'" :style="{ backgroundColor: (forceBackground ?? itemIcon?.backgroundColor) || defaultBackground, ...defaultStyle }" class="flex justify-center items-center">
-            <img :src="itemIcon?.src" class="w-[35px] h-[35px]">
+            <img :src="iconSrc" class="w-[35px] h-[35px]">
           </div>
-          <NImage v-else :style="{ backgroundColor: (forceBackground ?? itemIcon?.backgroundColor) || defaultBackground, ...defaultStyle }" :src="itemIcon?.src" preview-disabled />
+          <NImage v-else :style="{ backgroundColor: (forceBackground ?? itemIcon?.backgroundColor) || defaultBackground, ...defaultStyle }" :src="iconSrc" preview-disabled />
         </template>
 
         <template v-else-if="itemIcon?.itemType === 3">

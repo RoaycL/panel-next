@@ -1,16 +1,18 @@
 <script setup lang='ts'>
 import { NImage } from 'naive-ui'
-import { ref } from 'vue'
-defineProps<{
+import { computed, ref } from 'vue'
+import { getRuntime } from '@/runtime'
+const props = defineProps<{
   src: string
 }>()
-
 const emit = defineEmits<{
   (event: 'click'): void
   (event: 'refresh'): void
 }>()
 
+const resolvedSrc = computed(() => getRuntime().resolveUrl(props.src))
 const randCode = ref<string>('0')
+const captchaSrc = computed(() => `${resolvedSrc.value}${resolvedSrc.value.includes('?') ? '&' : '?'}${randCode.value}`)
 
 function handleClick() {
   randCode.value = String(rand(100, 99999))
@@ -32,7 +34,7 @@ defineExpose({
 <template>
   <!-- <div> -->
   <NImage
-    :src="`${src}?${randCode}`"
+    :src="captchaSrc"
     :preview-disabled="true"
     @click="handleClick"
   />

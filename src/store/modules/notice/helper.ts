@@ -1,4 +1,4 @@
-import { ss } from '@/utils/storage'
+import { persistentStorage } from '@/utils/storage'
 
 const LOCAL_NAME = 'noticeStore'
 
@@ -12,10 +12,10 @@ export function defaultSetting(): NoticeStore {
 }
 
 export function getLocalSetting(): NoticeStore {
-  const localSetting: NoticeStore | undefined = ss.get(LOCAL_NAME)
+  const localSetting = persistentStorage.get<NoticeStore>(LOCAL_NAME)
   return { ...defaultSetting(), ...localSetting }
 }
 
 export function setLocalSetting(setting: NoticeStore): void {
-  ss.set(LOCAL_NAME, setting)
+  persistentStorage.set(LOCAL_NAME, setting)
 }

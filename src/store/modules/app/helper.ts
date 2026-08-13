@@ -1,4 +1,4 @@
-import { ss } from '@/utils/storage'
+import { persistentStorage } from '@/utils/storage'
 
 const LOCAL_NAME = 'appSetting'
 
@@ -22,14 +22,14 @@ export function defaultSetting(): AppState {
 }
 
 export function getLocalSetting(): AppState {
-  const localSetting: AppState | undefined = ss.get(LOCAL_NAME)
+  const localSetting = persistentStorage.get<AppState>(LOCAL_NAME)
   return { ...defaultSetting(), ...localSetting }
 }
 
 export function setLocalSetting(setting: AppState): void {
-  ss.set(LOCAL_NAME, setting)
+  persistentStorage.set(LOCAL_NAME, setting)
 }
 
 export function removeLocalState() {
-  ss.remove(LOCAL_NAME)
+  persistentStorage.remove(LOCAL_NAME)
 }

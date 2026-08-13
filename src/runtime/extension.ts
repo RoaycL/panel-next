@@ -1,4 +1,5 @@
 import type { RuntimeAdapter, StorageAdapter } from './types'
+import { resolveHttpUrl } from './url'
 
 const SERVER_ORIGIN_KEY = 'panelNext.runtime.serverOrigin'
 const DATA_PREFIX = 'panelNext.data.'
@@ -62,6 +63,7 @@ class ChromeStorageAdapter implements StorageAdapter {
   private readonly values = new Map<string, string>()
   private origin: string | null = null
   private writeQueue = Promise.resolve()
+  private writeFailure: unknown = null
 
   constructor(private readonly area: ChromeStorageArea, onChanged: ChromeRuntimeApi['storage']['onChanged']) {
     onChanged.addListener((changes, areaName) => {
@@ -114,6 +116,7 @@ class ChromeStorageAdapter implements StorageAdapter {
 
   private enqueue(operation: () => Promise<void>) {
     this.writeQueue = this.writeQueue.then(operation).catch((error) => {
+      this.writeFailure = error
       console.error('Failed to persist extension storage.', error)
     })
   }
@@ -151,6 +154,11 @@ class ChromeStorageAdapter implements StorageAdapter {
 
   async flush() {
     await this.writeQueue
+    if (this.writeFailure) {
+      const failure = this.writeFailure
+      this.writeFailure = null
+      throw failure
+    }
   }
 }
 
@@ -257,12 +265,21 @@ export function createExtensionRuntime(): RuntimeAdapter {
       }
       return origin
     },
+    resolveUrl(url) {
+      if (!url || !serverOrigin || !url.startsWith('/'))
+        return url
+      return new URL(url, serverOrigin).href
+    },
+    resolveNavigationUrl(url) {
+      return resolveHttpUrl(url, serverOrigin ?? window.location.href)
+    },
     openUrl(url, mode) {
+      const target = resolveHttpUrl(url, serverOrigin ?? window.location.href)
       if (mode === 'current') {
-        window.location.assign(url)
+        window.location.assign(target)
         return
       }
-      window.open(url, '_blank', 'noopener,noreferrer')
+      window.open(target, '_blank', 'noopener,noreferrer')
     },
   }
 }

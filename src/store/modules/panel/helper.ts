@@ -1,4 +1,4 @@
-import { ss } from '@/utils/storage'
+import { persistentStorage } from '@/utils/storage'
 import { PanelPanelConfigStyleEnum, PanelStateNetworkModeEnum } from '@/enums'
 import defaultBackground from '@/assets/defaultBackground.webp'
 const LOCAL_NAME = 'panelStorage'
@@ -43,14 +43,14 @@ export function defaultState(): Panel.State {
 }
 
 export function getLocalState(): Panel.State {
-  const localState = ss.get(LOCAL_NAME)
+  const localState = persistentStorage.get<Partial<Panel.State>>(LOCAL_NAME)
   return { ...defaultState(), ...localState }
 }
 
 export function setLocalState(state: Panel.State) {
-  ss.set(LOCAL_NAME, state)
+  persistentStorage.set(LOCAL_NAME, state)
 }
 
 export function removeLocalState() {
-  ss.remove(LOCAL_NAME)
+  persistentStorage.remove(LOCAL_NAME)
 }

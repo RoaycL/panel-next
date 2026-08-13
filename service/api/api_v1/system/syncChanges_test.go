@@ -43,7 +43,14 @@ func TestSyncChangesReturnsAccountScopedPage(t *testing.T) {
 	}
 	previousDB := global.Db
 	global.Db = db
-	t.Cleanup(func() { global.Db = previousDB })
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		global.Db = previousDB
+		_ = sqlDB.Close()
+	})
 
 	response := callSyncChanges(t, models.User{BaseModel: models.BaseModel{ID: 7}}, sessionlib.AuthModeDevice, "0", "1")
 	if response.Code != http.StatusOK {

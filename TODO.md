@@ -5,11 +5,11 @@
 ## 当前状态
 
 - 状态更新时间：`2026-08-13`。
-- 当前开发分支：`agent/postgres-device-sync-foundation`（基于已合并扩展基础的 `main`）。
+- 当前开发分支：`main`（多人协作通过功能分支和 Pull Request 合入）。
 - 已完成：前端工具链升级、SQLite 完整备份恢复、MySQL/PostgreSQL 逻辑备份迁移。
 - 当前主线：先建立 Web/Chrome 双端基础，再继续品牌、图库、组件和官方公开能力对齐。
 - 双端布局：Web 保持原导航布局；Extension 已建立专用新标签页路由与响应式玻璃分组布局，底层数据和卡片交互继续共享。
-- 最近验证：后端 `go test ./...`、`go vet ./...` 及同步、CORS、会话/API 处理器 `-race` 通过；前端架构/缓存校验、TypeScript 类型检查、ESLint、Web/Extension 生产构建和扩展包校验通过；本机 PostgreSQL 17.10 已验证同步表迁移、约束与索引。
+- 最近验证：后端 `go test ./...`、`go vet ./...` 及同步状态/面板写接口 `-race` 通过；前端架构/缓存校验、TypeScript 类型检查、本次改动文件 ESLint、Web/Extension 生产构建和扩展包校验通过（全仓仍有 47 个历史 ESLint 错误）；本机 PostgreSQL 17.10 已验证同步表迁移、约束与索引。
 - 已知环境缺口：PostgreSQL 17.10 已完成真实迁移及备份恢复演练；MySQL 真实恢复演练和 Chrome 手工加载仍待具备相应环境时执行。
 
 ## P0：架构与仓库准备
@@ -58,23 +58,23 @@ P1 验收门槛：不得修改生产数据库结构；不得发布到 Chrome 商
 - [x] `SYNC-04` 扩展缓存最近一次完整快照并校验格式版本。Extension 在线加载首页时并行请求 bootstrap，只有完整通过校验才替换缓存；StorageAdapter 先按服务器 Origin 分区，缓存键再按账号 ID 隔离，信封重复记录并核对作用域。读写校验覆盖 cache/schema 版本、revision、时间、字段、ID 唯一性、卡片分组归属、10 万卡片及 5 MiB 上限，损坏或跨作用域缓存自动删除；独立验证脚本纳入 `build:all`。
 - [x] `SYNC-05` 实现缓存首屏、后台刷新、离线标识和重试退避。Extension 在首次渲染前同步应用按 Origin/账号校验的快照，后台只通过 bootstrap 更新界面与缓存；传输失败按 0/1/3 秒最多尝试三次，认证/API 响应不重试，浏览器恢复在线或用户点击状态胶囊时立即重试。有缓存失败显示离线缓存，无缓存明确不可用；非在线状态关闭编辑入口，避免误导为支持离线写入。重试边界纳入缓存验证脚本。
 - [x] `SYNC-06` 实现增量 changes 接口和客户端 revision 游标。新增账号级 `user_sync_state`/`user_sync_change`、事务内单调 revision 与有序分页；设备会话保护的 `GET /api/v1/sync/changes` 支持默认 200/最大 500、字符串游标、账号隔离、删除空载荷和游标超前 bootstrap 回退。客户端严格校验页结构和 revision 顺序，以已应用快照 revision 作为唯一可信游标，暂不推进未应用游标。派生日志不进入逻辑备份，恢复会在同一事务清除旧日志并按资源最大 revision 重建基线；本机 PostgreSQL 17.10 实迁移确认两张表、`BIGINT` revision、唯一约束和查询索引。
-- [ ] `SYNC-07` 写操作携带 revision，服务端拒绝静默覆盖冲突。
-- [ ] `SYNC-08` 覆盖双端一致性、旧缓存升级、损坏缓存和离线恢复测试。
+- [x] `SYNC-07` 写操作携带 revision，服务端拒绝静默覆盖冲突。分组、卡片、批量导入、删除、排序和面板配置统一携带账号级 `expectedRevision`；服务端锁定账号同步状态，在同一事务分配新 revision、写业务数据和 changes 日志，陈旧写入返回 `1502` 并完整回滚。前端仅在校验响应后推进 revision，冲突时自动重新 bootstrap。测试覆盖回滚、陈旧写拒绝、账号隔离、跨账号分组绑定和竞态检测。
+- [x] `SYNC-08` 覆盖双端一致性、旧缓存升级、损坏缓存和离线恢复测试。Extension 从可信快照 revision 连续拉取 changes，逐页校验游标、资源 ID、payload 和资源归属，在内存完整应用全部分页后才单键持久化；任一缺页、损坏、游标异常、存储失败或中途离线均保留旧快照并回退 bootstrap。缓存信封从 v1 自动升级为带显式 `cursorRevision` 的 v2，独立验证覆盖分组更新保留子项、卡片跨组移动、损坏 payload、分页原子性、旧缓存迁移和断线重试。
 
 ## P4：共享前端与双端体验
 
-- [ ] `SHARED-01` 将平台无关的面板逻辑从页面组件抽到共享核心。
-- [ ] `SHARED-02` 所有本地存储通过 StorageAdapter，清除误名 `ss` 但实际使用 localStorage 的历史实现。
-- [ ] `SHARED-03` 所有 URL 打开行为通过 RuntimeAdapter，并拒绝危险协议。
-- [ ] `SHARED-04` API 客户端支持同源 Web 与可配置扩展 Origin。
-- [ ] `SHARED-05` Web 和扩展分别懒加载管理功能，控制新标签页首屏体积。
-- [ ] `SHARED-06` 增加运行环境、网络、离线、同步和会话状态 UI。
-- [ ] `SHARED-07` 完成桌面、窄屏、高 DPI、浅色/深色主题回归。
+- [x] `SHARED-01` 将平台无关的面板逻辑从页面组件抽到共享核心。新增 `src/dashboard/core.ts`，统一 bootstrap 到面板状态的映射、分组规范化、搜索过滤、排序请求和 LAN/WAN 地址选择；首页只负责 Vue 交互和运行时副作用，Web/Extension 共用同一套纯逻辑。搜索结果保留稳定分组 ID 与标题，修复过滤后按数组索引编辑错组的隐患，独立验证已纳入 `build:all`。
+- [x] `SHARED-02` 所有本地存储通过 StorageAdapter，清除误名 `ss` 但实际使用 localStorage 的历史实现。应用、认证、面板、用户、公告和模块配置统一使用 `persistentStorage`，底层只访问当前 Runtime 的 StorageAdapter；保留原键名与 JSON 信封以兼容现有数据，移除 `ss`/`ls` 别名和死代码，并为读取接口补充泛型类型。架构验证现在阻止业务代码直接访问浏览器存储或重新引入旧别名。
+- [x] `SHARED-03` 所有 URL 打开行为通过 RuntimeAdapter，并拒绝危险协议。RuntimeAdapter 新增统一的安全导航解析，Web/Extension 打开动作与卡片 iframe 共用 HTTP(S) 白名单；应用根节点捕获静态链接、用户自定义 footer 链接及新标签/辅助点击并交给适配器处理。Blob 下载保持独立下载语义，架构规则禁止业务代码直接调用 `window.open`，独立验证覆盖相对地址与 `javascript:`、`data:`、`file:`、`mailto:` 拒绝。
+- [x] `SHARED-04` API 客户端支持同源 Web 与可配置扩展 Origin。Axios 请求拦截器按请求动态读取 Runtime API baseURL；验证码公共组件与图标/壁纸上传不再写死当前页面 `/api`，统一解析到 Web 同源或 Extension 已授权服务器 Origin。上传同时发送标准 Bearer 与兼容 token，架构验证禁止重新引入字面量 `/api` 上传 action。
+- [x] `SHARED-05` Web 和扩展分别懒加载管理功能，控制新标签页首屏体积。路由继续按 Runtime 分离 Web 首页与 Extension 外壳，管理应用由 AppLoader 动态分块；首页不再通过 barrel 静态引入 AppStarter 与 EditItem，只有用户打开管理器或编辑卡片时才下载并挂载。静态依赖边界验证已纳入 `build:all`，同时覆盖两个按需入口及管理应用动态 import。
+- [x] `SHARED-06` 增加运行环境、网络、离线、同步和会话状态 UI。首页新增 Web/Chrome 双端共用状态栏，展示运行端、浏览器在线/离线、公开/兼容/设备会话及到期时间；Extension 同栏展示缓存/同步/离线/不可用状态并保留点击重试。双端统一监听 online/offline 生命周期，状态 UI 验证纳入 `build:all`。
+- [x] `SHARED-07` 完成桌面、窄屏、高 DPI、浅色/深色主题回归。真实浏览器检查覆盖桌面与 390×844 窄屏、深色主题和窄屏管理弹窗，关键元素均在视口内；修复模糊背景层造成的约 10px 横向绘制溢出，并为设置入口补齐可访问标题。静态回归锁定 640px 断点、状态栏换行/裁剪、响应式字号、SVG 图标和系统浅/深主题钩子，Web/Extension 生产构建共同验收。
 
 ## P5：iTab 风格组件框架
 
-- [ ] `WIDGET-01` 定义组件注册表、配置 schema、尺寸、位置和版本迁移。
-- [ ] `WIDGET-02` 时钟、日期和搜索框迁入组件框架。
+- [x] `WIDGET-01` 定义组件注册表、配置 schema、尺寸、位置和版本迁移。新增共享 WidgetRegistry 与 v1 布局信封，组件定义包含稳定 type、当前版本、配置解析器、默认配置、异步 loader、默认/最小/最大网格尺寸及逐版本迁移；实例包含稳定 ID、网格位置、尺寸、隐藏状态和配置。加载时隔离未知、重复或损坏实例，尺寸安全收敛，验证覆盖注册冲突、配置 schema、迁移链、边界和未来版本拒绝。
+- [x] `WIDGET-02` 时钟、日期和搜索框迁入组件框架。注册 `core.clock`、`core.date`、`core.search` 三个内置组件定义，各自声明配置 schema、默认配置、网格尺寸和异步 loader；通用 WidgetHost 负责按 type 加载、配置/事件透传、隐藏和加载失败隔离。首页头部改由注册表实例渲染时钟与搜索，旧 `clockShowSecond`/`searchBoxShow` 配置继续兼容，日期可作为独立实例或时钟组合显示。
 - [ ] `WIDGET-03` 增加天气组件及后端代理缓存。
 - [ ] `WIDGET-04` 增加热搜/资讯组件及可替换数据源。
 - [ ] `WIDGET-05` 增加倒计时/纪念日组件。
@@ -140,4 +140,4 @@ pnpm run build-only
 
 ## 当前下一步
 
-`EXT-08` 等具备桌面 Chrome 环境后再人工验收，不阻塞后续开发。Extension 已完成缓存优先首屏、后台刷新和离线降级。当前推进 `SYNC-07`：让分组、卡片和面板配置写操作携带 revision，在同一事务写入变更日志并拒绝静默覆盖冲突；完成前客户端继续使用完整 bootstrap 刷新。
+`EXT-08` 等具备桌面 Chrome 环境后再人工验收，不阻塞后续开发。同步主链、共享前端与 `WIDGET-01`、`WIDGET-02` 已完成，当前推进 `WIDGET-03`：增加天气组件及后端代理缓存。

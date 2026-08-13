@@ -4,6 +4,7 @@ import { t } from '@/locales'
 
 const props = defineProps<{
   hideSecond?: boolean
+  display?: 'time' | 'date' | 'both'
 }>()
 
 interface CurrentDate {
@@ -68,10 +69,10 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="clock w-full text-center">
-    <span class="clock-time text-2xl sm:text-2xl md:text-3xl font-[600]">
+    <span v-if="display !== 'date'" class="clock-time text-2xl sm:text-2xl md:text-3xl font-[600]">
       {{ currentDate.time }}
     </span>
-    <div class="hidden sm:hidden md:block">
+    <div v-if="display !== 'time'" :class="display === 'both' || !display ? 'hidden sm:hidden md:block' : ''">
       <span class="clock-date mr-1">
         {{ currentDate.date }}
       </span>

@@ -5,6 +5,7 @@ import { computed } from 'vue'
 import { ItemIcon } from '@/components/common'
 import { useAuthStore } from '@/store'
 import { apiRespErrMsg } from '@/utils/request/apiMessage'
+import { getRuntime } from '@/runtime'
 
 const props = defineProps<{
   itemIcon: Panel.ItemIcon | null
@@ -13,6 +14,7 @@ const emit = defineEmits<{
   (e: 'update:itemIcon', visible: Panel.ItemIcon): void // 定义修改父组件（prop内）的值的事件
 }>()
 const authStore = useAuthStore()
+const uploadAction = getRuntime().resolveUrl('/api/file/uploadImg')
 
 // 默认图标背景色
 const defautSwatchesBackground = [
@@ -141,10 +143,11 @@ const handleUploadFinish = ({
           <div v-if="itemIconInfo.itemType === 2">
             <NInput v-model:value="itemIconInfo.src" class="mb-[5px] w-full" size="small" type="text" :placeholder="$t('iconItem.inputIconUrlOrUpload')" @input="handleChange" />
             <NUpload
-              action="/api/file/uploadImg"
+              :action="uploadAction"
               :show-file-list="false"
               name="imgfile"
               :headers="{
+                Authorization: `Bearer ${authStore.token}`,
                 token: authStore.token as string,
               }"
               @finish="handleUploadFinish"

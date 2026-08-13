@@ -1,4 +1,5 @@
 import type { RuntimeAdapter, RuntimeKind, StorageAdapter } from './types'
+import { resolveHttpUrl } from './url'
 
 class WebStorageAdapter implements StorageAdapter {
   constructor(private readonly storage: Storage) {}
@@ -34,12 +35,19 @@ export function createWebRuntime(kind: RuntimeKind): RuntimeAdapter {
     async configureServer() {
       throw new Error('Web mode always uses the current server.')
     },
+    resolveUrl(url) {
+      return url
+    },
+    resolveNavigationUrl(url) {
+      return resolveHttpUrl(url, window.location.href)
+    },
     openUrl(url, mode) {
+      const target = resolveHttpUrl(url, window.location.href)
       if (mode === 'current') {
-        window.location.assign(url)
+        window.location.assign(target)
         return
       }
-      window.open(url, '_blank', 'noopener,noreferrer')
+      window.open(target, '_blank', 'noopener,noreferrer')
     },
   }
 }

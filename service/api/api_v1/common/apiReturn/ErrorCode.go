@@ -24,6 +24,7 @@ var ErrorCodeMap = map[int]string{
 
 	1400: "Parameter format error", // 参数格式错误
 
-	1501: "Sync cursor is ahead of the server", // 同步游标超前，需要重新 bootstrap
+	1501: "Sync cursor is ahead of the server",              // 同步游标超前，需要重新 bootstrap
+	1502: "Sync revision conflict; refresh before retrying", // 写入基于旧版本，禁止静默覆盖
 
 }

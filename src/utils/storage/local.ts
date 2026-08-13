@@ -27,7 +27,7 @@ export function createLocalStorage(options?: { expire?: number | null; crypto?: 
     getRuntime().storage.setItem(key, json)
   }
 
-  function get(key: string) {
+  function get<T = unknown>(key: string): T | null {
     const json = getRuntime().storage.getItem(key)
     if (json) {
       let storageData: StorageData | null = null
@@ -42,12 +42,13 @@ export function createLocalStorage(options?: { expire?: number | null; crypto?: 
       if (storageData) {
         const { data, expire } = storageData
         if (expire === null || expire >= Date.now())
-          return data
+          return data as T
       }
 
       remove(key)
       return null
     }
+    return null
   }
 
   function remove(key: string) {
@@ -66,6 +67,7 @@ export function createLocalStorage(options?: { expire?: number | null; crypto?: 
   }
 }
 
-export const ls = createLocalStorage()
+export const expiringStorage = createLocalStorage()
 
-export const ss = createLocalStorage({ expire: null, crypto: false })
+/** Persistent JSON storage backed by the active Runtime StorageAdapter. */
+export const persistentStorage = createLocalStorage({ expire: null, crypto: false })
