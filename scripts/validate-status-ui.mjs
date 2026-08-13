@@ -11,5 +11,7 @@ for (const required of [
   assert.ok(home.includes(required), `status UI is missing ${required}`)
 }
 assert.match(home, /v-if="layout === 'extension'"[\s\S]*refreshExtensionBootstrap/)
+assert.match(home, /authStore\.visitMode === VisitMode\.VISIT_MODE_LOGIN && authStore\.authMode === 'device'/)
+assert.match(home, /if \(authStore\.authMode !== 'device'\)\s+return\s+const bootstrap = await getBootstrap\(\)/)
 
-console.log('Validated runtime, network, sync, and session status UI')
+console.log('Validated runtime, network, sync, session status UI, and legacy-session bootstrap guard')
