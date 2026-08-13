@@ -206,6 +206,7 @@ DELETE /api/v1/sessions/:id
 - Pinia 与工具层只使用语义明确的 `persistentStorage` 包装器，包装器再调用当前 Runtime 的 StorageAdapter；历史 `ss`/`ls` 别名已移除，现有键名和 JSON 信封保持兼容。
 - 会话和缓存使用不同键空间；退出登录必须清除会话，用户可选择保留非敏感缓存。
 - `chrome.storage.sync` 不保存 Sun-Panel 账号 Token，也不作为业务同步源。
+- API、验证码与上传地址均通过 RuntimeAdapter 解析：Web 使用构建配置的同源 `/api`，Extension 使用用户授权的服务器 Origin；业务组件不得写死当前扩展页面的 `/api` action。
 - Extension 的 bootstrap 快照使用独立缓存版本，先由服务器 Origin 的 StorageAdapter 分区，再按账号 ID 分键；快照信封同时记录 Origin 与账号，读取时必须双重匹配。
 - 快照写入前和读取后都校验 schemaVersion、十进制 revision、时间、字段类型、ID 唯一性、分组归属及数量/5 MiB 上限；损坏、跨实例、跨账号或未来不兼容的快照立即忽略并删除。
 - Extension 在组件首次渲染前同步读取可信快照并应用面板配置、分组和卡片；随后在后台优先增量同步，无法安全应用时请求 bootstrap，成功后原子替换界面与缓存。

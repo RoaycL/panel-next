@@ -12,6 +12,7 @@ const forbidden = [
   { name: 'sessionStorage', pattern: /\b(?:window\s*\.\s*)?sessionStorage\b/g },
   { name: 'legacy ss/ls storage alias', pattern: /\b(?:ss|ls)\s*\./g },
   { name: 'window.open', pattern: /\bwindow\s*\.\s*open\s*\(/g },
+  { name: 'literal API upload action', pattern: /\baction\s*=\s*["']\/api\//g },
 ]
 
 const violations = []
