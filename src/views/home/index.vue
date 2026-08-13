@@ -666,7 +666,7 @@ function handleAddItem(itemIconGroupId?: number) {
           </template>
         </NButton>
 
-        <NButton v-if="canEdit" color="#2a2a2a6b" @click="settingModalShow = !settingModalShow">
+        <NButton v-if="canEdit" color="#2a2a2a6b" :title="t('appLauncher.title')" @click="settingModalShow = !settingModalShow">
           <template #icon>
             <SvgIcon class="text-white font-xl" icon="majesticons-applications" />
           </template>
@@ -748,6 +748,7 @@ html {
 }
 
 .sun-main {
+  overflow: hidden;
   user-select: none;
 }
 

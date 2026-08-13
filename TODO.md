@@ -69,7 +69,7 @@ P1 验收门槛：不得修改生产数据库结构；不得发布到 Chrome 商
 - [x] `SHARED-04` API 客户端支持同源 Web 与可配置扩展 Origin。Axios 请求拦截器按请求动态读取 Runtime API baseURL；验证码公共组件与图标/壁纸上传不再写死当前页面 `/api`，统一解析到 Web 同源或 Extension 已授权服务器 Origin。上传同时发送标准 Bearer 与兼容 token，架构验证禁止重新引入字面量 `/api` 上传 action。
 - [x] `SHARED-05` Web 和扩展分别懒加载管理功能，控制新标签页首屏体积。路由继续按 Runtime 分离 Web 首页与 Extension 外壳，管理应用由 AppLoader 动态分块；首页不再通过 barrel 静态引入 AppStarter 与 EditItem，只有用户打开管理器或编辑卡片时才下载并挂载。静态依赖边界验证已纳入 `build:all`，同时覆盖两个按需入口及管理应用动态 import。
 - [x] `SHARED-06` 增加运行环境、网络、离线、同步和会话状态 UI。首页新增 Web/Chrome 双端共用状态栏，展示运行端、浏览器在线/离线、公开/兼容/设备会话及到期时间；Extension 同栏展示缓存/同步/离线/不可用状态并保留点击重试。双端统一监听 online/offline 生命周期，状态 UI 验证纳入 `build:all`。
-- [ ] `SHARED-07` 完成桌面、窄屏、高 DPI、浅色/深色主题回归。
+- [x] `SHARED-07` 完成桌面、窄屏、高 DPI、浅色/深色主题回归。真实浏览器检查覆盖桌面与 390×844 窄屏、深色主题和窄屏管理弹窗，关键元素均在视口内；修复模糊背景层造成的约 10px 横向绘制溢出，并为设置入口补齐可访问标题。静态回归锁定 640px 断点、状态栏换行/裁剪、响应式字号、SVG 图标和系统浅/深主题钩子，Web/Extension 生产构建共同验收。
 
 ## P5：iTab 风格组件框架
 
@@ -140,4 +140,4 @@ pnpm run build-only
 
 ## 当前下一步
 
-`EXT-08` 等具备桌面 Chrome 环境后再人工验收，不阻塞后续开发。同步主链 `SYNC-01` 至 `SYNC-08` 与 `SHARED-01` 至 `SHARED-06` 已完成，当前推进 `SHARED-07`：完成桌面、窄屏、高 DPI、浅色/深色主题回归。
+`EXT-08` 等具备桌面 Chrome 环境后再人工验收，不阻塞后续开发。同步主链 `SYNC-01` 至 `SYNC-08` 与共享前端 `SHARED-01` 至 `SHARED-07` 已完成，当前推进 `EXT-WIDGET-01`：建立共享小组件协议与注册表。
