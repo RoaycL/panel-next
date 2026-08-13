@@ -5,7 +5,7 @@
 ## 当前状态
 
 - 状态更新时间：`2026-08-13`。
-- 当前开发分支：`agent/postgres-device-sync-foundation`（基于已合并扩展基础的 `main`）。
+- 当前开发分支：`main`（多人协作通过功能分支和 Pull Request 合入）。
 - 已完成：前端工具链升级、SQLite 完整备份恢复、MySQL/PostgreSQL 逻辑备份迁移。
 - 当前主线：先建立 Web/Chrome 双端基础，再继续品牌、图库、组件和官方公开能力对齐。
 - 双端布局：Web 保持原导航布局；Extension 已建立专用新标签页路由与响应式玻璃分组布局，底层数据和卡片交互继续共享。
