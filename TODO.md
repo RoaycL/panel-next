@@ -67,7 +67,7 @@ P1 验收门槛：不得修改生产数据库结构；不得发布到 Chrome 商
 - [x] `SHARED-02` 所有本地存储通过 StorageAdapter，清除误名 `ss` 但实际使用 localStorage 的历史实现。应用、认证、面板、用户、公告和模块配置统一使用 `persistentStorage`，底层只访问当前 Runtime 的 StorageAdapter；保留原键名与 JSON 信封以兼容现有数据，移除 `ss`/`ls` 别名和死代码，并为读取接口补充泛型类型。架构验证现在阻止业务代码直接访问浏览器存储或重新引入旧别名。
 - [x] `SHARED-03` 所有 URL 打开行为通过 RuntimeAdapter，并拒绝危险协议。RuntimeAdapter 新增统一的安全导航解析，Web/Extension 打开动作与卡片 iframe 共用 HTTP(S) 白名单；应用根节点捕获静态链接、用户自定义 footer 链接及新标签/辅助点击并交给适配器处理。Blob 下载保持独立下载语义，架构规则禁止业务代码直接调用 `window.open`，独立验证覆盖相对地址与 `javascript:`、`data:`、`file:`、`mailto:` 拒绝。
 - [x] `SHARED-04` API 客户端支持同源 Web 与可配置扩展 Origin。Axios 请求拦截器按请求动态读取 Runtime API baseURL；验证码公共组件与图标/壁纸上传不再写死当前页面 `/api`，统一解析到 Web 同源或 Extension 已授权服务器 Origin。上传同时发送标准 Bearer 与兼容 token，架构验证禁止重新引入字面量 `/api` 上传 action。
-- [ ] `SHARED-05` Web 和扩展分别懒加载管理功能，控制新标签页首屏体积。
+- [x] `SHARED-05` Web 和扩展分别懒加载管理功能，控制新标签页首屏体积。路由继续按 Runtime 分离 Web 首页与 Extension 外壳，管理应用由 AppLoader 动态分块；首页不再通过 barrel 静态引入 AppStarter 与 EditItem，只有用户打开管理器或编辑卡片时才下载并挂载。静态依赖边界验证已纳入 `build:all`，同时覆盖两个按需入口及管理应用动态 import。
 - [ ] `SHARED-06` 增加运行环境、网络、离线、同步和会话状态 UI。
 - [ ] `SHARED-07` 完成桌面、窄屏、高 DPI、浅色/深色主题回归。
 
@@ -140,4 +140,4 @@ pnpm run build-only
 
 ## 当前下一步
 
-`EXT-08` 等具备桌面 Chrome 环境后再人工验收，不阻塞后续开发。同步主链 `SYNC-01` 至 `SYNC-08` 与 `SHARED-01` 至 `SHARED-04` 已完成，当前推进 `SHARED-05`：审计并完善 Web/Extension 管理功能懒加载，控制新标签页首屏体积。
+`EXT-08` 等具备桌面 Chrome 环境后再人工验收，不阻塞后续开发。同步主链 `SYNC-01` 至 `SYNC-08` 与 `SHARED-01` 至 `SHARED-05` 已完成，当前推进 `SHARED-06`：补齐运行环境、网络、离线、同步和会话状态 UI。

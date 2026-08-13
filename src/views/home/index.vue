@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { VueDraggable } from 'vue-draggable-plus'
 import { NBackTop, NButton, NButtonGroup, NDropdown, NModal, NSkeleton, NSpin, useDialog, useMessage } from 'naive-ui'
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
-import { AppIcon, AppStarter, EditItem } from './components'
+import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { AppIcon } from './components'
 import { Clock, SearchBox, SystemMonitor } from '@/components/deskModule'
 import { SvgIcon } from '@/components/common'
 import { deletes, getListByGroupId, saveSort } from '@/api/panel/itemIcon'
@@ -33,6 +33,8 @@ const panelState = usePanelState()
 const authStore = useAuthStore()
 const userStore = useUserStore()
 const runtime = getRuntime()
+const AppStarter = defineAsyncComponent(() => import('./components/AppStarter/index.vue'))
+const EditItem = defineAsyncComponent(() => import('./components/EditItem/index.vue'))
 
 const scrollContainerRef = ref<HTMLElement | null>(null)
 
@@ -660,7 +662,7 @@ function handleAddItem(itemIconGroupId?: number) {
         </NButton>
       </NButtonGroup>
 
-      <AppStarter v-model:visible="settingModalShow" />
+      <AppStarter v-if="settingModalShow" v-model:visible="settingModalShow" />
       <!-- <Setting v-model:visible="settingModalShow" /> -->
     </div>
 
@@ -679,7 +681,7 @@ function handleAddItem(itemIconGroupId?: number) {
       </div>
     </NBackTop>
 
-    <EditItem v-model:visible="editItemInfoShow" :item-info="editItemInfoData" :item-group-id="currentAddItenIconGroupId" @done="handleEditSuccess" />
+    <EditItem v-if="editItemInfoShow" v-model:visible="editItemInfoShow" :item-info="editItemInfoData" :item-group-id="currentAddItenIconGroupId" @done="handleEditSuccess" />
 
     <!-- 弹窗 -->
     <NModal
