@@ -1,15 +1,21 @@
 package database
 
 import (
+	"encoding/json"
 	"log"
+	"net"
+	"net/url"
 	"os"
 	"path"
+	"strconv"
 	"sun-panel/lib/cmn"
 	"sun-panel/models"
 	"time"
 
+	"github.com/google/uuid"
 	"gorm.io/driver/mysql"
 	_ "gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	_ "gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -18,8 +24,9 @@ import (
 )
 
 const (
-	MYSQL  = "mysql"
-	SQLITE = "sqlite"
+	MYSQL    = "mysql"
+	POSTGRES = "postgres"
+	SQLITE   = "sqlite"
 )
 
 type DbClient interface {
@@ -37,6 +44,17 @@ type MySQLConfig struct {
 
 type SQLiteConfig struct {
 	Filename string
+}
+
+type PostgresConfig struct {
+	Host            string
+	Port            string
+	Username        string
+	Password        string
+	Database        string
+	SSLMode         string
+	ConnectTimeout  int
+	ConnMaxLifetime int
 }
 
 func DbInit(dbClient DbClient) (db *gorm.DB, dbErr error) {
@@ -64,6 +82,48 @@ func (d *MySQLConfig) Connect() (db *gorm.DB, err error) {
 	wait_timeout := d.WaitTimeout
 	sqlDb.SetConnMaxLifetime(time.Duration(wait_timeout * int(time.Second))) // SetConnMaxLifetime 设置了连接可复用的最大时间。
 	return
+}
+
+func (d *PostgresConfig) Connect() (db *gorm.DB, err error) {
+	sslMode := d.SSLMode
+	if sslMode == "" {
+		sslMode = "disable"
+	}
+	connectTimeout := d.ConnectTimeout
+	if connectTimeout <= 0 {
+		connectTimeout = 10
+	}
+	dsnURL := &url.URL{
+		Scheme: "postgres",
+		User:   url.UserPassword(d.Username, d.Password),
+		Host:   net.JoinHostPort(d.Host, d.Port),
+		Path:   d.Database,
+	}
+	query := dsnURL.Query()
+	query.Set("sslmode", sslMode)
+	query.Set("connect_timeout", strconv.Itoa(connectTimeout))
+	dsnURL.RawQuery = query.Encode()
+	dsn := dsnURL.String()
+	db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
+		Logger:                                   GetLogger(),
+		NamingStrategy:                           schema.NamingStrategy{SingularTable: true},
+		DisableForeignKeyConstraintWhenMigrating: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, err
+	}
+	sqlDB.SetMaxIdleConns(10)
+	sqlDB.SetMaxOpenConns(100)
+	lifetime := d.ConnMaxLifetime
+	if lifetime <= 0 {
+		lifetime = 300
+	}
+	sqlDB.SetConnMaxLifetime(time.Duration(lifetime) * time.Second)
+	return db, nil
 }
 
 // Connect sqllite3连接
@@ -100,6 +160,7 @@ func GetLogger() logger.Interface {
 			SlowThreshold:             time.Second, // 慢 SQL 阈值
 			LogLevel:                  logger.Warn, // 日志级别
 			IgnoreRecordNotFoundError: true,        // 忽略ErrRecordNotFound（记录未找到）错误
+			ParameterizedQueries:      true,        // 不在 SQL 日志中插入 Token 哈希等参数
 			Colorful:                  true,        // 彩色打印
 		},
 	)
@@ -123,9 +184,25 @@ func CreateDatabase(driver string, db *gorm.DB) error {
 		&models.File{},
 		&models.ItemIconGroup{},
 		&models.ModuleConfig{},
+		&models.UserSession{},
+		&models.UserSessionRefreshToken{},
+		&models.InstanceMetadata{},
+		&models.UserSyncState{},
+		&models.UserSyncChange{},
 	)
 
 	return err
+}
+
+func EnsureInstanceMetadata(db *gorm.DB) (string, error) {
+	metadata := models.InstanceMetadata{
+		Name:  models.InstanceMetadataID,
+		Value: uuid.NewString(),
+	}
+	if err := db.Where("name = ?", metadata.Name).FirstOrCreate(&metadata).Error; err != nil {
+		return "", err
+	}
+	return metadata.Value, nil
 }
 
 // 初始化一个用户,一个用户都没有的时候创建一个
@@ -148,5 +225,28 @@ func NotFoundAndCreateUser(db *gorm.DB) error {
 		}
 	}
 
+	return nil
+}
+
+func EnsureDefaultSystemSettings(db *gorm.DB) error {
+	application, err := json.Marshal(map[string]any{
+		"emailSuffix":  "",
+		"openRegister": false,
+		"loginCaptcha": false,
+		"webSiteUrl":   "",
+	})
+	if err != nil {
+		return err
+	}
+	defaults := []models.SystemSetting{
+		{ConfigName: "system_application", ConfigValue: string(application)},
+		{ConfigName: "disclaimer", ConfigValue: ""},
+		{ConfigName: "web_about_description", ConfigValue: ""},
+	}
+	for _, setting := range defaults {
+		if err := db.Where("config_name = ?", setting.ConfigName).FirstOrCreate(&setting).Error; err != nil {
+			return err
+		}
+	}
 	return nil
 }

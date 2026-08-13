@@ -160,7 +160,7 @@ func createCurrentBackup(c *gin.Context) (archivePath string, cleanup func(), er
 		}
 		databaseInfo.Mode = "snapshot"
 		sources = append(sources, backuplib.Source{ArchivePath: backuplib.DatabaseSQLitePath, LocalPath: databaseSnapshot})
-	case "mysql":
+	case "mysql", "postgres":
 		logicalPath := filepath.Join(workspace, "database.json")
 		if err := backuplib.ExportLogicalDatabase(c.Request.Context(), global.Db, logicalPath, backuplib.SunPanelLogicalTables); err != nil {
 			cleanup()

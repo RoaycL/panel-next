@@ -22,7 +22,7 @@
 
 ### MySQL
 
-不得复制外部 MySQL 的数据文件。Panel Next 在可重复读事务中读取以下业务表，并写入 `database/database.json`：
+不得复制外部 MySQL/PostgreSQL 的数据文件。Panel Next 在可重复读事务中读取以下业务表，并写入 `database/database.json`：
 
 - `user`
 - `system_setting`
@@ -58,6 +58,10 @@ $env:CC = '<mingw64>/bin/gcc.exe'
 go test ./...
 go vet ./...
 ```
+
+### PostgreSQL 实机演练
+
+2026-08-09 在 PostgreSQL 17.10 上完成独立低权限角色与数据库的新装和恢复演练：通过管理 API 导出逻辑备份，导出后修改探针数据，排队恢复并重启服务。恢复后探针回到备份值，PostgreSQL ID 序列已校准，待恢复包被消费且公开 API 正常。演练用探针、临时 ZIP 和恢复前快照已在验证后删除。
 
 前端验证：
 

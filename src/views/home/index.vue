@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { VueDraggable } from 'vue-draggable-plus'
 import { NBackTop, NButton, NButtonGroup, NDropdown, NModal, NSkeleton, NSpin, useDialog, useMessage } from 'naive-ui'
-import { nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { AppIcon, AppStarter, EditItem } from './components'
 import { Clock, SearchBox, SystemMonitor } from '@/components/deskModule'
 import { SvgIcon } from '@/components/common'
@@ -9,12 +9,13 @@ import { deletes, getListByGroupId, saveSort } from '@/api/panel/itemIcon'
 import { getList as getGroupList } from '@/api/panel/itemIconGroup'
 
 import { setTitle, updateLocalUserInfo } from '@/utils/cmn'
-import { useAuthStore, usePanelState } from '@/store'
+import { useAuthStore, usePanelState, useUserStore } from '@/store'
 import { PanelPanelConfigStyleEnum, PanelStateNetworkModeEnum } from '@/enums'
 import { VisitMode } from '@/enums/auth'
 import { router } from '@/router'
 import { t } from '@/locales'
 import { getRuntime } from '@/runtime'
+import { readBootstrapSnapshot, refreshBootstrapSnapshot } from '@/sync/bootstrapCache'
 
 interface ItemGroup extends Panel.ItemIconGroup {
   sortStatus?: boolean
@@ -22,10 +23,17 @@ interface ItemGroup extends Panel.ItemIconGroup {
   items?: Panel.ItemInfo[]
 }
 
+withDefaults(defineProps<{
+  layout?: 'web' | 'extension'
+}>(), {
+  layout: 'web',
+})
+
 const ms = useMessage()
 const dialog = useDialog()
 const panelState = usePanelState()
 const authStore = useAuthStore()
+const userStore = useUserStore()
 const runtime = getRuntime()
 
 const scrollContainerRef = ref<HTMLElement | null>(null)
@@ -48,6 +56,28 @@ const settingModalShow = ref(false)
 
 const items = ref<ItemGroup[]>([])
 const filterItems = ref<ItemGroup[]>([])
+type ExtensionSyncStatus = 'idle' | 'syncing' | 'online' | 'cached' | 'offline' | 'error'
+const extensionSyncStatus = ref<ExtensionSyncStatus>(runtime.kind === 'extension' ? 'syncing' : 'idle')
+const lastSyncAt = ref<string | null>(null)
+let hasCachedSnapshot = false
+let extensionRefreshPromise: Promise<void> | null = null
+
+const canEdit = computed(() => authStore.visitMode === VisitMode.VISIT_MODE_LOGIN
+  && (runtime.kind !== 'extension' || extensionSyncStatus.value === 'online'))
+
+const extensionSyncLabel = computed(() => {
+  const labels: Record<Exclude<ExtensionSyncStatus, 'idle'>, string> = {
+    syncing: t('panelHome.syncing'),
+    online: t('panelHome.syncOnline'),
+    cached: t('panelHome.syncCached'),
+    offline: t('panelHome.syncOffline'),
+    error: t('panelHome.syncUnavailable'),
+  }
+  return extensionSyncStatus.value === 'idle' ? '' : labels[extensionSyncStatus.value]
+})
+const extensionSyncTitle = computed(() => lastSyncAt.value
+  ? t('panelHome.syncLastAt', { time: new Date(lastSyncAt.value).toLocaleString() })
+  : extensionSyncLabel.value)
 
 function openPage(openMethod: number, url: string, title?: string) {
   switch (openMethod) {
@@ -85,31 +115,29 @@ function handleItemClick(itemGroupIndex: number, item: Panel.ItemInfo) {
   openPage(item.openMethod, jumpUrl, item.title)
 }
 
-function handWindowIframeIdLoad(payload: Event) {
+function handWindowIframeIdLoad(_payload: Event) {
   windowIframeIsLoad.value = false
 }
 
-function getList() {
+async function getList() {
   // 获取组数据
-  getGroupList<Common.ListResponse<ItemGroup[]>>().then(({ code, data, msg }) => {
-    if (code === 0)
-      items.value = data.list
-    for (let i = 0; i < data.list.length; i++) {
-      const element = data.list[i]
-      if (element.id)
-        updateItemIconGroupByNet(i, element.id)
-    }
-    filterItems.value = items.value
-    // console.log(items)
-  })
+  const { code, data } = await getGroupList<Common.ListResponse<ItemGroup[]>>()
+  if (code !== 0 || !data?.list)
+    return false
+  items.value = data.list
+  await Promise.all(items.value.map(async (element, index) => {
+    if (element.id)
+      await updateItemIconGroupByNet(index, element.id)
+  }))
+  filterItems.value = items.value
+  return true
 }
 
 // 从后端获取组下面的图标
-function updateItemIconGroupByNet(itemIconGroupIndex: number, itemIconGroupId: number) {
-  getListByGroupId<Common.ListResponse<Panel.ItemInfo[]>>(itemIconGroupId).then((res) => {
-    if (res.code === 0)
-      items.value[itemIconGroupIndex].items = res.data.list
-  })
+async function updateItemIconGroupByNet(itemIconGroupIndex: number, itemIconGroupId: number) {
+  const res = await getListByGroupId<Common.ListResponse<Panel.ItemInfo[]>>(itemIconGroupId)
+  if (res.code === 0 && items.value[itemIconGroupIndex])
+    items.value[itemIconGroupIndex].items = res.data.list
 }
 
 function handleRightMenuSelect(key: string | number) {
@@ -178,7 +206,7 @@ function onClickoutside() {
   dropdownShow.value = false
 }
 
-function handleEditSuccess(item: Panel.ItemInfo) {
+function handleEditSuccess(_item: Panel.ItemInfo) {
   getList()
 }
 
@@ -243,7 +271,7 @@ function getDropdownMenuOptions() {
     })
   }
 
-  if (authStore.visitMode === VisitMode.VISIT_MODE_LOGIN) {
+  if (canEdit.value) {
     dropdownMenuOptions.push({
       label: t('common.edit'),
       key: 'edit',
@@ -256,17 +284,96 @@ function getDropdownMenuOptions() {
   return dropdownMenuOptions
 }
 
-onMounted(() => {
-  // 更新用户信息
-  updateLocalUserInfo()
-  getList()
+function applyBootstrapData(data: Sync.BootstrapResponseV1) {
+  panelState.applyPanelConfig(data.panel.config)
+  authStore.setUserInfo(data.account)
+  authStore.setVisitMode(VisitMode.VISIT_MODE_LOGIN)
+  userStore.updateUserInfo(data.account)
+  items.value = data.panel.groups.map(group => ({
+    ...group,
+    hoverStatus: false,
+    items: group.items.map(item => ({ ...item })),
+  }))
+  filterItems.value = items.value
+  if (panelState.panelConfig.logoText)
+    setTitle(panelState.panelConfig.logoText)
+}
 
-  // 更新同步云端配置
-  panelState.updatePanelConfigByCloud()
+async function refreshExtensionBootstrap() {
+  const accountId = authStore.userInfo?.id
+  if (runtime.kind !== 'extension' || !accountId)
+    return
+  if (extensionRefreshPromise)
+    return extensionRefreshPromise
+
+  extensionSyncStatus.value = 'syncing'
+  extensionRefreshPromise = (async () => {
+    const result = await refreshBootstrapSnapshot(accountId)
+    if (result.data && result.savedAt) {
+      applyBootstrapData(result.data)
+      hasCachedSnapshot = true
+      lastSyncAt.value = result.savedAt
+      extensionSyncStatus.value = 'online'
+      return
+    }
+    extensionSyncStatus.value = hasCachedSnapshot ? 'offline' : 'error'
+  })()
+  try {
+    await extensionRefreshPromise
+  }
+  finally {
+    extensionRefreshPromise = null
+  }
+}
+
+function handleBrowserOnline() {
+  void refreshExtensionBootstrap()
+}
+
+function handleBrowserOffline() {
+  if (runtime.kind === 'extension')
+    extensionSyncStatus.value = hasCachedSnapshot ? 'offline' : 'error'
+}
+
+if (runtime.kind === 'extension') {
+  panelState.resetPanelConfig()
+  const accountId = authStore.userInfo?.id
+  const cached = accountId ? readBootstrapSnapshot(accountId) : null
+  if (cached) {
+    applyBootstrapData(cached.data)
+    hasCachedSnapshot = true
+    lastSyncAt.value = cached.savedAt
+    extensionSyncStatus.value = navigator.onLine ? 'cached' : 'offline'
+  }
+  else if (!navigator.onLine) {
+    extensionSyncStatus.value = 'error'
+  }
+}
+
+onMounted(async () => {
+  if (runtime.kind === 'extension') {
+    window.addEventListener('online', handleBrowserOnline)
+    window.addEventListener('offline', handleBrowserOffline)
+    void refreshExtensionBootstrap()
+    return
+  }
+
+  // 更新用户信息
+  await updateLocalUserInfo()
+
+  // 分组、卡片和面板配置来自同一个已验证会话，可以并行加载。
+  await Promise.all([getList(), panelState.updatePanelConfigByCloud()])
 
   // 设置标题
   if (panelState.panelConfig.logoText)
     setTitle(panelState.panelConfig.logoText)
+})
+
+onUnmounted(() => {
+  if (runtime.kind === 'extension') {
+    window.removeEventListener('online', handleBrowserOnline)
+    window.removeEventListener('offline', handleBrowserOffline)
+  }
 })
 
 // 前端搜索过滤
@@ -324,7 +431,7 @@ function handleAddItem(itemIconGroupId?: number) {
 </script>
 
 <template>
-  <div class="w-full h-full sun-main">
+  <div class="w-full h-full sun-main" :class="{ 'extension-home': layout === 'extension' }">
     <div
       class="cover wallpaper" :style="{
         filter: `blur(${panelState.panelConfig.backgroundBlur}px)`,
@@ -334,18 +441,30 @@ function handleAddItem(itemIconGroupId?: number) {
       }"
     />
     <div class="mask" :style="{ backgroundColor: `rgba(0,0,0,${panelState.panelConfig.backgroundMaskNumber})` }" />
+    <button
+      v-if="layout === 'extension'"
+      type="button"
+      class="sync-indicator"
+      :class="`sync-${extensionSyncStatus}`"
+      :title="extensionSyncTitle"
+      :disabled="extensionSyncStatus === 'syncing'"
+      @click="refreshExtensionBootstrap"
+    >
+      <span class="sync-dot" />
+      {{ extensionSyncLabel }}
+    </button>
     <div ref="scrollContainerRef" class="absolute w-full h-full overflow-auto">
       <div
-        class="p-2.5 mx-auto"
+        class="home-content p-2.5 mx-auto"
         :style="{
-          marginTop: `${panelState.panelConfig.marginTop}%`,
+          marginTop: layout === 'extension' ? '0' : `${panelState.panelConfig.marginTop}%`,
           marginBottom: `${panelState.panelConfig.marginBottom}%`,
-          maxWidth: (panelState.panelConfig.maxWidth ?? '1200') + panelState.panelConfig.maxWidthUnit,
+          maxWidth: layout === 'extension' ? '1440px' : (panelState.panelConfig.maxWidth ?? '1200') + panelState.panelConfig.maxWidthUnit,
         }"
       >
         <!-- 头 -->
-        <div class="mx-[auto] w-[80%]">
-          <div class="flex mx-[auto] items-center justify-center text-white">
+        <div class="home-header mx-[auto] w-[80%]">
+          <div class="home-identity flex mx-[auto] items-center justify-center text-white">
             <div class="logo">
               <span class="text-2xl md:text-6xl font-bold text-shadow">
                 {{ panelState.panelConfig.logoText }}
@@ -358,13 +477,18 @@ function handleAddItem(itemIconGroupId?: number) {
               <Clock :hide-second="!panelState.panelConfig.clockShowSecond" />
             </div>
           </div>
-          <div v-if="panelState.panelConfig.searchBoxShow" class="flex mt-[20px] mx-auto sm:w-full lg:w-[80%]">
-            <SearchBox @itemSearch="itemFrontEndSearch" />
+          <div v-if="panelState.panelConfig.searchBoxShow" class="home-search flex mt-[20px] mx-auto sm:w-full lg:w-[80%]">
+            <SearchBox @item-search="itemFrontEndSearch" />
           </div>
         </div>
 
         <!-- 应用盒子 -->
-        <div :style="{ marginLeft: `${panelState.panelConfig.marginX}px`, marginRight: `${panelState.panelConfig.marginX}px` }">
+        <div
+          class="home-groups"
+          :style="layout === 'extension'
+            ? undefined
+            : { marginLeft: `${panelState.panelConfig.marginX}px`, marginRight: `${panelState.panelConfig.marginX}px` }"
+        >
           <!-- 系统监控状态 -->
           <div
             v-if="panelState.panelConfig.systemMonitorShow
@@ -373,7 +497,7 @@ function handleAddItem(itemIconGroupId?: number) {
             class="flex mx-auto"
           >
             <SystemMonitor
-              :allow-edit="authStore.visitMode === VisitMode.VISIT_MODE_LOGIN"
+              :allow-edit="canEdit"
               :show-title="panelState.panelConfig.systemMonitorShowTitle"
             />
           </div>
@@ -392,7 +516,7 @@ function handleAddItem(itemIconGroupId?: number) {
                 {{ itemGroup.title }}
               </span>
               <div
-                v-if="authStore.visitMode === VisitMode.VISIT_MODE_LOGIN"
+                v-if="canEdit"
                 class="group-buttons ml-2 delay-100 transition-opacity flex"
                 :class="itemGroup.hoverStatus ? 'opacity-100' : 'opacity-0'"
               >
@@ -525,7 +649,7 @@ function handleAddItem(itemIconGroupId?: number) {
           </template>
         </NButton>
 
-        <NButton v-if="authStore.visitMode === VisitMode.VISIT_MODE_LOGIN" color="#2a2a2a6b" @click="settingModalShow = !settingModalShow">
+        <NButton v-if="canEdit" color="#2a2a2a6b" @click="settingModalShow = !settingModalShow">
           <template #icon>
             <SvgIcon class="text-white font-xl" icon="majesticons-applications" />
           </template>
@@ -610,6 +734,127 @@ html {
   user-select: none;
 }
 
+.sync-indicator {
+  position: fixed;
+  z-index: 40;
+  top: 16px;
+  right: 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 999px;
+  color: #fff;
+  background: rgb(18 25 39 / 68%);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 16%);
+  backdrop-filter: blur(14px);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.sync-indicator:disabled {
+  cursor: wait;
+}
+
+.sync-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+
+.sync-online .sync-dot {
+  background: #4ade80;
+  box-shadow: 0 0 10px rgb(74 222 128 / 80%);
+}
+
+.sync-cached .sync-dot,
+.sync-syncing .sync-dot {
+  background: #60a5fa;
+}
+
+.sync-offline .sync-dot,
+.sync-error .sync-dot {
+  background: #f59e0b;
+}
+
+.extension-home .home-content {
+  box-sizing: border-box;
+  min-height: 100%;
+  padding: 44px 54px 90px;
+}
+
+.extension-home .home-header {
+  width: min(100%, 920px);
+  margin: 0 auto 38px;
+}
+
+.extension-home .home-identity {
+  justify-content: space-between;
+  padding: 0 8px;
+}
+
+.extension-home .logo span {
+  font-size: clamp(24px, 3vw, 42px);
+  letter-spacing: -.04em;
+}
+
+.extension-home .divider {
+  display: none;
+}
+
+.extension-home .home-identity :deep(.clock) {
+  width: auto;
+  text-align: right;
+}
+
+.extension-home .home-search {
+  width: 100%;
+  margin-top: 24px;
+}
+
+.extension-home .home-search :deep(.search-container) {
+  min-height: 52px;
+  border-color: rgb(255 255 255 / 24%);
+  background: rgb(18 25 39 / 58%) !important;
+  box-shadow: 0 18px 60px rgb(0 0 0 / 18%);
+  backdrop-filter: blur(18px);
+}
+
+.extension-home .home-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: 22px;
+}
+
+.extension-home .item-list {
+  min-width: 0;
+  margin-top: 0;
+  padding: 22px;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 24px;
+  background: rgb(18 25 39 / 42%);
+  box-shadow: 0 18px 60px rgb(0 0 0 / 14%);
+  backdrop-filter: blur(18px);
+}
+
+.extension-home .item-list > :first-child {
+  margin-bottom: 16px;
+  margin-left: 0;
+  font-size: 16px;
+}
+
+.extension-home .icon-small-box {
+  grid-template-columns: repeat(auto-fill, minmax(82px, 1fr));
+  gap: 16px 12px;
+}
+
+.extension-home .icon-info-box {
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 14px;
+}
+
 .cover {
   position: absolute;
   width: 100%;
@@ -656,6 +901,22 @@ html {
 @media (max-width: 500px) {
   .icon-info-box{
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+
+  .extension-home .home-content {
+    padding: 26px 18px 80px;
+  }
+
+  .extension-home .home-identity {
+    align-items: flex-start;
+  }
+
+  .extension-home .home-groups {
+    grid-template-columns: 1fr;
+  }
+
+  .extension-home .item-list {
+    padding: 18px 14px;
   }
 }
 </style>

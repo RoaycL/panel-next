@@ -31,7 +31,8 @@
     "1202": "Data record not found",
     "1300": "Upload failed",
     "1301": "Upload failed, unsupported file format",
-    "1400": "Parameter format error"
+    "1400": "Parameter format error",
+    "1501": "Sync state changed; refreshing the full snapshot"
   },
   "appLauncher": {
     "title": "System Applications"
@@ -262,7 +263,13 @@
     "changeToWanModelSuccess": "Switched to WAN mode (mode status saved locally)",
     "goToLogin": "Go to login",
     "openLanUrl": "Open LAN URL",
-    "openWanUrl": "Open WAN URL"
+    "openWanUrl": "Open WAN URL",
+    "syncCached": "Cached · Refreshing",
+    "syncing": "Syncing",
+    "syncOnline": "Synced",
+    "syncOffline": "Offline · Cached data",
+    "syncUnavailable": "Offline · No cache",
+    "syncLastAt": "Last synced: {time}"
   },
   "settingUserInfo": {
     "confirmLogoutText": "Are you sure you want to logout?",

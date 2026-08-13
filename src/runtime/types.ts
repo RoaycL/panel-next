@@ -6,6 +6,8 @@ export interface StorageAdapter {
   setItem: (key: string, value: string) => void
   removeItem: (key: string) => void
   clear: () => void
+  flush?: () => Promise<void>
+  sync?: () => Promise<void>
 }
 
 export interface RuntimeAdapter {

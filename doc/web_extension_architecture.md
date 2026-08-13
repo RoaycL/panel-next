@@ -62,9 +62,16 @@ interface RuntimeAdapter {
 - 保持现有 Hash Router，减少服务器回退路由和扩展页面差异。
 - P1 保持现有 `dist` 输出，避免破坏后端镜像和发布脚本；在 `DUAL-02` 确定兼容迁移方案后再调整为 `dist/web`。
 
+### 版本与产物规则
+
+- `service/assets/version` 是 Web、后端和扩展的唯一发布版本来源；Chrome Manifest 构建时自动写入同一语义版本。
+- Web 兼容产物继续输出到 `dist`；扩展目录输出到 `dist/extension`。
+- 扩展发布包命名为 `panel-next-extension-v<version>.zip`，同时生成同名 `.sha256` 文件，统一放在 `artifacts`。
+
 ### 扩展构建
 
 - 使用 Manifest V3 和 `chrome_url_overrides.newtab`。
+- 扩展 `/` 路由进入独立布局外壳，Web `/` 路由保持原页面；两者暂时复用首页数据与交互组件，后续再将平台无关逻辑抽入 `panel-core`。
 - 输出到 `dist/extension`，包含 `manifest.json`、`newtab.html`、静态资源和可选 service worker。
 - Vite 资源基路径使用相对地址，不依赖站点根目录。
 - 扩展新标签页首屏不得等待全部远程接口；先读取本地快照，再后台刷新。
@@ -106,21 +113,86 @@ user_session
 - CORS 仅允许配置过的 Web Origin 和扩展 ID，并允许认证头、语言头及预检请求。
 - 新增无认证的服务器信息接口，返回 API 版本、实例标识和认证能力，禁止泄漏部署详情。
 
+默认 CORS 配置为空，只自动允许由请求 Host、协议（含反向代理 `X-Forwarded-Proto`）确认的同源 Web 请求。额外 Web Origin 必须是无路径、查询和凭据的完整 HTTP(S) Origin；扩展必须配置精确 32 位 Chrome ID。策略拒绝通配符、`null` Origin、未声明方法和额外请求头，不开启 `Access-Control-Allow-Credentials`。
+
 ### 5.3 同步接口
 
 第一版使用在线优先、缓存回退：
 
 ```text
 GET  /api/v1/client/capabilities
+POST /api/v1/sessions/login
+POST /api/v1/sessions/refresh
+POST /api/v1/sessions/upgrade
 GET  /api/v1/sync/bootstrap
 GET  /api/v1/sync/changes?since=<revision>
 POST /api/v1/sync/mutations
 GET  /api/v1/sessions
-POST /api/v1/sessions/refresh
 DELETE /api/v1/sessions/:id
 ```
 
+能力发现接口无需认证。客户端可发送 `X-Panel-API-Version` 请求明确版本；未发送时选择服务端当前版本。服务端通过 `X-Panel-API-Version` 和 `X-Panel-API-Min-Version` 返回边界，非法版本返回 HTTP 400，不受支持的版本返回 HTTP 426。响应包含：
+
+- 当前、最低、已选择和支持的 API 版本；
+- 不随业务备份迁移的随机实例 ID、产品标识和应用版本；
+- 支持的客户端类型，以及当前真正可用的认证方式和功能开关。
+
+能力必须按可调用状态发布。当前 `deviceSession.available=true`，`clientTypes` 包含 `web` 与 `chrome_extension`，并公开 Extension 旧 Token 升级端点。响应同时公开旧 Token 的实际最终截止时间，客户端不能假定兼容窗口可无限延期。
+
 `bootstrap` 一次返回新标签页首屏所需的数据和全局 `revision`。写操作携带客户端已知 revision；服务端发现过期写入时返回冲突，不静默覆盖更新的数据。
+
+`SYNC-01` 固定首版 bootstrap 数据契约：
+
+```json
+{
+  "schemaVersion": 1,
+  "revision": "42",
+  "generatedAt": "2026-08-09T12:00:00Z",
+  "account": { "id": 1, "username": "user@example.com", "name": "User" },
+  "panel": {
+    "revision": "40",
+    "config": {},
+    "searchEngine": {},
+    "groups": [{ "id": 1, "title": "APP", "revision": "41", "items": [] }]
+  }
+}
+```
+
+- `schemaVersion` 管理缓存结构兼容性；破坏性结构变更必须增加版本并保留明确的迁移或失效策略。
+- 顶层及资源 `revision` 都是非负十进制字符串，避免 JavaScript 对 64 位数据库计数器的精度损失；客户端不得转为 `number`。
+- `generatedAt`、分组及卡片时间使用 RFC 3339 字符串；数组排序即服务端展示顺序。
+- `account` 只包含安全摘要，响应不包含密码、Token、Token 哈希、内部 JSON 字段或冗余 `userId`。
+- `GET /api/v1/sync/bootstrap` 只接受设备 Access Token，并执行 API 版本协商；能力发现中的 `syncBootstrap` 已在端点可调用后发布为 `true`。
+- 聚合查询按账号隔离，以分组和卡片的服务端排序返回；账号首次使用且没有分组时，会原子创建默认分组并接管该账号的无分组卡片。
+
+`SYNC-02` 在 `item_icon_group`、`item_icon` 和 `user_config` 增加 `BIGINT NOT NULL DEFAULT 0` 修订号，用户配置同时补充更新时间。`0` 表示迁移前或尚未纳入同步提交的资源；bootstrap DTO 将数据库整数转成十进制字符串。旧逻辑备份允许只缺少这次明确声明的迁移列，其他缺列、额外列和未知表仍拒绝恢复。
+
+`SYNC-06` 增加账号级单调 revision 与变更日志。`GET /api/v1/sync/changes?since=<revision>&limit=<1..500>` 只接受设备 Access Token，默认每页 200 条，并返回：
+
+```json
+{
+  "schemaVersion": 1,
+  "fromRevision": "40",
+  "nextRevision": "42",
+  "currentRevision": "43",
+  "hasMore": true,
+  "changes": [
+    {
+      "revision": "41",
+      "resourceType": "group",
+      "resourceId": "1",
+      "operation": "upsert",
+      "changedAt": "2026-08-10T12:00:00Z",
+      "data": { "id": 1, "title": "APP" }
+    }
+  ]
+}
+```
+
+- `resourceType` 只允许 `panel`、`group`、`item`，`operation` 只允许 `upsert`、`delete`；删除项的 `data` 固定为 `null`。
+- 客户端按 `nextRevision` 翻页，只有全部变更成功并持久化后才能推进本地游标；游标大于服务端 revision 时返回 `1501` 和 `fullBootstrapRequired=true`。
+- Extension 当前把通过完整校验且已经应用的 bootstrap 快照 revision 作为可信游标，不建立可独立超前的第二份游标。`SYNC-07` 接通所有写路径和原子应用之前，首页仍使用完整 bootstrap 后台刷新，不发布增量同步能力开关。
+- `user_sync_state` 与 `user_sync_change` 是派生同步状态，不进入 PostgreSQL/MySQL 可移植业务备份。逻辑恢复在同一事务清除旧日志，并按已恢复资源的最大 revision 重建账号基线；SQLite 完整快照则保留自洽的同步状态。
 
 ## 6. 客户端数据策略
 
@@ -129,10 +201,17 @@ DELETE /api/v1/sessions/:id
 - Web 使用 localStorage/IndexedDB 适配器；扩展使用 `chrome.storage.local`。
 - 会话和缓存使用不同键空间；退出登录必须清除会话，用户可选择保留非敏感缓存。
 - `chrome.storage.sync` 不保存 Sun-Panel 账号 Token，也不作为业务同步源。
+- Extension 的 bootstrap 快照使用独立缓存版本，先由服务器 Origin 的 StorageAdapter 分区，再按账号 ID 分键；快照信封同时记录 Origin 与账号，读取时必须双重匹配。
+- 快照写入前和读取后都校验 schemaVersion、十进制 revision、时间、字段类型、ID 唯一性、分组归属及数量/5 MiB 上限；损坏、跨实例、跨账号或未来不兼容的快照立即忽略并删除。
+- Extension 在组件首次渲染前同步读取可信快照并应用面板配置、分组和卡片；随后在后台请求 bootstrap，成功时原子替换界面与缓存。
+- 可信快照的顶层 revision 同时是当前客户端游标；增量页只有在完整应用成功后才能提交新游标，失败时保留旧快照并允许安全重试。
+- 后台请求只对传输失败执行最多 3 次尝试，等待间隔为 0、1、3 秒；明确的认证或 API 响应不重试。浏览器恢复在线时可立即再次刷新，避免无限定时轮询。
+- 有缓存但刷新失败时保留内容并标记“离线 · 显示缓存”；没有缓存时明确显示不可用。离线、缓存和同步中状态关闭编辑入口，第一版不伪装支持离线写入。
 
 ## 7. 新标签页性能预算
 
 - 有缓存时应立即绘制基本布局，不因后端离线显示空白页。
+- Extension 的缓存读取和应用发生在首次渲染前；网络刷新不阻塞已缓存首屏。
 - 首屏不加载管理页、备份页和不需要的小组件代码。
 - 小组件和设置面板动态导入。
 - 壁纸使用缩略图或适配尺寸，失败时回退到内置背景。

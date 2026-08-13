@@ -2,7 +2,7 @@ version: "3.2"
 
 services:
   sun-panel:
-    image: 'hslr/sun-panel:latest'
+    build: .
     container_name: sun-panel
     volumes:
     - ./conf:/app/conf

@@ -12,10 +12,13 @@ function extensionManifestPlugin(): PluginOption {
     name: 'panel-next-extension-manifest',
     apply: 'build',
     generateBundle() {
+      const [, version] = fs.readFileSync(path.resolve(process.cwd(), 'service/assets/version'), 'utf8').trim().split('|')
+      const manifest = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), 'extension/manifest.json'), 'utf8'))
+      manifest.version = version
       this.emitFile({
         type: 'asset',
         fileName: 'manifest.json',
-        source: fs.readFileSync(path.resolve(process.cwd(), 'extension/manifest.json'), 'utf8'),
+        source: `${JSON.stringify(manifest, null, 2)}\n`,
       })
     },
   }

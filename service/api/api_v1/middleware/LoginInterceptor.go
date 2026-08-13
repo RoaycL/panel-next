@@ -1,61 +1,109 @@
 package middleware
 
 import (
+	"errors"
+	"strings"
+	"time"
+
 	"sun-panel/api/api_v1/common/apiReturn"
 	"sun-panel/global"
+	sessionlib "sun-panel/lib/session"
 	"sun-panel/models"
 
 	"github.com/gin-gonic/gin"
 )
 
 func LoginInterceptor(c *gin.Context) {
-
-	// 继续执行后续的操作，再回来
-	// c.Next()
-
-	// 获得token
 	cToken := c.GetHeader("token")
-
-	// 没有token信息视为未登录
-	if cToken == "" {
-		apiReturn.ErrorByCode(c, 1000)
-		c.Abort() // 终止执行后续的操作，一般配合return使用
-		return
+	bearerToken := bearerAccessToken(c)
+	accessToken := bearerToken
+	if accessToken == "" {
+		accessToken = cToken
 	}
-
-	token := ""
-	{
-		var ok bool
-		token, ok = global.CUserToken.Get(cToken)
-		// 可能已经安全退出或者很久没有使用已过期
-		if !ok || token == "" {
-			apiReturn.ErrorByCode(c, 1001)
-			c.Abort() // 终止执行后续的操作，一般配合return使用
+	var deviceErr error
+	if accessToken != "" {
+		deviceErr = authenticateDeviceSession(c, accessToken)
+		if deviceErr == nil {
 			return
 		}
 	}
 
-	// 直接返回缓存的用户信息
+	legacyActive := legacyCompatibilityActive()
+	if cToken != "" && legacyActive && authenticateLegacyToken(c, cToken) {
+		return
+	}
+
+	switch {
+	case errors.Is(deviceErr, sessionlib.ErrAccessTokenExpired):
+		apiReturn.ErrorByCode(c, 1008)
+	case bearerToken == "" && cToken != "" && !legacyActive:
+		apiReturn.ErrorByCode(c, 1009)
+	case accessToken != "":
+		apiReturn.ErrorByCode(c, 1001)
+	case cToken != "":
+		apiReturn.ErrorByCode(c, 1001)
+	default:
+		apiReturn.ErrorByCode(c, 1000)
+	}
+	c.Abort()
+}
+
+func authenticateLegacyToken(c *gin.Context, cToken string) bool {
+	token, ok := global.CUserToken.Get(cToken)
+	if !ok || token == "" {
+		return false
+	}
 	if userInfo, success := global.UserToken.Get(token); success {
 		c.Set("userInfo", userInfo)
-		return
+		c.Set(sessionlib.GinAuthModeKey, sessionlib.AuthModeLegacy)
+		return true
 	}
-
-	global.Logger.Debug("准备查询数据库的用户资料", token)
-
 	mUser := models.User{}
-	// 去库中查询是否存在该用户；否则返回错误
-	if info, err := mUser.GetUserInfoByToken(token); err != nil || info.Token == "" || info.ID == 0 {
-		apiReturn.ErrorCode(c, 1001, global.Lang.Get("login.err_token_expire"), nil)
-		c.Abort()
-		return
-	} else {
-		// 通过 设置当前用户信息
-		global.UserToken.SetDefault(info.Token, info)
-		global.CUserToken.SetDefault(cToken, token)
-		c.Set("userInfo", info)
+	info, err := mUser.GetUserInfoByToken(token)
+	if err != nil || info.Token == "" || info.ID == 0 {
+		return false
 	}
+	global.UserToken.SetDefault(info.Token, info)
+	global.CUserToken.SetDefault(cToken, token)
+	c.Set("userInfo", info)
+	c.Set(sessionlib.GinAuthModeKey, sessionlib.AuthModeLegacy)
+	return true
+}
 
+func authenticateDeviceSession(c *gin.Context, accessToken string) error {
+	stored, err := sessionlib.NewManager(global.Db).AuthenticateAccess(c.Request.Context(), accessToken)
+	if err != nil {
+		return err
+	}
+	var info models.User
+	if err := global.Db.WithContext(c.Request.Context()).First(&info, "id = ?", stored.UserID).Error; err != nil {
+		return err
+	}
+	if info.Status != 1 {
+		return sessionlib.ErrSessionRevoked
+	}
+	c.Set("userInfo", info)
+	c.Set(sessionlib.GinSessionIDKey, stored.ID)
+	c.Set(sessionlib.GinAuthModeKey, sessionlib.AuthModeDevice)
+	return nil
+}
+
+func bearerAccessToken(c *gin.Context) string {
+	value := strings.TrimSpace(c.GetHeader("Authorization"))
+	if len(value) < 7 || !strings.EqualFold(value[:7], "Bearer ") {
+		return ""
+	}
+	return strings.TrimSpace(value[7:])
+}
+
+var authenticationNow = time.Now
+
+func legacyCompatibilityActive() bool {
+	if global.Config == nil {
+		return false
+	}
+	deadline := global.Config.GetValueStringOrDefault("session", "legacy_token_until")
+	return sessionlib.LegacyTokenCompatibilityActive(deadline, authenticationNow())
 }
 
 // 不验证缓存直接验证库省去没有缓存每次都要手动登录的问题

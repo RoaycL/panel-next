@@ -68,7 +68,7 @@ func InitApp() error {
 	lang.LangInit("zh-cn") // en-us
 
 	DatabaseConnect()
-	if databaseDriver == database.MYSQL {
+	if databaseDriver == database.MYSQL || databaseDriver == database.POSTGRES {
 		if err := ApplyPendingRestore(); err != nil {
 			global.Logger.Errorln("Pending restore failed", err)
 			return err
@@ -123,6 +123,17 @@ func DatabaseConnect() {
 			Database:    global.Config.GetValueStringOrDefault("mysql", "db_name"),
 			WaitTimeout: global.Config.GetValueInt("mysql", "wait_timeout"),
 		}
+	} else if databaseDrive == database.POSTGRES {
+		dbClientInfo = &database.PostgresConfig{
+			Host:            global.Config.GetValueStringOrDefault("postgres", "host"),
+			Port:            global.Config.GetValueStringOrDefault("postgres", "port"),
+			Username:        global.Config.GetValueStringOrDefault("postgres", "username"),
+			Password:        global.Config.GetValueStringOrDefault("postgres", "password"),
+			Database:        global.Config.GetValueStringOrDefault("postgres", "db_name"),
+			SSLMode:         global.Config.GetValueStringOrDefault("postgres", "ssl_mode"),
+			ConnectTimeout:  global.Config.GetValueInt("postgres", "connect_timeout"),
+			ConnMaxLifetime: global.Config.GetValueInt("postgres", "conn_max_lifetime"),
+		}
 	} else {
 		dbClientInfo = &database.SQLiteConfig{
 			Filename: global.Config.GetValueStringOrDefault("sqlite", "file_path"),
@@ -137,9 +148,19 @@ func DatabaseConnect() {
 		models.Db = global.Db
 	}
 
-	database.CreateDatabase(databaseDrive, global.Db)
+	if err := database.CreateDatabase(databaseDrive, global.Db); err != nil {
+		log.Panicln("Database migration error", err)
+	}
+	if err := database.EnsureDefaultSystemSettings(global.Db); err != nil {
+		log.Panicln("Default system settings initialization error", err)
+	}
+	if _, err := database.EnsureInstanceMetadata(global.Db); err != nil {
+		log.Panicln("Instance metadata initialization error", err)
+	}
 
-	database.NotFoundAndCreateUser(global.Db)
+	if err := database.NotFoundAndCreateUser(global.Db); err != nil {
+		log.Panicln("Default user initialization error", err)
+	}
 }
 
 // 命令行运行
