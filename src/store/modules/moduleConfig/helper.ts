@@ -1,4 +1,4 @@
-import { ss } from '@/utils/storage'
+import { persistentStorage } from '@/utils/storage'
 // import userDefaultAvatar from '@/assets/userDefaultAvatar.png'
 
 const LOCAL_NAME = 'moduleConfig'
@@ -13,10 +13,10 @@ export interface ModuleConfigState {
 }
 
 export function getLocalState(): ModuleConfigState {
-  const localSetting: ModuleConfigState | undefined = ss.get(LOCAL_NAME)
+  const localSetting = persistentStorage.get<ModuleConfigState>(LOCAL_NAME)
   return { ...localSetting }
 }
 
 export function setLocalState(setting: ModuleConfigState): void {
-  ss.set(LOCAL_NAME, setting)
+  persistentStorage.set(LOCAL_NAME, setting)
 }

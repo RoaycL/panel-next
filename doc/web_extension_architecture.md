@@ -203,6 +203,7 @@ DELETE /api/v1/sessions/:id
 - 服务器数据：账号、分组、卡片、面板配置、搜索引擎、组件布局和资源元数据。
 - 设备本地数据：服务器地址、设备 ID、会话、最近成功快照、最后同步 revision、设备专属偏好。
 - Web 使用 localStorage/IndexedDB 适配器；扩展使用 `chrome.storage.local`。
+- Pinia 与工具层只使用语义明确的 `persistentStorage` 包装器，包装器再调用当前 Runtime 的 StorageAdapter；历史 `ss`/`ls` 别名已移除，现有键名和 JSON 信封保持兼容。
 - 会话和缓存使用不同键空间；退出登录必须清除会话，用户可选择保留非敏感缓存。
 - `chrome.storage.sync` 不保存 Sun-Panel 账号 Token，也不作为业务同步源。
 - Extension 的 bootstrap 快照使用独立缓存版本，先由服务器 Origin 的 StorageAdapter 分区，再按账号 ID 分键；快照信封同时记录 Origin 与账号，读取时必须双重匹配。
