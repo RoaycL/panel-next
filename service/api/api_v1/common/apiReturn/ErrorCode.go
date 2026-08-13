@@ -5,11 +5,14 @@ var ErrorCodeMap = map[int]string{
 	// 100: "operation failed",
 
 	1000: "Not logged in yet",                   // 还未登录
+	1001: "Invalid session",                     // 会话无效或已撤销
 	1003: "Incorrect username or password",      // 用户名或密码错误
 	1004: "Account disabled or not activated",   // 账号已停用或未激活
 	1005: "No current permission for operation", // 当前无权限操作
 	1006: "Account does not exist",              // 账号不存在
 	1007: "Old password error",                  // 旧密码不正确
+	1008: "Access token expired",                // Access Token 已过期，可尝试刷新
+	1009: "Legacy token compatibility expired",  // 旧 Token 兼容窗口已结束
 
 	// 数据类
 	1200: "Database error",           // 数据库错误
@@ -20,5 +23,7 @@ var ErrorCodeMap = map[int]string{
 	1301: "Unsupported file format", // 不被支持的格式文件
 
 	1400: "Parameter format error", // 参数格式错误
+
+	1501: "Sync cursor is ahead of the server", // 同步游标超前，需要重新 bootstrap
 
 }

@@ -31,7 +31,8 @@
     "1202": "未找到数据记录",
     "1300": "上传失败",
     "1301": "上传失败，不被支持的文件格式",
-    "1400": "参数格式错误"
+    "1400": "参数格式错误",
+    "1501": "同步状态已变化，正在重新获取完整快照"
   },
   "appLauncher": {
     "title": "系统应用"
@@ -262,7 +263,13 @@
     "changeToWanModelSuccess": "已经切换到公网模式（模式状态仅保存在本地）",
     "goToLogin": "前往登录",
     "openLanUrl": "打开局域网地址",
-    "openWanUrl": "打开公网地址"
+    "openWanUrl": "打开公网地址",
+    "syncCached": "缓存 · 正在刷新",
+    "syncing": "正在同步",
+    "syncOnline": "已同步",
+    "syncOffline": "离线 · 显示缓存",
+    "syncUnavailable": "离线 · 暂无缓存",
+    "syncLastAt": "最近同步：{time}"
   },
   "settingUserInfo": {
     "confirmLogoutText": "你确定要退出登录吗？",

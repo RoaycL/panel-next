@@ -14,8 +14,9 @@ type ItemIcon struct {
 	Url             string                    `gorm:"type:varchar(1000)" json:"url"`
 	LanUrl          string                    `gorm:"type:varchar(1000)" json:"lanUrl"`
 	Description     string                    `gorm:"type:varchar(1000)" json:"description"`
-	OpenMethod      int                       `gorm:"type:tinyint(1)" json:"openMethod"`
-	Sort            int                       `gorm:"type:int(11)" json:"sort"`
+	OpenMethod      int                       `gorm:"type:smallint" json:"openMethod"`
+	Sort            int                       `json:"sort"`
+	Revision        int64                     `gorm:"not null;default:0;index" json:"revision"`
 	ItemIconGroupId int                       `json:"itemIconGroupId"`
 	UserId          uint                      `json:"userId"`
 	User            User                      `json:"user"`

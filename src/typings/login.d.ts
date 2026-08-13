@@ -10,6 +10,18 @@ declare namespace Login{
 		token :string
 	}
 
+    interface DeviceSessionRefreshResponse {
+        accessToken:string
+        refreshToken:string
+        accessExpiresAt:string
+        refreshExpiresAt:string
+    }
+
+    interface DeviceSessionLoginResponse extends DeviceSessionRefreshResponse {
+        sessionId:string
+        user:User.Info
+    }
+
     interface ResetPasswordByVCodeReqest extends System.Register.SendRegisterVcodeRquest{
     }
 

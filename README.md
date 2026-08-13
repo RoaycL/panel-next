@@ -50,7 +50,7 @@ flowchart LR
 ### 已完成
 
 - 升级 Vue、Vite、TypeScript、pnpm 等前端工具链，并建立 Web/Extension 双产物构建。
-- 实现 SQLite 完整备份恢复、MySQL 逻辑备份迁移、校验、快照与失败回滚。
+- 实现 SQLite 完整备份恢复、MySQL/PostgreSQL 逻辑备份迁移、校验、快照与失败回滚。
 - 建立 Manifest V3 新标签页扩展入口和共享 `RuntimeAdapter` / `StorageAdapter`。
 - 接入 `chrome.storage.local` 预加载内存镜像，按服务器 Origin 隔离数据。
 - 实现服务器地址配置、兼容性验证、按 Origin 授权和服务器切换。
@@ -83,6 +83,7 @@ flowchart LR
 - Node.js `>= 22.13`
 - pnpm `11.20.0`（以 `package.json` 的 `packageManager` 字段为准）
 - Go `>= 1.20`
+- PostgreSQL `>= 14`（推荐 17；新部署默认）
 - SQLite 相关 Go 构建需要可用的 CGO/C 编译环境
 
 ### 获取代码
@@ -90,7 +91,7 @@ flowchart LR
 ```powershell
 git clone https://github.com/RoaycL/panel-next.git
 cd panel-next
-git switch codex/open-feature-parity
+git switch main
 corepack enable
 corepack pnpm install
 ```
@@ -119,6 +120,14 @@ cd service
 go test ./...
 go vet ./...
 ```
+
+### PostgreSQL 配置
+
+新生成的 `service/conf/conf.ini` 默认使用 `[postgres]`。本机部署可直接连接已有 PostgreSQL；容器部署连接宿主机或外部 PostgreSQL 时，需要把 `postgres.host` 设置为容器可访问的地址。已有明确配置为 SQLite/MySQL 的实例不会被静默切换，迁移前应先生成并验证备份。
+
+### Web/Extension 跨源配置
+
+Web 同源访问默认可用，不需要开放 CORS。Chrome 扩展或额外 Web 前端必须在 `service/conf/conf.ini` 的 `[cors]` 中配置精确 `extension_ids` 或 `web_origins`；不支持通配符。完整示例和反向代理要求见 [Chrome 扩展开发说明](./doc/chrome_extension_development.md#服务端-cors-配置)。
 
 ## 开发约定
 

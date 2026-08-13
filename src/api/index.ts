@@ -1,11 +1,12 @@
 import { post } from '@/utils/request'
+import { getDeviceIdentity } from '@/runtime/device'
 
 // 登录相关
 
 export function login<T>(data: Login.LoginReqest) {
   return post<T>({
-    url: '/login',
-    data,
+    url: '/v1/sessions/login',
+    data: { ...data, ...getDeviceIdentity() },
   })
 }
 

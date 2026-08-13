@@ -15,6 +15,7 @@ export interface HttpOption {
   signal?: GenericAbortSignal
   beforeRequest?: () => void
   afterRequest?: () => void
+  silentNetworkError?: boolean
 }
 
 export interface Response<T = any> {
@@ -25,16 +26,22 @@ export interface Response<T = any> {
   code: number
 }
 
-function http<T = any>(
-  { url, data, method, headers, onDownloadProgress, signal, beforeRequest, afterRequest }: HttpOption,
-) {
+function http<T = any>(options: HttpOption, sessionRetry = false): Promise<Response<T>> {
+  const { url, data, headers: providedHeaders, onDownloadProgress, signal, beforeRequest, afterRequest, silentNetworkError } = options
+  let { method } = options
+  let headers = providedHeaders
   const authStore = useAuthStore()
   const appStore = useAppStore()
-  const successHandler = (res: AxiosResponse<Response<T>>) => {
+  const successHandler = async (res: AxiosResponse<Response<T>>): Promise<Response<T>> => {
     if (res.data.code === 0)
       return res.data
 
-    if (res.data.code === 1001) {
+    if (res.data.code === 1008 && !sessionRetry) {
+      if (await authStore.refreshSession())
+        return http<T>(options, true)
+    }
+
+    if (res.data.code === 1001 || res.data.code === 1008 || res.data.code === 1009) {
       // 避免重复弹窗
       if (loginMessageShow === false) {
         loginMessageShow = true
@@ -77,10 +84,12 @@ function http<T = any>(
 
   const failHandler = (error: Response<Error>) => {
     afterRequest?.()
-    message.error(t('common.networkError'), {
-      duration: 50000,
-      closable: true,
-    })
+    if (!silentNetworkError) {
+      message.error(t('common.networkError'), {
+        duration: 50000,
+        closable: true,
+      })
+    }
     throw new Error(error?.msg || 'Error')
   }
 
@@ -95,26 +104,12 @@ function http<T = any>(
   headers.token = authStore.token
   headers.lang = appStore.language
   return method === 'GET'
-    ? request.get(url, { params, signal, onDownloadProgress }).then(successHandler, failHandler)
+    ? request.get(url, { params, headers, signal, onDownloadProgress }).then(successHandler, failHandler)
     : request.post(url, params, { headers, signal, onDownloadProgress }).then(successHandler, failHandler)
 }
 
 export function get<T = any>(
-  { url, data, method = 'GET', onDownloadProgress, signal, beforeRequest, afterRequest }: HttpOption,
-): Promise<Response<T>> {
-  return http<T>({
-    url,
-    method,
-    data,
-    onDownloadProgress,
-    signal,
-    beforeRequest,
-    afterRequest,
-  })
-}
-
-export function post<T = any>(
-  { url, data, method = 'POST', headers, onDownloadProgress, signal, beforeRequest, afterRequest }: HttpOption,
+  { url, data, method = 'GET', headers, onDownloadProgress, signal, beforeRequest, afterRequest, silentNetworkError }: HttpOption,
 ): Promise<Response<T>> {
   return http<T>({
     url,
@@ -125,6 +120,23 @@ export function post<T = any>(
     signal,
     beforeRequest,
     afterRequest,
+    silentNetworkError,
+  })
+}
+
+export function post<T = any>(
+  { url, data, method = 'POST', headers, onDownloadProgress, signal, beforeRequest, afterRequest, silentNetworkError }: HttpOption,
+): Promise<Response<T>> {
+  return http<T>({
+    url,
+    method,
+    data,
+    headers,
+    onDownloadProgress,
+    signal,
+    beforeRequest,
+    afterRequest,
+    silentNetworkError,
   })
 }
 

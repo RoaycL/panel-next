@@ -17,7 +17,7 @@ func ValidateSunPanelLayout(manifest Manifest) error {
 	switch {
 	case manifest.Database.Driver == "sqlite" && manifest.Database.Mode == "snapshot":
 		databasePath = DatabaseSQLitePath
-	case manifest.Database.Driver == "mysql" && manifest.Database.Mode == "logical":
+	case (manifest.Database.Driver == "mysql" || manifest.Database.Driver == "postgres") && manifest.Database.Mode == "logical":
 		databasePath = DatabaseLogicalPath
 	default:
 		return fmt.Errorf("%w: unsupported database backup %q/%q", ErrInvalidArchive, manifest.Database.Driver, manifest.Database.Mode)

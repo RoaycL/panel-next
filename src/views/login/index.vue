@@ -27,13 +27,14 @@ const form = ref<Login.LoginReqest>({
 const loginPost = async () => {
   loading.value = true
   try {
-    const res = await login<Login.LoginResponse>(form.value)
+    const res = await login<Login.DeviceSessionLoginResponse>(form.value)
     if (res.code === 0) {
-      authStore.setToken(res.data.token)
-      authStore.setUserInfo(res.data)
+      const session = res.data as Login.DeviceSessionLoginResponse
+      const user = session.user
+      authStore.setDeviceSession(session)
 
       setTimeout(() => {
-        ms.success(`Hi ${res.data.name},${t('login.welcomeMessage')}`)
+        ms.success(`Hi ${user.name},${t('login.welcomeMessage')}`)
         loading.value = false
         router.push({ path: '/' })
       }, 500)

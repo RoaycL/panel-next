@@ -41,3 +41,13 @@ func TestValidateSunPanelLogicalLayout(t *testing.T) {
 		t.Fatalf("expected invalid archive, got %v", err)
 	}
 }
+
+func TestValidateSunPanelPostgresLogicalLayout(t *testing.T) {
+	valid := Manifest{
+		Database: Database{Driver: "postgres", Mode: "logical"},
+		Entries:  []Entry{{Path: DatabaseLogicalPath}},
+	}
+	if err := ValidateSunPanelLayout(valid); err != nil {
+		t.Fatalf("expected PostgreSQL logical backup layout to be valid: %v", err)
+	}
+}

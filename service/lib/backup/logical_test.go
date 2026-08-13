@@ -50,6 +50,14 @@ func TestConvertLogicalMySQLTimestamp(t *testing.T) {
 	}
 }
 
+func TestConvertLogicalPostgresTimestamp(t *testing.T) {
+	value := "2026-08-09T12:34:56.123456Z"
+	converted := convertLogicalValue("postgres", "timestamptz", &value)
+	if _, ok := converted.(time.Time); !ok {
+		t.Fatalf("expected PostgreSQL timestamp to convert to time.Time, got %T", converted)
+	}
+}
+
 func TestLogicalDatabaseSQLiteIntegrationRoundTrip(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "test.db")), &gorm.Config{NamingStrategy: schema.NamingStrategy{SingularTable: true}})
 	if err != nil {
@@ -102,6 +110,18 @@ func TestLogicalDatabaseRejectsUnknownTable(t *testing.T) {
 	}
 }
 
+func TestLogicalBackupExcludesInstallationAndSessionState(t *testing.T) {
+	configured := make(map[string]bool, len(SunPanelLogicalTables))
+	for _, table := range SunPanelLogicalTables {
+		configured[table.Name] = true
+	}
+	for _, excluded := range []string{"instance_metadata", "user_session", "user_session_refresh_token", "user_sync_state", "user_sync_change"} {
+		if configured[excluded] {
+			t.Fatalf("security-local table %q must not enter business backups", excluded)
+		}
+	}
+}
+
 func TestLogicalDatabaseRejectsSchemaMismatch(t *testing.T) {
 	payload := LogicalDatabase{
 		FormatVersion: LogicalDatabaseFormatVersion,
@@ -112,6 +132,29 @@ func TestLogicalDatabaseRejectsSchemaMismatch(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected schema mismatch")
+	}
+}
+
+func TestLogicalDatabaseAllowsOnlyDeclaredMigrationColumnsToBeMissing(t *testing.T) {
+	payload := LogicalDatabase{
+		FormatVersion: LogicalDatabaseFormatVersion,
+		Tables: []LogicalTable{{
+			Name: "item_icon", Columns: []string{"id", "title"},
+			Rows: [][]*string{{stringPointer("1"), stringPointer("Example")}},
+		}},
+	}
+	schema := func(string) ([]string, error) {
+		return []string{"id", "title", "revision"}, nil
+	}
+	if _, err := validateLogicalDatabaseSchema(payload, []LogicalTableSpec{{
+		Name: "item_icon", OrderBy: "id", OptionalOnRestore: []string{"revision"},
+	}}, schema); err != nil {
+		t.Fatalf("pre-revision backup should remain restorable: %v", err)
+	}
+	if _, err := validateLogicalDatabaseSchema(payload, []LogicalTableSpec{{
+		Name: "item_icon", OrderBy: "id",
+	}}, schema); err == nil {
+		t.Fatal("missing undeclared schema column was accepted")
 	}
 }
 

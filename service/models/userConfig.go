@@ -1,7 +1,11 @@
 package models
 
+import "time"
+
 type UserConfig struct {
-	UserId uint `gorm:"index" json:"userId"`
+	UserId    uint      `gorm:"index" json:"userId"`
+	Revision  int64     `gorm:"not null;default:0;index" json:"revision"`
+	UpdatedAt time.Time `json:"updateTime"`
 
 	// 纯前端数据，面板样式数据
 	PanelJson string                 `json:"-"`

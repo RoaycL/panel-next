@@ -6,10 +6,12 @@ import (
 	"sun-panel/api/api_v1/common/base"
 	"sun-panel/global"
 	"sun-panel/lib/cmn"
+	sessionlib "sun-panel/lib/session"
 	"sun-panel/models"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
+	"gorm.io/gorm"
 )
 
 type UserApi struct{}
@@ -101,12 +103,18 @@ func (a *UserApi) UpdatePasssword(c *gin.Context) {
 			return
 		}
 	}
-	res := global.Db.Model(&models.User{}).Where("id", userInfo.ID).Updates(map[string]interface{}{
-		"password": cmn.PasswordEncryption(params.NewPassword),
-		"token":    "",
+	err = global.Db.WithContext(c.Request.Context()).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&models.User{}).Where("id = ?", userInfo.ID).Updates(map[string]interface{}{
+			"password": cmn.PasswordEncryption(params.NewPassword),
+			"token":    "",
+		}).Error; err != nil {
+			return err
+		}
+		_, err := sessionlib.NewManager(tx).RevokeAll(c.Request.Context(), userInfo.ID)
+		return err
 	})
-	if res.Error != nil {
-		apiReturn.ErrorDatabase(c, res.Error.Error())
+	if err != nil {
+		apiReturn.ErrorDatabase(c, err.Error())
 		return
 	}
 	// 删除token

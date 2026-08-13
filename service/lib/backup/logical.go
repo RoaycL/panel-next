@@ -19,16 +19,17 @@ const LogicalDatabaseFormatVersion = 1
 var SunPanelLogicalTables = []LogicalTableSpec{
 	{Name: "user", OrderBy: "id"},
 	{Name: "system_setting", OrderBy: "id"},
-	{Name: "item_icon_group", OrderBy: "id"},
-	{Name: "item_icon", OrderBy: "id"},
-	{Name: "user_config", OrderBy: "user_id"},
+	{Name: "item_icon_group", OrderBy: "id", OptionalOnRestore: []string{"revision"}},
+	{Name: "item_icon", OrderBy: "id", OptionalOnRestore: []string{"revision"}},
+	{Name: "user_config", OrderBy: "user_id", OptionalOnRestore: []string{"revision", "updated_at"}},
 	{Name: "file", OrderBy: "id"},
 	{Name: "module_config", OrderBy: "id"},
 }
 
 type LogicalTableSpec struct {
-	Name    string
-	OrderBy string
+	Name              string
+	OrderBy           string
+	OptionalOnRestore []string
 }
 
 type LogicalDatabase struct {
@@ -87,6 +88,12 @@ func ExportLogicalDatabase(ctx context.Context, db *gorm.DB, destination string,
 }
 
 func ImportLogicalDatabase(ctx context.Context, db *gorm.DB, source string, specs []LogicalTableSpec) error {
+	return ImportLogicalDatabaseWithTxHook(ctx, db, source, specs, nil)
+}
+
+// ImportLogicalDatabaseWithTxHook runs the optional hook in the same database
+// transaction after all portable business tables have been restored.
+func ImportLogicalDatabaseWithTxHook(ctx context.Context, db *gorm.DB, source string, specs []LogicalTableSpec, hook func(*gorm.DB) error) error {
 	if db == nil {
 		return errors.New("database is not initialized")
 	}
@@ -106,43 +113,61 @@ func ImportLogicalDatabase(ctx context.Context, db *gorm.DB, source string, spec
 		}
 		for _, spec := range specs {
 			table := tables[spec.Name]
-			if len(table.Rows) == 0 {
-				continue
-			}
-			columns := make([]string, len(table.Columns))
-			placeholders := make([]string, len(table.Columns))
-			for i, column := range table.Columns {
-				columns[i] = quoteIdentifier(tx, column)
-				placeholders[i] = "?"
-			}
-			query := "INSERT INTO " + quoteIdentifier(tx, table.Name) + " (" + strings.Join(columns, ",") + ") VALUES (" + strings.Join(placeholders, ",") + ")"
-			columnTypes, err := tx.Migrator().ColumnTypes(table.Name)
-			if err != nil {
-				return fmt.Errorf("inspect table %q: %w", table.Name, err)
-			}
-			databaseTypes := make(map[string]string, len(columnTypes))
-			for _, columnType := range columnTypes {
-				databaseTypes[columnType.Name()] = columnType.DatabaseTypeName()
-			}
-			for rowIndex, row := range table.Rows {
-				values := make([]any, len(row))
-				for i, value := range row {
-					values[i] = convertLogicalValue(tx.Dialector.Name(), databaseTypes[table.Columns[i]], value)
+			if len(table.Rows) > 0 {
+				columns := make([]string, len(table.Columns))
+				placeholders := make([]string, len(table.Columns))
+				for i, column := range table.Columns {
+					columns[i] = quoteIdentifier(tx, column)
+					placeholders[i] = "?"
 				}
-				if err := tx.Exec(query, values...).Error; err != nil {
-					return fmt.Errorf("restore table %q row %d: %w", table.Name, rowIndex, err)
+				query := "INSERT INTO " + quoteIdentifier(tx, table.Name) + " (" + strings.Join(columns, ",") + ") VALUES (" + strings.Join(placeholders, ",") + ")"
+				columnTypes, err := tx.Migrator().ColumnTypes(table.Name)
+				if err != nil {
+					return fmt.Errorf("inspect table %q: %w", table.Name, err)
+				}
+				databaseTypes := make(map[string]string, len(columnTypes))
+				for _, columnType := range columnTypes {
+					databaseTypes[columnType.Name()] = columnType.DatabaseTypeName()
+				}
+				for rowIndex, row := range table.Rows {
+					values := make([]any, len(row))
+					for i, value := range row {
+						values[i] = convertLogicalValue(tx.Dialector.Name(), databaseTypes[table.Columns[i]], value)
+					}
+					if err := tx.Exec(query, values...).Error; err != nil {
+						return fmt.Errorf("restore table %q row %d: %w", table.Name, rowIndex, err)
+					}
+				}
+			}
+			if tx.Dialector.Name() == "postgres" && containsColumn(table.Columns, "id") {
+				quotedTable := quoteIdentifier(tx, table.Name)
+				query := "SELECT setval(pg_get_serial_sequence(?, 'id'), COALESCE(MAX(id), 1), MAX(id) IS NOT NULL) FROM " + quotedTable
+				if err := tx.Exec(query, quotedTable).Error; err != nil {
+					return fmt.Errorf("reset sequence for table %q: %w", table.Name, err)
 				}
 			}
 		}
+		if hook != nil {
+			return hook(tx)
+		}
 		return nil
 	})
+}
+
+func containsColumn(columns []string, target string) bool {
+	for _, column := range columns {
+		if column == target {
+			return true
+		}
+	}
+	return false
 }
 
 func convertLogicalValue(dialect, databaseType string, value *string) any {
 	if value == nil {
 		return nil
 	}
-	if dialect == "mysql" {
+	if dialect == "mysql" || dialect == "postgres" {
 		typeName := strings.ToUpper(databaseType)
 		if strings.Contains(typeName, "DATE") || strings.Contains(typeName, "TIME") {
 			if parsed, err := time.Parse(time.RFC3339Nano, *value); err == nil {
@@ -236,7 +261,8 @@ func validateLogicalDatabaseSchema(payload LogicalDatabase, specs []LogicalTable
 	tables := make(map[string]LogicalTable, len(payload.Tables))
 	totalRows := 0
 	for _, table := range payload.Tables {
-		if _, ok := allowed[table.Name]; !ok {
+		spec, ok := allowed[table.Name]
+		if !ok {
 			return nil, fmt.Errorf("unexpected logical table %q", table.Name)
 		}
 		if _, duplicate := tables[table.Name]; duplicate {
@@ -263,8 +289,17 @@ func validateLogicalDatabaseSchema(payload LogicalDatabase, specs []LogicalTable
 			}
 			seenColumns[column] = struct{}{}
 		}
-		if len(seenColumns) != len(actual) {
-			return nil, fmt.Errorf("logical table %q does not match the current schema", table.Name)
+		optional := make(map[string]struct{}, len(spec.OptionalOnRestore))
+		for _, column := range spec.OptionalOnRestore {
+			optional[column] = struct{}{}
+		}
+		for column := range actual {
+			if _, present := seenColumns[column]; present {
+				continue
+			}
+			if _, allowedMissing := optional[column]; !allowedMissing {
+				return nil, fmt.Errorf("logical table %q does not match the current schema", table.Name)
+			}
 		}
 		for _, row := range table.Rows {
 			if len(row) != len(table.Columns) {

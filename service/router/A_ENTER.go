@@ -2,6 +2,7 @@ package router
 
 import (
 	"sun-panel/global"
+	corslib "sun-panel/lib/cors"
 	// "sun-panel/router/admin"
 	"sun-panel/router/openness"
 	"sun-panel/router/panel"
@@ -13,6 +14,14 @@ import (
 // 初始化总路由
 func InitRouters(addr string) error {
 	router := gin.Default()
+	corsPolicy, err := corslib.NewPolicy(
+		global.Config.GetValueStringOrDefault("cors", "web_origins"),
+		global.Config.GetValueStringOrDefault("cors", "extension_ids"),
+	)
+	if err != nil {
+		return err
+	}
+	router.Use(corsPolicy.Handler())
 	rootRouter := router.Group("/")
 	routerGroup := rootRouter.Group("api")
 

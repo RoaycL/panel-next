@@ -2,12 +2,17 @@ import type { App } from 'vue'
 import type { RouteRecordRaw } from 'vue-router'
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { setupPageGuard } from './permission'
+import { getRuntime } from '@/runtime'
+
+const homeComponent = getRuntime().kind === 'extension'
+  ? () => import('@/views/extension/index.vue')
+  : () => import('@/views/home/index.vue')
 
 const routes: RouteRecordRaw[] = [
   {
     path: '/',
     name: 'Home',
-    component: () => import('@/views/home/index.vue'),
+    component: homeComponent,
   },
 
   {

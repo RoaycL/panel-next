@@ -11,8 +11,26 @@ func getDefaultConfig() map[string]map[string]string {
 	return map[string]map[string]string{
 		"base": {
 			"http_port":        "9090",
+			"database_drive":   "postgres",
 			"source_path":      "./files",      // 存放文件的路径
 			"source_temp_path": "./files/temp", // 存放文件的缓存路径
+		},
+		"postgres": {
+			"host":              "127.0.0.1",
+			"port":              "5432",
+			"username":          "panel_next",
+			"password":          "",
+			"db_name":           "panel_next",
+			"ssl_mode":          "disable",
+			"connect_timeout":   "10",
+			"conn_max_lifetime": "300",
+		},
+		"cors": {
+			"web_origins":   "",
+			"extension_ids": "",
+		},
+		"session": {
+			"legacy_token_until": "2026-11-07T00:00:00Z",
 		},
 		"sqlite": {
 			"file_path": "./database.db",

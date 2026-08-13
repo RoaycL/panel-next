@@ -10,8 +10,17 @@ interface ChromeStorageArea {
   remove: (keys: string | string[]) => Promise<void>
 }
 
+interface ChromeStorageChange {
+  newValue?: unknown
+}
+
 interface ChromeRuntimeApi {
-  storage: { local: ChromeStorageArea }
+  storage: {
+    local: ChromeStorageArea
+    onChanged: {
+      addListener: (callback: (changes: Record<string, ChromeStorageChange>, areaName: string) => void) => void
+    }
+  }
   permissions: {
     contains: (permissions: { origins: string[] }) => Promise<boolean>
     request: (permissions: { origins: string[] }) => Promise<boolean>
@@ -21,7 +30,7 @@ interface ChromeRuntimeApi {
 
 function getChromeApi(): ChromeRuntimeApi {
   const api = (globalThis as typeof globalThis & { chrome?: ChromeRuntimeApi }).chrome
-  if (!api?.storage?.local || !api.permissions)
+  if (!api?.storage?.local || !api.storage.onChanged || !api.permissions)
     throw new Error('Chrome extension APIs are unavailable. Load the built package as an extension.')
   return api
 }
@@ -54,10 +63,30 @@ class ChromeStorageAdapter implements StorageAdapter {
   private origin: string | null = null
   private writeQueue = Promise.resolve()
 
-  constructor(private readonly area: ChromeStorageArea) {}
+  constructor(private readonly area: ChromeStorageArea, onChanged: ChromeRuntimeApi['storage']['onChanged']) {
+    onChanged.addListener((changes, areaName) => {
+      if (areaName !== 'local')
+        return
+      for (const [key, change] of Object.entries(changes)) {
+        if (typeof change.newValue === 'string')
+          this.values.set(key, change.newValue)
+        else if (change.newValue === undefined)
+          this.values.delete(key)
+      }
+    })
+  }
 
   async preload() {
     const stored = await this.area.get(null)
+    for (const [key, value] of Object.entries(stored)) {
+      if (typeof value === 'string')
+        this.values.set(key, value)
+    }
+  }
+
+  async sync() {
+    const stored = await this.area.get(null)
+    this.values.clear()
     for (const [key, value] of Object.entries(stored)) {
       if (typeof value === 'string')
         this.values.set(key, value)
@@ -119,6 +148,10 @@ class ChromeStorageAdapter implements StorageAdapter {
     if (keys.length)
       this.enqueue(() => this.area.remove(keys))
   }
+
+  async flush() {
+    await this.writeQueue
+  }
 }
 
 async function validateServer(origin: string) {
@@ -135,9 +168,15 @@ async function validateServer(origin: string) {
 
     const payload = await response.json() as {
       code?: unknown
-      data?: { loginCaptcha?: unknown; register?: unknown }
+      data?: {
+        loginCaptcha?: unknown
+        register?: unknown
+      }
     }
-    if (payload.code !== 0 || typeof payload.data?.loginCaptcha !== 'boolean' || typeof payload.data.register !== 'boolean')
+    const register = payload.data?.register
+    const hasCompatibleRegisterSetting = typeof register === 'boolean'
+      || (typeof register === 'object' && register !== null && typeof (register as { openRegister?: unknown }).openRegister === 'boolean')
+    if (payload.code !== 0 || typeof payload.data?.loginCaptcha !== 'boolean' || !hasCompatibleRegisterSetting)
       throw new Error('目标地址不是兼容的 Panel Next / Sun-Panel 服务。')
   }
   catch (error) {
@@ -154,7 +193,7 @@ async function validateServer(origin: string) {
 
 export function createExtensionRuntime(): RuntimeAdapter {
   const chromeApi = getChromeApi()
-  const storage = new ChromeStorageAdapter(chromeApi.storage.local)
+  const storage = new ChromeStorageAdapter(chromeApi.storage.local, chromeApi.storage.onChanged)
   let serverOrigin: string | null = null
 
   return {
