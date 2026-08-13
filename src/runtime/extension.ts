@@ -257,12 +257,20 @@ export function createExtensionRuntime(): RuntimeAdapter {
       }
       return origin
     },
+    resolveUrl(url) {
+      if (!url || !serverOrigin || !url.startsWith('/'))
+        return url
+      return new URL(url, serverOrigin).href
+    },
     openUrl(url, mode) {
+      const target = new URL(url, serverOrigin ?? window.location.href)
+      if (target.protocol !== 'http:' && target.protocol !== 'https:')
+        throw new Error('Only HTTP and HTTPS links can be opened.')
       if (mode === 'current') {
-        window.location.assign(url)
+        window.location.assign(target.href)
         return
       }
-      window.open(url, '_blank', 'noopener,noreferrer')
+      window.open(target.href, '_blank', 'noopener,noreferrer')
     },
   }
 }

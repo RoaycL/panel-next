@@ -17,5 +17,6 @@ export interface RuntimeAdapter {
   getApiBaseUrl: () => string
   getServerOrigin: () => string | null
   configureServer: (serverUrl: string) => Promise<string>
+  resolveUrl: (url: string) => string
   openUrl: (url: string, mode: OpenUrlMode) => void
 }

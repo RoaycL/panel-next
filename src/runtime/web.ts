@@ -34,12 +34,18 @@ export function createWebRuntime(kind: RuntimeKind): RuntimeAdapter {
     async configureServer() {
       throw new Error('Web mode always uses the current server.')
     },
+    resolveUrl(url) {
+      return url
+    },
     openUrl(url, mode) {
+      const target = new URL(url, window.location.href)
+      if (target.protocol !== 'http:' && target.protocol !== 'https:')
+        throw new Error('Only HTTP and HTTPS links can be opened.')
       if (mode === 'current') {
-        window.location.assign(url)
+        window.location.assign(target.href)
         return
       }
-      window.open(url, '_blank', 'noopener,noreferrer')
+      window.open(target.href, '_blank', 'noopener,noreferrer')
     },
   }
 }
