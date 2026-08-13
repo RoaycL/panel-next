@@ -97,7 +97,7 @@ async function editApi() {
       ms.error(`${t('common.saveFail')}:${msg}`)
     }
   }
-  catch (error) {
+  catch {
     ms.error(t('common.saveFail'))
   }
   submitLoading.value = false
@@ -125,7 +125,7 @@ async function getIconByUrl(url: string, loadingIndex: number) {
       ms.error(t('iconItem.geticonFail'))
     }
   }
-  catch (error) {
+  catch {
     ms.error(t('iconItem.geticonFail'))
   }
   getIconLoading.value[loadingIndex] = false
@@ -139,7 +139,7 @@ watch(() => props.visible, (newValue) => {
   }
 
   getGroupListOptions()
-})
+}, { immediate: true })
 
 function getGroupListOptions() {
   getGroupList<Common.ListResponse<Panel.ItemIconGroup[]>>().then(({ data, code, msg }) => {

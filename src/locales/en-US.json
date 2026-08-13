@@ -282,6 +282,25 @@
     "syncUnavailable": "Offline · No cache",
     "syncLastAt": "Last synced: {time}"
   },
+  "weather": {
+    "title": "Current weather",
+    "loading": "Loading weather",
+    "unavailable": "Weather unavailable",
+    "refresh": "Refresh weather",
+    "humidity": "Humidity {value}%",
+    "stale": "Cached data",
+    "conditions": {
+      "clear": "Clear",
+      "partlyCloudy": "Partly cloudy",
+      "cloudy": "Cloudy",
+      "fog": "Fog",
+      "drizzle": "Drizzle",
+      "rain": "Rain",
+      "snow": "Snow",
+      "thunderstorm": "Thunderstorm",
+      "unknown": "Weather"
+    }
+  },
   "settingUserInfo": {
     "confirmLogoutText": "Are you sure you want to logout?",
     "confirmPassword": "Confirm new password",

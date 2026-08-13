@@ -20,7 +20,7 @@ import { getBootstrap } from '@/api/sync'
 import { onSyncConflict, setSyncRevision } from '@/sync/revision'
 import type { DashboardGroup } from '@/dashboard/core'
 import { createDashboardState, createItemSortRequest, filterDashboardGroups, normalizeDashboardGroups, selectItemUrl } from '@/dashboard/core'
-import { WidgetHost, createHeaderClockWidget, createHeaderSearchWidget } from '@/widgets'
+import { WidgetHost, createHeaderClockWidget, createHeaderSearchWidget, createHeaderWeatherWidget } from '@/widgets'
 
 withDefaults(defineProps<{
   layout?: 'web' | 'extension'
@@ -94,6 +94,7 @@ const sessionTitle = computed(() => authStore.accessExpiresAt
   : sessionLabel.value)
 const headerClockWidget = computed(() => createHeaderClockWidget(!panelState.panelConfig.clockShowSecond))
 const headerSearchWidget = createHeaderSearchWidget()
+const headerWeatherWidget = createHeaderWeatherWidget()
 
 function openPage(openMethod: number, url: string, title?: string) {
   switch (openMethod) {
@@ -348,6 +349,8 @@ async function handleSyncConflict() {
     await refreshExtensionBootstrap()
     return
   }
+  if (authStore.authMode !== 'device')
+    return
   const bootstrap = await getBootstrap()
   if (bootstrap.code === 0)
     applyBootstrapData(bootstrap.data)
@@ -380,7 +383,7 @@ onMounted(async () => {
   // 更新用户信息
   await updateLocalUserInfo()
 
-  if (authStore.visitMode === VisitMode.VISIT_MODE_LOGIN) {
+  if (authStore.visitMode === VisitMode.VISIT_MODE_LOGIN && authStore.authMode === 'device') {
     const bootstrap = await getBootstrap()
     if (bootstrap.code === 0) {
       applyBootstrapData(bootstrap.data)
@@ -495,6 +498,9 @@ function handleAddItem(itemIconGroupId?: number) {
             </div>
             <div class="text-shadow">
               <WidgetHost :instance="headerClockWidget" />
+            </div>
+            <div class="header-weather">
+              <WidgetHost :instance="headerWeatherWidget" />
             </div>
           </div>
           <div v-if="panelState.panelConfig.searchBoxShow" class="home-search flex mt-[20px] mx-auto sm:w-full lg:w-[80%]">
@@ -853,6 +859,7 @@ html {
 
 .extension-home .home-identity {
   justify-content: space-between;
+  gap: 18px;
   padding: 0 8px;
 }
 
@@ -863,6 +870,14 @@ html {
 
 .extension-home .divider {
   display: none;
+}
+
+.header-weather {
+  margin-left: 18px;
+}
+
+.extension-home .header-weather {
+  margin-left: auto;
 }
 
 .extension-home .home-identity :deep(.clock) {
@@ -964,12 +979,30 @@ html {
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   }
 
+  .home-identity {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .header-weather {
+    display: flex;
+    width: 100%;
+    justify-content: center;
+    margin: 8px 0 0;
+  }
+
   .extension-home .home-content {
     padding: 26px 18px 80px;
   }
 
   .extension-home .home-identity {
+    flex-wrap: wrap;
     align-items: flex-start;
+  }
+
+  .extension-home .header-weather {
+    width: 100%;
+    margin-left: 0;
   }
 
   .extension-home .home-groups {
