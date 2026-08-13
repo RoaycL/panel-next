@@ -164,6 +164,7 @@
     "editSuccess": "编辑成功",
     "export": "导出",
     "exportSuccess": "导出成功",
+    "invalidUrl": "链接地址无效或协议不受支持",
     "failed": "操作失败",
     "icon": "图标",
     "image": "图片",

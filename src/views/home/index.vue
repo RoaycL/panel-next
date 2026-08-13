@@ -88,10 +88,15 @@ function openPage(openMethod: number, url: string, title?: string) {
       runtime.openUrl(url, 'tab')
       break
     case 3:
-      windowShow.value = true
-      windowSrc.value = url
-      windowTitle.value = title || url
-      windowIframeIsLoad.value = true
+      try {
+        windowSrc.value = runtime.resolveNavigationUrl(url)
+        windowShow.value = true
+        windowTitle.value = title || url
+        windowIframeIsLoad.value = true
+      }
+      catch {
+        ms.error(t('common.invalidUrl'))
+      }
       break
 
     default:

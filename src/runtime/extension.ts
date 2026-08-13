@@ -1,4 +1,5 @@
 import type { RuntimeAdapter, StorageAdapter } from './types'
+import { resolveHttpUrl } from './url'
 
 const SERVER_ORIGIN_KEY = 'panelNext.runtime.serverOrigin'
 const DATA_PREFIX = 'panelNext.data.'
@@ -269,15 +270,16 @@ export function createExtensionRuntime(): RuntimeAdapter {
         return url
       return new URL(url, serverOrigin).href
     },
+    resolveNavigationUrl(url) {
+      return resolveHttpUrl(url, serverOrigin ?? window.location.href)
+    },
     openUrl(url, mode) {
-      const target = new URL(url, serverOrigin ?? window.location.href)
-      if (target.protocol !== 'http:' && target.protocol !== 'https:')
-        throw new Error('Only HTTP and HTTPS links can be opened.')
+      const target = resolveHttpUrl(url, serverOrigin ?? window.location.href)
       if (mode === 'current') {
-        window.location.assign(target.href)
+        window.location.assign(target)
         return
       }
-      window.open(target.href, '_blank', 'noopener,noreferrer')
+      window.open(target, '_blank', 'noopener,noreferrer')
     },
   }
 }

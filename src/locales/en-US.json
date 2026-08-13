@@ -164,6 +164,7 @@
     "editSuccess": "Edited successfully",
     "export": "Export",
     "exportSuccess": "Exported successfully",
+    "invalidUrl": "The link is invalid or uses an unsupported protocol",
     "failed": "Operation failed",
     "icon": "Icon",
     "image": "Image",

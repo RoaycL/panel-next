@@ -227,6 +227,7 @@ DELETE /api/v1/sessions/:id
 
 - 扩展 CSP 禁止 `unsafe-eval` 和远程脚本。
 - 所有外部 URL 在打开前验证协议，拒绝 `javascript:`、`data:` 等可执行地址。
+- 模板链接和用户自定义 footer 链接在应用根节点统一拦截后交给 RuntimeAdapter；卡片 iframe 与新窗口打开共用 HTTP(S) 安全解析，Blob URL 仅保留给显式文件下载。
 - iframe 只是兼容能力；目标站点的 CSP 或 `X-Frame-Options` 禁止嵌入时回退到新标签页。
 - 扩展权限遵循最小权限原则，每项新增权限都在发布清单中说明用户价值。
 - 登录、刷新、撤销、同步冲突和权限变更写入不含敏感明文的安全日志。
