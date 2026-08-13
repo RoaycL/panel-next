@@ -3,7 +3,7 @@ import { VueDraggable } from 'vue-draggable-plus'
 import { NBackTop, NButton, NButtonGroup, NDropdown, NModal, NSkeleton, NSpin, useDialog, useMessage } from 'naive-ui'
 import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { AppIcon } from './components'
-import { Clock, SearchBox, SystemMonitor } from '@/components/deskModule'
+import { SystemMonitor } from '@/components/deskModule'
 import { SvgIcon } from '@/components/common'
 import { deletes, getListByGroupId, saveSort } from '@/api/panel/itemIcon'
 import { getList as getGroupList } from '@/api/panel/itemIconGroup'
@@ -20,6 +20,7 @@ import { getBootstrap } from '@/api/sync'
 import { onSyncConflict, setSyncRevision } from '@/sync/revision'
 import type { DashboardGroup } from '@/dashboard/core'
 import { createDashboardState, createItemSortRequest, filterDashboardGroups, normalizeDashboardGroups, selectItemUrl } from '@/dashboard/core'
+import { WidgetHost, createHeaderClockWidget, createHeaderSearchWidget } from '@/widgets'
 
 withDefaults(defineProps<{
   layout?: 'web' | 'extension'
@@ -91,6 +92,8 @@ const sessionLabel = computed(() => {
 const sessionTitle = computed(() => authStore.accessExpiresAt
   ? t('panelHome.sessionExpiresAt', { time: new Date(authStore.accessExpiresAt).toLocaleString() })
   : sessionLabel.value)
+const headerClockWidget = computed(() => createHeaderClockWidget(!panelState.panelConfig.clockShowSecond))
+const headerSearchWidget = createHeaderSearchWidget()
 
 function openPage(openMethod: number, url: string, title?: string) {
   switch (openMethod) {
@@ -491,11 +494,11 @@ function handleAddItem(itemIconGroupId?: number) {
               |
             </div>
             <div class="text-shadow">
-              <Clock :hide-second="!panelState.panelConfig.clockShowSecond" />
+              <WidgetHost :instance="headerClockWidget" />
             </div>
           </div>
           <div v-if="panelState.panelConfig.searchBoxShow" class="home-search flex mt-[20px] mx-auto sm:w-full lg:w-[80%]">
-            <SearchBox @item-search="itemFrontEndSearch" />
+            <WidgetHost :instance="headerSearchWidget" @item-search="itemFrontEndSearch" />
           </div>
         </div>
 
