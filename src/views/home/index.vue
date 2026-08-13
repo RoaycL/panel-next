@@ -18,12 +18,8 @@ import { getRuntime } from '@/runtime'
 import { readBootstrapSnapshot, refreshBootstrapSnapshot } from '@/sync/bootstrapCache'
 import { getBootstrap } from '@/api/sync'
 import { onSyncConflict, setSyncRevision } from '@/sync/revision'
-
-interface ItemGroup extends Panel.ItemIconGroup {
-  sortStatus?: boolean
-  hoverStatus: boolean
-  items?: Panel.ItemInfo[]
-}
+import type { DashboardGroup } from '@/dashboard/core'
+import { createDashboardState, createItemSortRequest, filterDashboardGroups, normalizeDashboardGroups, selectItemUrl } from '@/dashboard/core'
 
 withDefaults(defineProps<{
   layout?: 'web' | 'extension'
@@ -56,8 +52,9 @@ const currentAddItenIconGroupId = ref<number | undefined>()
 
 const settingModalShow = ref(false)
 
-const items = ref<ItemGroup[]>([])
-const filterItems = ref<ItemGroup[]>([])
+const items = ref<DashboardGroup[]>([])
+const filterItems = ref<DashboardGroup[]>([])
+const searchKeyword = ref('')
 type ExtensionSyncStatus = 'idle' | 'syncing' | 'online' | 'cached' | 'offline' | 'error'
 const extensionSyncStatus = ref<ExtensionSyncStatus>(runtime.kind === 'extension' ? 'syncing' : 'idle')
 const lastSyncAt = ref<string | null>(null)
@@ -102,19 +99,12 @@ function openPage(openMethod: number, url: string, title?: string) {
   }
 }
 
-function handleItemClick(itemGroupIndex: number, item: Panel.ItemInfo) {
-  if (items.value[itemGroupIndex] && items.value[itemGroupIndex].sortStatus) {
+function handleItemClick(itemGroup: DashboardGroup, item: Panel.ItemInfo) {
+  if (itemGroup.sortStatus) {
     handleEditItem(item)
     return
   }
-
-  let jumpUrl = ''
-
-  if (item)
-    jumpUrl = (panelState.networkMode === PanelStateNetworkModeEnum.lan ? item.lanUrl : item.url) as string
-  if (item.lanUrl === '')
-    jumpUrl = item.url
-
+  const jumpUrl = selectItemUrl(item, panelState.networkMode === PanelStateNetworkModeEnum.lan)
   openPage(item.openMethod, jumpUrl, item.title)
 }
 
@@ -124,31 +114,33 @@ function handWindowIframeIdLoad(_payload: Event) {
 
 async function getList() {
   // 获取组数据
-  const { code, data } = await getGroupList<Common.ListResponse<ItemGroup[]>>()
+  const { code, data } = await getGroupList<Common.ListResponse<Panel.ItemIconGroup[]>>()
   if (code !== 0 || !data?.list)
     return false
-  items.value = data.list
+  items.value = normalizeDashboardGroups(data.list)
   await Promise.all(items.value.map(async (element, index) => {
     if (element.id)
       await updateItemIconGroupByNet(index, element.id)
   }))
-  filterItems.value = items.value
+  refreshFilteredItems()
   return true
 }
 
 // 从后端获取组下面的图标
 async function updateItemIconGroupByNet(itemIconGroupIndex: number, itemIconGroupId: number) {
   const res = await getListByGroupId<Common.ListResponse<Panel.ItemInfo[]>>(itemIconGroupId)
-  if (res.code === 0 && items.value[itemIconGroupIndex])
+  if (res.code === 0 && items.value[itemIconGroupIndex]) {
     items.value[itemIconGroupIndex].items = res.data.list
+    refreshFilteredItems()
+  }
 }
 
 function handleRightMenuSelect(key: string | number) {
   dropdownShow.value = false
   // console.log(currentRightSelectItem, key)
-  let jumpUrl = panelState.networkMode === PanelStateNetworkModeEnum.lan ? currentRightSelectItem.value?.lanUrl : currentRightSelectItem.value?.url
-  if (currentRightSelectItem.value?.lanUrl === '')
-    jumpUrl = currentRightSelectItem.value.url
+  const jumpUrl = currentRightSelectItem.value
+    ? selectItemUrl(currentRightSelectItem.value, panelState.networkMode === PanelStateNetworkModeEnum.lan)
+    : ''
   switch (key) {
     case 'newWindows':
       runtime.openUrl(jumpUrl || '', 'tab')
@@ -190,8 +182,8 @@ function handleRightMenuSelect(key: string | number) {
   }
 }
 
-function handleContextMenu(e: MouseEvent, itemGroupIndex: number, item: Panel.ItemInfo) {
-  if (items.value[itemGroupIndex] && items.value[itemGroupIndex].sortStatus)
+function handleContextMenu(e: MouseEvent, itemGroup: DashboardGroup, item: Panel.ItemInfo) {
+  if (itemGroup.sortStatus)
     return
 
   e.preventDefault()
@@ -228,18 +220,10 @@ function handleChangeNetwork(mode: PanelStateNetworkModeEnum) {
 //   // console.log(items.value)
 // }
 
-function handleSaveSort(itemGroup: ItemGroup) {
-  const saveItems: Common.SortItemRequest[] = []
-  if (itemGroup.items) {
-    for (let i = 0; i < itemGroup.items.length; i++) {
-      const element = itemGroup.items[i]
-      saveItems.push({
-        id: element.id as number,
-        sort: i + 1,
-      })
-    }
-
-    saveSort({ itemIconGroupId: itemGroup.id as number, sortItems: saveItems }).then(({ code, msg }) => {
+function handleSaveSort(itemGroup: DashboardGroup) {
+  const request = createItemSortRequest(itemGroup)
+  if (request) {
+    saveSort(request).then(({ code, msg }) => {
       if (code === 0) {
         ms.success(t('common.saveSuccess'))
         itemGroup.sortStatus = false
@@ -288,17 +272,14 @@ function getDropdownMenuOptions() {
 }
 
 function applyBootstrapData(data: Sync.BootstrapResponseV1) {
-  setSyncRevision(data.revision)
-  panelState.applyPanelConfig(data.panel.config)
-  authStore.setUserInfo(data.account)
+  const dashboard = createDashboardState(data)
+  setSyncRevision(dashboard.revision)
+  panelState.applyPanelConfig(dashboard.panelConfig)
+  authStore.setUserInfo(dashboard.account)
   authStore.setVisitMode(VisitMode.VISIT_MODE_LOGIN)
-  userStore.updateUserInfo(data.account)
-  items.value = data.panel.groups.map(group => ({
-    ...group,
-    hoverStatus: false,
-    items: group.items.map(item => ({ ...item })),
-  }))
-  filterItems.value = items.value
+  userStore.updateUserInfo(dashboard.account)
+  items.value = dashboard.groups
+  refreshFilteredItems()
   if (panelState.panelConfig.logoText)
     setTitle(panelState.panelConfig.logoText)
 }
@@ -402,41 +383,29 @@ onUnmounted(() => {
 
 // 前端搜索过滤
 function itemFrontEndSearch(keyword?: string) {
-  keyword = keyword?.trim()
-  if (keyword !== '' && panelState.panelConfig.searchBoxSearchIcon) {
-    const filteredData = ref<ItemGroup[]>([])
-    for (let i = 0; i < items.value.length; i++) {
-      const element = items.value[i].items?.filter((item: Panel.ItemInfo) => {
-        return (
-          item.title.toLowerCase().includes(keyword?.toLowerCase() ?? '')
-          || item.url.toLowerCase().includes(keyword?.toLowerCase() ?? '')
-          || item.description?.toLowerCase().includes(keyword?.toLowerCase() ?? '')
-        )
-      })
-      if (element && element.length > 0)
-        filteredData.value.push({ items: element, hoverStatus: false })
-    }
-    filterItems.value = filteredData.value
-  }
-  else {
-    filterItems.value = items.value
-  }
+  searchKeyword.value = keyword ?? ''
+  refreshFilteredItems()
 }
 
-function handleSetHoverStatus(groupIndex: number, hoverStatus: boolean) {
-  if (items.value[groupIndex])
-    items.value[groupIndex].hoverStatus = hoverStatus
+function refreshFilteredItems() {
+  filterItems.value = filterDashboardGroups(items.value, searchKeyword.value, Boolean(panelState.panelConfig.searchBoxSearchIcon))
 }
 
-function handleSetSortStatus(groupIndex: number, sortStatus: boolean) {
-  if (items.value[groupIndex])
-    items.value[groupIndex].sortStatus = sortStatus
+function handleSetHoverStatus(group: DashboardGroup, hoverStatus: boolean) {
+  group.hoverStatus = hoverStatus
+}
 
-  // 并未保存排序重新更新数据
+function handleSetSortStatus(group: DashboardGroup, sortStatus: boolean) {
+  const source = items.value.find(item => item.id === group.id)
+  if (!source)
+    return
+  source.sortStatus = sortStatus
+  group.sortStatus = sortStatus
+
   if (!sortStatus) {
-    // 单独更新组
-    if (items.value[groupIndex] && items.value[groupIndex].id)
-      updateItemIconGroupByNet(groupIndex, items.value[groupIndex].id as number)
+    const sourceIndex = items.value.indexOf(source)
+    if (source.id)
+      updateItemIconGroupByNet(sourceIndex, source.id)
   }
 }
 
@@ -531,8 +500,8 @@ function handleAddItem(itemIconGroupId?: number) {
             v-for="(itemGroup, itemGroupIndex) in filterItems" :key="itemGroupIndex"
             class="item-list mt-[50px]"
             :class="itemGroup.sortStatus ? 'shadow-2xl border shadow-[0_0_30px_10px_rgba(0,0,0,0.3)]  p-[10px] rounded-2xl' : ''"
-            @mouseenter="handleSetHoverStatus(itemGroupIndex, true)"
-            @mouseleave="handleSetHoverStatus(itemGroupIndex, false)"
+            @mouseenter="handleSetHoverStatus(itemGroup, true)"
+            @mouseleave="handleSetHoverStatus(itemGroup, false)"
           >
             <!-- 分组标题 -->
             <div class="text-white text-xl font-extrabold mb-[20px] ml-[10px] flex items-center">
@@ -547,7 +516,7 @@ function handleAddItem(itemIconGroupId?: number) {
                 <span class="mr-2 cursor-pointer" :title="t('common.add')" @click="handleAddItem(itemGroup.id)">
                   <SvgIcon class="text-white font-xl" icon="typcn:plus" />
                 </span>
-                <span class="mr-2 cursor-pointer " :title="t('common.sort')" @click="handleSetSortStatus(itemGroupIndex, !itemGroup.sortStatus)">
+                <span class="mr-2 cursor-pointer " :title="t('common.sort')" @click="handleSetSortStatus(itemGroup, !itemGroup.sortStatus)">
                   <SvgIcon class="text-white font-xl" icon="ri:drag-drop-line" />
                 </span>
               </div>
@@ -562,7 +531,7 @@ function handleAddItem(itemIconGroupId?: number) {
                   filter=".not-drag"
                   :disabled="!itemGroup.sortStatus"
                 >
-                  <div v-for="item, index in itemGroup.items" :key="index" :title="item.description" @contextmenu="(e) => handleContextMenu(e, itemGroupIndex, item)">
+                  <div v-for="item, index in itemGroup.items" :key="index" :title="item.description" @contextmenu="(e) => handleContextMenu(e, itemGroup, item)">
                     <AppIcon
                       :class="itemGroup.sortStatus ? 'cursor-move' : 'cursor-pointer'"
                       :item-info="item"
@@ -570,7 +539,7 @@ function handleAddItem(itemIconGroupId?: number) {
                       :icon-text-info-hide-description="panelState.panelConfig.iconTextInfoHideDescription || false"
                       :icon-text-icon-hide-title="panelState.panelConfig.iconTextIconHideTitle || false"
                       :style="0"
-                      @click="handleItemClick(itemGroupIndex, item)"
+                      @click="handleItemClick(itemGroup, item)"
                     />
                   </div>
 
@@ -599,7 +568,7 @@ function handleAddItem(itemIconGroupId?: number) {
                   filter=".not-drag"
                   :disabled="!itemGroup.sortStatus"
                 >
-                  <div v-for="item, index in itemGroup.items" :key="index" :title="item.description" @contextmenu="(e) => handleContextMenu(e, itemGroupIndex, item)">
+                  <div v-for="item, index in itemGroup.items" :key="index" :title="item.description" @contextmenu="(e) => handleContextMenu(e, itemGroup, item)">
                     <AppIcon
                       :class="itemGroup.sortStatus ? 'cursor-move' : 'cursor-pointer'"
                       :item-info="item"
@@ -607,7 +576,7 @@ function handleAddItem(itemIconGroupId?: number) {
                       :icon-text-info-hide-description="!panelState.panelConfig.iconTextInfoHideDescription"
                       :icon-text-icon-hide-title="panelState.panelConfig.iconTextIconHideTitle || false"
                       :style="1"
-                      @click="handleItemClick(itemGroupIndex, item)"
+                      @click="handleItemClick(itemGroup, item)"
                     />
                   </div>
 

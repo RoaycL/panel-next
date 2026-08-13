@@ -63,7 +63,7 @@ P1 验收门槛：不得修改生产数据库结构；不得发布到 Chrome 商
 
 ## P4：共享前端与双端体验
 
-- [ ] `SHARED-01` 将平台无关的面板逻辑从页面组件抽到共享核心。
+- [x] `SHARED-01` 将平台无关的面板逻辑从页面组件抽到共享核心。新增 `src/dashboard/core.ts`，统一 bootstrap 到面板状态的映射、分组规范化、搜索过滤、排序请求和 LAN/WAN 地址选择；首页只负责 Vue 交互和运行时副作用，Web/Extension 共用同一套纯逻辑。搜索结果保留稳定分组 ID 与标题，修复过滤后按数组索引编辑错组的隐患，独立验证已纳入 `build:all`。
 - [ ] `SHARED-02` 所有本地存储通过 StorageAdapter，清除误名 `ss` 但实际使用 localStorage 的历史实现。
 - [ ] `SHARED-03` 所有 URL 打开行为通过 RuntimeAdapter，并拒绝危险协议。
 - [ ] `SHARED-04` API 客户端支持同源 Web 与可配置扩展 Origin。
@@ -140,4 +140,4 @@ pnpm run build-only
 
 ## 当前下一步
 
-`EXT-08` 等具备桌面 Chrome 环境后再人工验收，不阻塞后续开发。同步主链 `SYNC-01` 至 `SYNC-08` 已完成，当前推进 `SHARED-01`：将页面中的平台无关面板状态、搜索、排序和同步应用逻辑抽到共享核心，保持 Web 与 Extension 使用同一套行为。
+`EXT-08` 等具备桌面 Chrome 环境后再人工验收，不阻塞后续开发。同步主链 `SYNC-01` 至 `SYNC-08` 与 `SHARED-01` 已完成，当前推进 `SHARED-02`：统一历史本地状态到 StorageAdapter，并清理误名 `ss` 的 localStorage 封装。

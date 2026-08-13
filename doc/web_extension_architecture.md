@@ -198,6 +198,8 @@ DELETE /api/v1/sessions/:id
 
 ## 6. 客户端数据策略
 
+平台无关的面板状态转换位于 `src/dashboard/core.ts`：bootstrap 映射、分组规范化、搜索、排序请求和网络地址选择均为无浏览器依赖的纯函数。页面组件只保留 Vue 状态编排和 RuntimeAdapter 副作用，Web 与 Extension 不维护两套业务分支。
+
 - 服务器数据：账号、分组、卡片、面板配置、搜索引擎、组件布局和资源元数据。
 - 设备本地数据：服务器地址、设备 ID、会话、最近成功快照、最后同步 revision、设备专属偏好。
 - Web 使用 localStorage/IndexedDB 适配器；扩展使用 `chrome.storage.local`。
