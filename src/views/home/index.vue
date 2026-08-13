@@ -57,6 +57,7 @@ const settingModalShow = ref(false)
 const items = ref<DashboardGroup[]>([])
 const filterItems = ref<DashboardGroup[]>([])
 const searchKeyword = ref('')
+const browserOnline = ref(navigator.onLine)
 type ExtensionSyncStatus = 'idle' | 'syncing' | 'online' | 'cached' | 'offline' | 'error'
 const extensionSyncStatus = ref<ExtensionSyncStatus>(runtime.kind === 'extension' ? 'syncing' : 'idle')
 const lastSyncAt = ref<string | null>(null)
@@ -80,6 +81,16 @@ const extensionSyncLabel = computed(() => {
 const extensionSyncTitle = computed(() => lastSyncAt.value
   ? t('panelHome.syncLastAt', { time: new Date(lastSyncAt.value).toLocaleString() })
   : extensionSyncLabel.value)
+const runtimeLabel = computed(() => runtime.kind === 'extension' ? t('panelHome.runtimeExtension') : t('panelHome.runtimeWeb'))
+const networkLabel = computed(() => browserOnline.value ? t('panelHome.networkOnline') : t('panelHome.networkOffline'))
+const sessionLabel = computed(() => {
+  if (authStore.visitMode === VisitMode.VISIT_MODE_PUBLIC)
+    return t('panelHome.sessionPublic')
+  return authStore.authMode === 'device' ? t('panelHome.sessionDevice') : t('panelHome.sessionLegacy')
+})
+const sessionTitle = computed(() => authStore.accessExpiresAt
+  ? t('panelHome.sessionExpiresAt', { time: new Date(authStore.accessExpiresAt).toLocaleString() })
+  : sessionLabel.value)
 
 function openPage(openMethod: number, url: string, title?: string) {
   switch (openMethod) {
@@ -319,10 +330,12 @@ async function refreshExtensionBootstrap() {
 }
 
 function handleBrowserOnline() {
+  browserOnline.value = true
   void refreshExtensionBootstrap()
 }
 
 function handleBrowserOffline() {
+  browserOnline.value = false
   if (runtime.kind === 'extension')
     extensionSyncStatus.value = hasCachedSnapshot ? 'offline' : 'error'
 }
@@ -354,9 +367,9 @@ if (runtime.kind === 'extension') {
 
 onMounted(async () => {
   removeSyncConflictListener = onSyncConflict(handleSyncConflict)
+  window.addEventListener('online', handleBrowserOnline)
+  window.addEventListener('offline', handleBrowserOffline)
   if (runtime.kind === 'extension') {
-    window.addEventListener('online', handleBrowserOnline)
-    window.addEventListener('offline', handleBrowserOffline)
     void refreshExtensionBootstrap()
     return
   }
@@ -382,10 +395,8 @@ onMounted(async () => {
 
 onUnmounted(() => {
   removeSyncConflictListener?.()
-  if (runtime.kind === 'extension') {
-    window.removeEventListener('online', handleBrowserOnline)
-    window.removeEventListener('offline', handleBrowserOffline)
-  }
+  window.removeEventListener('online', handleBrowserOnline)
+  window.removeEventListener('offline', handleBrowserOffline)
 })
 
 // 前端搜索过滤
@@ -441,18 +452,24 @@ function handleAddItem(itemIconGroupId?: number) {
       }"
     />
     <div class="mask" :style="{ backgroundColor: `rgba(0,0,0,${panelState.panelConfig.backgroundMaskNumber})` }" />
-    <button
-      v-if="layout === 'extension'"
-      type="button"
-      class="sync-indicator"
-      :class="`sync-${extensionSyncStatus}`"
-      :title="extensionSyncTitle"
-      :disabled="extensionSyncStatus === 'syncing'"
-      @click="refreshExtensionBootstrap"
-    >
-      <span class="sync-dot" />
-      {{ extensionSyncLabel }}
-    </button>
+    <div class="runtime-status-bar" role="status" :aria-label="t('panelHome.statusOverview')">
+      <span class="status-chip">{{ runtimeLabel }}</span>
+      <span class="status-chip" :class="browserOnline ? 'status-online' : 'status-offline'">
+        <span class="status-dot" />{{ networkLabel }}
+      </span>
+      <button
+        v-if="layout === 'extension'"
+        type="button"
+        class="status-chip sync-indicator"
+        :class="`sync-${extensionSyncStatus}`"
+        :title="extensionSyncTitle"
+        :disabled="extensionSyncStatus === 'syncing'"
+        @click="refreshExtensionBootstrap"
+      >
+        <span class="sync-dot" />{{ extensionSyncLabel }}
+      </button>
+      <span class="status-chip" :title="sessionTitle">{{ sessionLabel }}</span>
+    </div>
     <div ref="scrollContainerRef" class="absolute w-full h-full overflow-auto">
       <div
         class="home-content p-2.5 mx-auto"
@@ -734,11 +751,19 @@ html {
   user-select: none;
 }
 
-.sync-indicator {
+.runtime-status-bar {
   position: fixed;
   z-index: 40;
   top: 16px;
   right: 18px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+  max-width: calc(100% - 36px);
+}
+
+.status-chip {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -750,6 +775,11 @@ html {
   box-shadow: 0 8px 28px rgb(0 0 0 / 16%);
   backdrop-filter: blur(14px);
   font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.sync-indicator {
   cursor: pointer;
 }
 
@@ -762,6 +792,21 @@ html {
   height: 7px;
   border-radius: 50%;
   background: #94a3b8;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+
+.status-online .status-dot {
+  background: #4ade80;
+}
+
+.status-offline .status-dot {
+  background: #f59e0b;
 }
 
 .sync-online .sync-dot {
@@ -777,6 +822,18 @@ html {
 .sync-offline .sync-dot,
 .sync-error .sync-dot {
   background: #f59e0b;
+}
+
+@media (max-width: 640px) {
+  .runtime-status-bar {
+    top: 10px;
+    right: 10px;
+    max-width: calc(100% - 20px);
+  }
+
+  .status-chip {
+    padding: 7px 9px;
+  }
 }
 
 .extension-home .home-content {
