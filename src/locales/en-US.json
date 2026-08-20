@@ -15,7 +15,23 @@
     "pblicText": "Public",
     "role": "Role",
     "setOrUnsetPublicMode": "Set/Unset public access",
-    "userCountText": "Total {count} users"
+    "userCountText": "Total {count} users",
+    "sessionsAppName": "Device Sessions",
+    "sessionsAlertText": "View and manage active device sessions, revoke single or all sessions.",
+    "deviceName": "Device Name",
+    "unknownDevice": "Unknown Device",
+    "currentSession": "Current Session",
+    "clientType": "Client Type",
+    "clientWeb": "Web",
+    "clientExtension": "Chrome Extension",
+    "createdAt": "Created At",
+    "lastActiveAt": "Last Active",
+    "accessExpiresAt": "Access Expires At",
+    "revoke": "Revoke",
+    "cannotRevokeCurrent": "Cannot Revoke Current",
+    "revokeConfirm": "Are you sure to revoke this session? You will need to login again.",
+    "revokeAllConfirm": "Are you sure to revoke all sessions? You will need to login again.",
+    "revokeAll": "Revoke All"
   },
   "api": {
     "loginExpires": "Login status has expired, please login again"

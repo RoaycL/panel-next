@@ -11,6 +11,7 @@ import AppLoader from './AppLoader/index.vue'
 import ItemCard from './ItemCard/index.vue'
 import GallerySelector from './GallerySelector/index.vue'
 import PublicGallery from '../apps/PublicGallery/index.vue'
+import UserSessions from '../apps/UserSessions/index.vue'
 
 export {
   Verification,
@@ -26,4 +27,5 @@ export {
   ItemCard,
   GallerySelector,
   PublicGallery,
+  UserSessions,
 }

@@ -15,7 +15,23 @@
     "pblicText": "公开",
     "role": "角色",
     "setOrUnsetPublicMode": "设置/取消公开访问",
-    "userCountText": "共{count}位用户"
+    "userCountText": "共{count}位用户",
+    "sessionsAppName": "设备会话",
+    "sessionsAlertText": "查看和管理当前登录的设备会话，可撤销单个会话或全部会话。",
+    "deviceName": "设备名称",
+    "unknownDevice": "未知设备",
+    "currentSession": "当前会话",
+    "clientType": "客户端类型",
+    "clientWeb": "Web",
+    "clientExtension": "Chrome 扩展",
+    "createdAt": "创建时间",
+    "lastActiveAt": "最后活跃",
+    "accessExpiresAt": "Access Token 过期",
+    "revoke": "撤销",
+    "cannotRevokeCurrent": "无法撤销当前会话",
+    "revokeConfirm": "确定要撤销该设备会话吗？撤销后需要重新登录。",
+    "revokeAllConfirm": "确定要撤销所有设备会话吗？撤销后需要重新登录。",
+    "revokeAll": "撤销全部会话"
   },
   "api": {
     "loginExpires": "登录状态已过期，请重新登录"

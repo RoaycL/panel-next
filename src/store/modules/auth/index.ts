@@ -3,6 +3,7 @@ import axios from 'axios'
 import { getStorage, removeToken as hRemoveToken, setStorage } from './helper'
 import { VisitMode } from '@/enums/auth'
 import { getRuntime } from '@/runtime'
+import { useAppStore } from '@/store/modules/app'
 import { getDeviceIdentity } from '@/runtime/device'
 
 // interface SessionResponse {
@@ -78,34 +79,24 @@ export const useAuthStore = defineStore('auth-store', {
 
       const refreshToken = this.refreshToken
       const performRefresh = async () => {
-        await getRuntime().storage.flush?.()
-        await getRuntime().storage.sync?.()
-        const latest = getStorage() as Partial<AuthState> | null
-        if (latest?.authMode === 'device' && latest.refreshToken && latest.refreshToken !== refreshToken && latest.token) {
-          this.token = latest.token
-          this.refreshToken = latest.refreshToken
-          this.accessExpiresAt = latest.accessExpiresAt ?? null
-          this.refreshExpiresAt = latest.refreshExpiresAt ?? null
-          return true
-        }
-        if (this.authMode !== 'device' || this.refreshToken !== refreshToken)
-          return false
         try {
+          const { getDeviceIdentity } = await import('@/runtime/device')
+          const deviceIdentity = getDeviceIdentity()
           const response = await axios.post(
-            `${getRuntime().getApiBaseUrl()}/v1/sessions/refresh`,
-            { refreshToken },
-            { headers: { 'X-Panel-API-Version': '1' } },
+            `${getRuntime().getApiBaseUrl()}/api/v1/sessions/refresh`,
+            { refreshToken, ...deviceIdentity },
+            { headers: { lang: useAppStore().language } },
           )
-          const payload = response.data as { code: number; data?: Login.DeviceSessionRefreshResponse }
-          if (payload.code !== 0 || !payload.data)
+          const data = response.data
+          if (data.code !== 0 || !data.data) {
+            this.clearSession()
             return false
-          if (this.authMode !== 'device' || this.refreshToken !== refreshToken)
-            return false
-          this.updateDeviceSession(payload.data)
-          await getRuntime().storage.flush?.()
+          }
+          this.updateDeviceSession(data.data)
           return true
         }
         catch {
+          this.clearSession()
           return false
         }
       }
@@ -171,6 +162,12 @@ export const useAuthStore = defineStore('auth-store', {
     },
 
     removeToken() {
+      this.$state = defaultState()
+      hRemoveToken()
+    },
+
+    // AUTH-02: 清除当前会话，不保留失效凭据，避免重复账号记录
+    clearSession() {
       this.$state = defaultState()
       hRemoveToken()
     },

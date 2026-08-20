@@ -117,12 +117,19 @@ onMounted(() => {
     icon: 'mdi:image-multiple-outline',
     auth: 1,
   }
+  const userSessionsApp: App = {
+    name: t('adminSettingUsers.sessionsAppName'),
+    componentName: 'UserSessions',
+    icon: 'mdi:devices',
+    auth: 1,
+  }
   // 初始化
   if (authStore.userInfo?.role === 1) {
     apps.value.push(backupApp)
     apps.value.push(adminApp)
     apps.value.push(siteSettingApp)
     apps.value.push(publicGalleryApp)
+    apps.value.push(userSessionsApp)
   }
 
   window.addEventListener('resize', handleResize)

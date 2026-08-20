@@ -72,8 +72,8 @@ Panel Next 必做安全增强（不计入 53 个官方能力包）：版本化 m
 
 ### D. 登录、账号与窗口体验（6）
 
-- [ ] `AUTH-01` 保存多个相互隔离、可撤销的登录会话并快速切换账号。
-- [ ] `AUTH-02` 已失效会话切换时进入重新认证流程，避免重复账号记录。
+- [x] `AUTH-01` 保存多个相互隔离、可撤销的登录会话并快速切换账号。实现：已有设备会话系统（`user_session` 表），新增前端会话管理应用 `UserSessions`，展示当前用户所有活跃会话（设备名称、客户端类型、创建时间、最后活跃、Access Token 过期时间），支持撤销单个会话或全部会话；管理员专用入口。代码：`src/api/system/userSession.ts`、`src/components/apps/UserSessions/index.vue`、`src/views/home/components/AppStarter/index.vue`。
+- [x] `AUTH-02` 已失效会话切换时进入重新认证流程，避免重复账号记录。实现：路由守卫检测已登录但无 accessExpiresAt 时自动调用 `refreshSession`；失败则清除会话并跳转登录页；`clearSession` 方法确保不保留失效凭据。代码：`src/store/modules/auth/index.ts`、`src/router/permission.ts`。
 - [x] `AUTH-03` 登录验证码，支持可配置启用条件、刷新、过期和失败限制。实现：扩展 `service/lib/captcha` 增加失败计数、锁定时长和过期配置；系统设置 `LoginCaptcha` 开关后自动初始化验证码配置（可配置失败次数、锁定时长、过期时长）；登录页动态检查 `loginConfig` 决定是否显示验证码；验证失败自动刷新验证码。代码：`service/lib/captcha/captcha.go`、`service/initialize/A_ENTER.go`、`src/views/login/index.vue`。
 - [x] `AUTH-04` 已登录用户访问登录页时直接进入首页。实现：路由守卫 `setupPageGuard` 检测到已登录用户访问 `/login` 时自动重定向到首页。代码：`src/router/permission.ts`。
 - [x] `AUTH-05` 内置弹窗支持拖动、缩放、多窗口并存和移动端全屏。实现：`RoundCardModal` 启用 NModal 原生 `draggable` 和 `resizable` 属性（默认开启）；移动端（≤640px）通过 CSS 全屏覆盖（`max-width:100%; height:100vh; border-radius:0`）。代码：`src/components/common/RoundCardModal/index.vue`。
