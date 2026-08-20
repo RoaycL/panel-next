@@ -1,4 +1,6 @@
+import type { TrendingSource } from '@/api/trending'
 import type { WidgetConfigSchema, WidgetInstance } from './types'
+import { TRENDING_SOURCES } from '@/api/trending'
 import { widgetRegistry } from './registry'
 
 export interface ClockWidgetConfig {
@@ -14,6 +16,11 @@ export interface SearchWidgetConfig {
 export interface WeatherWidgetConfig {
   city: string
   units: 'metric' | 'imperial'
+}
+
+export interface TrendingWidgetConfig {
+  source: TrendingSource
+  limit: number
 }
 
 const clockSchema: WidgetConfigSchema<ClockWidgetConfig> = {
@@ -60,6 +67,20 @@ const weatherSchema: WidgetConfigSchema<WeatherWidgetConfig> = {
   },
 }
 
+const trendingSchema: WidgetConfigSchema<TrendingWidgetConfig> = {
+  parse(value) {
+    if (typeof value !== 'object' || value === null)
+      throw new Error('Invalid trending widget config.')
+    const config = value as Partial<TrendingWidgetConfig>
+    if (!TRENDING_SOURCES.includes(config.source as TrendingSource))
+      throw new Error('Invalid trending widget config.')
+    const limit = Number(config.limit ?? 10)
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50)
+      throw new Error('Invalid trending widget config.')
+    return { source: config.source as TrendingSource, limit }
+  },
+}
+
 if (!widgetRegistry.get('core.clock')) {
   widgetRegistry.register({
     type: 'core.clock', currentVersion: 1, configSchema: clockSchema,
@@ -80,6 +101,11 @@ if (!widgetRegistry.get('core.clock')) {
     defaultConfig: () => ({ city: '北京', units: 'metric' }),
     size: { default: { columns: 3, rows: 1 }, min: { columns: 2, rows: 1 }, max: { columns: 6, rows: 2 } },
     load: () => import('./builtin/WeatherWidget.vue').then(module => module.default),
+  }).register({
+    type: 'core.trending', currentVersion: 1, configSchema: trendingSchema,
+    defaultConfig: () => ({ source: 'weibo', limit: 10 }),
+    size: { default: { columns: 4, rows: 2 }, min: { columns: 2, rows: 1 }, max: { columns: 8, rows: 4 } },
+    load: () => import('./builtin/TrendingWidget.vue').then(module => module.default),
   })
 }
 
@@ -93,4 +119,8 @@ export function createHeaderSearchWidget(): WidgetInstance<SearchWidgetConfig> {
 
 export function createHeaderWeatherWidget(): WidgetInstance<WeatherWidgetConfig> {
   return widgetRegistry.create('core.weather', 'header.weather', { column: 2, row: 0 })
+}
+
+export function createTrendingWidget(source: TrendingSource = 'weibo', limit = 10): WidgetInstance<TrendingWidgetConfig> {
+  return widgetRegistry.create('core.trending', 'content.trending', { column: 0, row: 0 }, { source, limit })
 }

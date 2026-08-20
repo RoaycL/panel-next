@@ -13,5 +13,6 @@ func InitOpenness(router *gin.RouterGroup) {
 		router.GET("getDisclaimer", api.GetDisclaimer)
 		router.GET("getAboutDescription", api.GetAboutDescription)
 		router.GET("v1/widgets/weather", api.Weather)
+		router.GET("v1/widgets/trending", api.Trending)
 	}
 }

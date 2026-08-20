@@ -301,6 +301,19 @@
       "unknown": "Weather"
     }
   },
+  "trending": {
+    "title": "Trending",
+    "loading": "Loading trending",
+    "unavailable": "Trending unavailable",
+    "refresh": "Refresh trending",
+    "stale": "Cached data",
+    "sources": {
+      "weibo": "Weibo Trending",
+      "baidu": "Baidu Trending",
+      "zhihu": "Zhihu Hot List",
+      "hackernews": "Hacker News"
+    }
+  },
   "settingUserInfo": {
     "confirmLogoutText": "Are you sure you want to logout?",
     "confirmPassword": "Confirm new password",

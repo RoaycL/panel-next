@@ -219,7 +219,7 @@ DELETE /api/v1/sessions/:id
 
 共享小组件使用 v1 版本化布局信封与 WidgetRegistry。每个定义声明稳定 type、配置 schema、异步 loader、尺寸边界和连续迁移函数；每个实例记录稳定 ID、网格位置/尺寸、隐藏状态、定义版本与配置。未知、重复、损坏或未来版本实例在加载时隔离并报告，不阻塞其余组件渲染。
 
-首批内置定义为 `core.clock`、`core.date`、`core.search`。通用 WidgetHost 通过定义的异步 loader 渲染并透传配置/事件；首页历史时钟和搜索配置映射为注册表实例，保持升级兼容。
+首批内置定义为 `core.clock`、`core.date`、`core.search`，后续加入 `core.weather` 与 `core.trending`。通用 WidgetHost 通过定义的异步 loader 渲染并透传配置/事件；首页历史时钟和搜索配置映射为注册表实例，保持升级兼容。热搜组件的数据源是可替换的：`service/lib/trending` 以 Provider 接口聚合微博/百度/知乎/Hacker News，通过注册表按名替换或扩展，公共代理端点统一实施校验、超时、缓存和陈旧降级。
 
 - 有缓存时应立即绘制基本布局，不因后端离线显示空白页。
 - Extension 的缓存读取和应用发生在首次渲染前；网络刷新不阻塞已缓存首屏。

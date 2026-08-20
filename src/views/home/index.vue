@@ -20,7 +20,7 @@ import { getBootstrap } from '@/api/sync'
 import { onSyncConflict, setSyncRevision } from '@/sync/revision'
 import type { DashboardGroup } from '@/dashboard/core'
 import { createDashboardState, createItemSortRequest, filterDashboardGroups, normalizeDashboardGroups, selectItemUrl } from '@/dashboard/core'
-import { WidgetHost, createHeaderClockWidget, createHeaderSearchWidget, createHeaderWeatherWidget } from '@/widgets'
+import { WidgetHost, createHeaderClockWidget, createHeaderSearchWidget, createHeaderWeatherWidget, createTrendingWidget } from '@/widgets'
 
 withDefaults(defineProps<{
   layout?: 'web' | 'extension'
@@ -95,6 +95,7 @@ const sessionTitle = computed(() => authStore.accessExpiresAt
 const headerClockWidget = computed(() => createHeaderClockWidget(!panelState.panelConfig.clockShowSecond))
 const headerSearchWidget = createHeaderSearchWidget()
 const headerWeatherWidget = createHeaderWeatherWidget()
+const trendingWidget = createTrendingWidget()
 
 function openPage(openMethod: number, url: string, title?: string) {
   switch (openMethod) {
@@ -506,6 +507,9 @@ function handleAddItem(itemIconGroupId?: number) {
           <div v-if="panelState.panelConfig.searchBoxShow" class="home-search flex mt-[20px] mx-auto sm:w-full lg:w-[80%]">
             <WidgetHost :instance="headerSearchWidget" @item-search="itemFrontEndSearch" />
           </div>
+          <div class="home-trending flex mx-auto mt-[24px] w-full justify-center">
+            <WidgetHost :instance="trendingWidget" />
+          </div>
         </div>
 
         <!-- 应用盒子 -->
@@ -876,6 +880,10 @@ html {
   margin-left: 18px;
 }
 
+.home-trending {
+  max-width: min(92%, 680px);
+}
+
 .extension-home .header-weather {
   margin-left: auto;
 }
@@ -989,6 +997,10 @@ html {
     width: 100%;
     justify-content: center;
     margin: 8px 0 0;
+  }
+
+  .home-trending {
+    margin-top: 14px;
   }
 
   .extension-home .home-content {

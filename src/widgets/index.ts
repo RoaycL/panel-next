@@ -1,4 +1,4 @@
 export * from './types'
 export { WidgetRegistry, widgetRegistry } from './registry'
-export { createHeaderClockWidget, createHeaderSearchWidget, createHeaderWeatherWidget } from './builtins'
+export { createHeaderClockWidget, createHeaderSearchWidget, createHeaderWeatherWidget, createTrendingWidget } from './builtins'
 export { default as WidgetHost } from './WidgetHost.vue'
