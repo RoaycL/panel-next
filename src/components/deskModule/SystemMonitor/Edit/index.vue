@@ -127,10 +127,10 @@ async function handleSubmit() {
     </div> -->
     <NTabs v-model:value="active" type="segment">
       <NTabPane :name="MonitorType.cpu" :tab="$t('deskModule.systemMonitor.cpuState')">
-        <GenericProgressStyleEditor v-model:genericProgressStyleExtendParam="currentGenericProgressStyleExtendParam" />
+        <GenericProgressStyleEditor v-model:generic-progress-style-extend-param="currentGenericProgressStyleExtendParam" />
       </NTabPane>
       <NTabPane :name="MonitorType.memory" :tab="$t('deskModule.systemMonitor.memoryState')">
-        <GenericProgressStyleEditor v-model:genericProgressStyleExtendParam="currentGenericProgressStyleExtendParam" />
+        <GenericProgressStyleEditor v-model:generic-progress-style-extend-param="currentGenericProgressStyleExtendParam" />
       </NTabPane>
       <NTabPane :name="MonitorType.disk" :tab="$t('deskModule.systemMonitor.diskState')">
         <DiskEditor ref="DiskEditorRef" v-model:disk-extend-param="currentDiskExtendParam" />

@@ -48,9 +48,9 @@ export interface IconGroup {
 }
 
 interface ExportJsonResult {
-  addIconsData(datas: IconGroup[]): ExportJsonResult
-  exportFile(): void
-  string(): string
+  addIconsData: (datas: IconGroup[]) => ExportJsonResult
+  exportFile: () => void
+  string: () => string
 }
 
 // 导出数据
@@ -112,7 +112,7 @@ export function importJsonString(jsonString: string): ImportJsonResult | null {
   try {
     data = JSON.parse(jsonString)
   }
-  catch (error) {
+  catch {
     throw new FormatError('file format error')
     return null
   }
@@ -170,7 +170,7 @@ function generateMD5(jsonString: string): string {
     const md5 = CryptoJS.MD5(modifiedJsonString).toString()
     return md5
   }
-  catch (error) {
+  catch {
     return ''
   }
 }

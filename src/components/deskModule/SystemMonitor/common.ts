@@ -28,8 +28,8 @@ export async function add(value: MonitorData): Promise<boolean> {
     if (res.code !== 0)
       console.log('save failed', res)
   }
-  catch (error) {
-    console.error(error)
+  catch (err) {
+    console.error(err)
     success = false
   }
   return success
@@ -51,8 +51,8 @@ export async function saveByIndex(index: number | undefined, value: MonitorData)
     if (res.code !== 0)
       console.log('save failed', res)
   }
-  catch (error) {
-    console.error(error)
+  catch (err) {
+    console.error(err)
     success = false
   }
   return success
@@ -64,7 +64,7 @@ export async function getByIndex(index: number): Promise<MonitorData | null> {
     if (data[index])
       return data[index]
   }
-  catch (error) {
+  catch {
 
   }
 
@@ -79,9 +79,9 @@ export async function deleteByIndex(index: number): Promise<boolean> {
       data.splice(index, 1)
     await saveAll(data)
   }
-  catch (error) {
+  catch (err) {
     success = false
-    console.error(error)
+    console.error(err)
   }
 
   return success

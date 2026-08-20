@@ -3,7 +3,8 @@ import { nextTick, onMounted, ref } from 'vue'
 import { VueDraggable } from 'vue-draggable-plus'
 import { NButton, NDropdown, useDialog, useMessage } from 'naive-ui'
 import AppIconSystemMonitor from './AppIconSystemMonitor/index.vue'
-import { type CardStyle, type MonitorData, MonitorType } from './typings'
+import {   MonitorType } from './typings'
+import type {CardStyle, MonitorData} from './typings';
 import Edit from './Edit/index.vue'
 import { deleteByIndex, getAll, saveAll } from './common'
 import { usePanelState } from '@/store'
@@ -108,7 +109,7 @@ async function handleSaveSort() {
     monitorGroup.value.sortStatus = false
 }
 
-function handleContextMenu(e: MouseEvent, index: number | null, item: MonitorData) {
+function handleContextMenu(e: MouseEvent, index: number | null, _item: MonitorData) {
   if (index !== null) {
     e.preventDefault()
     currentRightSelectIndex.value = index

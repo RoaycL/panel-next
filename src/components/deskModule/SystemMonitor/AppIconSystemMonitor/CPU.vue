@@ -23,7 +23,7 @@ async function getData() {
     if (code === 0)
       cpuState.value = data
   }
-  catch (error) {
+  catch {
 
   }
 }

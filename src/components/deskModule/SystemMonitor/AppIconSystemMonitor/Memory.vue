@@ -28,7 +28,7 @@ async function getData() {
     if (code === 0)
       memoryState.value = data
   }
-  catch (error) {
+  catch {
 
   }
 }

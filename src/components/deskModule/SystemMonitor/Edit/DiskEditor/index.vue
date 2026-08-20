@@ -54,8 +54,8 @@ async function getMountPointList() {
       })
     }
   }
-  catch (error) {
-
+  catch {
+    // validation failed
   }
 }
 
@@ -76,8 +76,8 @@ defineExpose({
         return Promise.resolve(false)
       }
     }
-    catch (error) {
-      console.error('An error occurred during validation:', error)
+    catch (err) {
+      console.error('An error occurred during validation:', err)
       return Promise.resolve(false)
     }
   },

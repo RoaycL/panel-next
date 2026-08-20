@@ -84,7 +84,7 @@ function handleDelete(groupInfo: Panel.ItemIconGroup) {
     negativeText: t('common.cancel'),
     onPositiveClick: () => {
       if (groupInfo.id) {
-        deletes([groupInfo.id]).then(({ code, msg }) => {
+        deletes([groupInfo.id]).then(({ code }) => {
           if (code !== 0)
             ms.error(t('common.deleteFail'))
           else
@@ -113,7 +113,7 @@ function handleSaveGroup() {
 }
 
 function refreshList() {
-  getList<Common.ListResponse<Panel.ItemIconGroup[]>>().then(({ code, data }) => {
+  getList<Common.ListResponse<Panel.ItemIconGroup[]>>().then(({ data }) => {
     groups.value = data.list
   })
 }

@@ -73,7 +73,7 @@ const data = computed({
       </div>
     </div>
 
-    <NForm ref="formRef" v-model="data">
+    <NForm v-model="data">
       <NFormItem :label="$t('deskModule.systemMonitor.progressColor')">
         <NColorPicker v-model:value="data.progressColor" :swatches="defautSwatchesBackground" :modes="['hex']" size="small" />
       </NFormItem>

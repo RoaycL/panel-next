@@ -98,7 +98,7 @@ function handleUpdatePassword(e: MouseEvent) {
       return
     }
     updatePasswordModalState.value.loading = true
-    updatePassword(updatePasswordModalState.value.form.oldPassword, updatePasswordModalState.value.form.password).then(({ code, msg }) => {
+    updatePassword(updatePasswordModalState.value.form.oldPassword, updatePasswordModalState.value.form.password).then(({ code }) => {
       if (code === 0) {
         // 成功
         updatePasswordModalState.value.show = false

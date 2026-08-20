@@ -27,7 +27,7 @@ const show = computed({
   },
 })
 
-watch(show, (newValue, oldValue) => {
+watch(show, (newValue) => {
   if (newValue === true) {
     captchaRef.value?.refresh()
     vCode.value = ''

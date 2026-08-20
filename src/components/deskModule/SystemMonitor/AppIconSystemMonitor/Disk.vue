@@ -33,7 +33,7 @@ async function getData() {
     if (code === 0)
       diskState.value = data
   }
-  catch (error) {
+  catch {
 
   }
 }

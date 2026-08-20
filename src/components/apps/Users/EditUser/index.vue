@@ -79,7 +79,7 @@ const show = computed({
   },
 })
 
-watch(show, (newValue, oldValue) => {
+watch(show, (_newValue, _oldValue) => {
   if (props.userInfo?.id)
     model.value = props.userInfo || {}
 

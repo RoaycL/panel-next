@@ -84,7 +84,7 @@ async function deletesImges(id: number) {
       ms.error(`${t('common.failed')}:${msg}`)
     }
   }
-  catch (error) {
+  catch {
     ms.error(t('common.failed'))
   }
 }

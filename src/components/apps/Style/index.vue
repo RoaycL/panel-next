@@ -11,13 +11,13 @@ import GallerySelector from '@/components/common/GallerySelector/index.vue'
 
 const showWallpaperGallery = ref(false)
 
+const authStore = useAuthStore()
+const panelState = usePanelState()
+
 function handleWallpaperGallerySelect(url: string) {
   panelState.panelConfig.backgroundImageSrc = url
   showWallpaperGallery.value = false
 }
-
-const authStore = useAuthStore()
-const panelState = usePanelState()
 const ms = useMessage()
 const showWallpaperInput = ref(false)
 const uploadAction = getRuntime().resolveUrl('/api/file/uploadImg')
