@@ -1,12 +1,20 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import type { UploadFileInfo } from 'naive-ui'
-import { NButton, NCard, NColorPicker, NGrid, NGridItem, NInput, NInputGroup, NInputNumber, NPopconfirm, NSelect, NSlider, NSwitch, NUpload, NUploadDragger, useMessage } from 'naive-ui'
+import { NButton, NCard, NColorPicker, NGrid, NGridItem, NInput, NInputGroup, NInputNumber, NModal, NPopconfirm, NSelect, NSlider, NSwitch, NUpload, NUploadDragger, useMessage } from 'naive-ui'
 import { useAuthStore, usePanelState } from '@/store'
 import { set as setUserConfig } from '@/api/panel/userConfig'
 import { PanelPanelConfigStyleEnum } from '@/enums/panel'
 import { t } from '@/locales'
 import { getRuntime } from '@/runtime'
+import GallerySelector from '@/components/common/GallerySelector/index.vue'
+
+const showWallpaperGallery = ref(false)
+
+function handleWallpaperGallerySelect(url: string) {
+  panelState.panelConfig.backgroundImageSrc = url
+  showWallpaperGallery.value = false
+}
 
 const authStore = useAuthStore()
 const panelState = usePanelState()
@@ -224,7 +232,10 @@ function resetPanelConfig() {
         </NUploadDragger>
       </NUpload>
 
-      <div class="flex items-center mt-[5px]">
+      <div class="flex items-center mt-[5px] gap-[10px]">
+        <NButton size="small" @click="showWallpaperGallery = true">
+          {{ $t('apps.baseSettings.selectFromGallery') }}
+        </NButton>
         <span class="mr-[10px]">{{ $t('apps.baseSettings.customImageAddress') }}</span>
         <NSwitch v-model:value="showWallpaperInput" />
       </div>
@@ -316,6 +327,10 @@ function resetPanelConfig() {
         {{ $t('common.save') }}
       </NButton>
     </NCard>
+
+    <NModal v-model:show="showWallpaperGallery" preset="card" size="small" style="width: 700px; max-height: 500px;" :title="t('apps.baseSettings.selectFromGallery')">
+      <GallerySelector type="wallpaper" @select="handleWallpaperGallerySelect" />
+    </NModal>
   </div>
 </template>
 

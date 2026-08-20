@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { NButton, NColorPicker, NInput, NRadio, NUpload } from 'naive-ui'
+import { NButton, NColorPicker, NInput, NModal, NRadio, NUpload } from 'naive-ui'
 import type { UploadFileInfo } from 'naive-ui'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { ItemIcon } from '@/components/common'
+import GallerySelector from '@/components/common/GallerySelector/index.vue'
 import { useAuthStore } from '@/store'
 import { apiRespErrMsg } from '@/utils/request/apiMessage'
 import { getRuntime } from '@/runtime'
+import { t } from '@/locales'
 
 const props = defineProps<{
   itemIcon: Panel.ItemIcon | null
@@ -15,6 +17,7 @@ const emit = defineEmits<{
 }>()
 const authStore = useAuthStore()
 const uploadAction = getRuntime().resolveUrl('/api/file/uploadImg')
+const showGallery = ref(false)
 
 // 默认图标背景色
 const defautSwatchesBackground = [
@@ -82,6 +85,12 @@ const handleUploadFinish = ({
 
   return file
 }
+
+function handleGallerySelect(url: string) {
+  itemIconInfo.value.src = url
+  emit('update:itemIcon', itemIconInfo.value || null)
+  showGallery.value = false
+}
 </script>
 
 <template>
@@ -142,20 +151,26 @@ const handleUploadFinish = ({
           <!-- 图片 -->
           <div v-if="itemIconInfo.itemType === 2">
             <NInput v-model:value="itemIconInfo.src" class="mb-[5px] w-full" size="small" type="text" :placeholder="$t('iconItem.inputIconUrlOrUpload')" @input="handleChange" />
-            <NUpload
-              :action="uploadAction"
-              :show-file-list="false"
-              name="imgfile"
-              :headers="{
-                Authorization: `Bearer ${authStore.token}`,
-                token: authStore.token as string,
-              }"
-              @finish="handleUploadFinish"
-            >
-              <NButton size="small">
-                {{ $t('iconItem.selectUpload') }}
+            <div class="flex gap-[5px]">
+              <NUpload
+                :action="uploadAction"
+                :show-file-list="false"
+                name="imgfile"
+                :data="{ fileType: 'icon' }"
+                :headers="{
+                  Authorization: `Bearer ${authStore.token}`,
+                  token: authStore.token as string,
+                }"
+                @finish="handleUploadFinish"
+              >
+                <NButton size="small">
+                  {{ $t('iconItem.selectUpload') }}
+                </NButton>
+              </NUpload>
+              <NButton size="small" @click="showGallery = true">
+                {{ $t('iconItem.selectFromGallery') }}
               </NButton>
-            </NUpload>
+            </div>
           </div>
         </div>
       </div>
@@ -181,6 +196,10 @@ const handleUploadFinish = ({
         </div>
       </div>
     </div>
+
+    <NModal v-model:show="showGallery" preset="card" size="small" style="width: 700px; max-height: 500px;" :title="t('iconItem.selectFromGallery')">
+      <GallerySelector type="icon" @select="handleGallerySelect" />
+    </NModal>
   </div>
 </template>
 

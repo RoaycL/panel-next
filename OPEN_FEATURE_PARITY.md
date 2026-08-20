@@ -67,7 +67,7 @@ Panel Next 必做安全增强（不计入 53 个官方能力包）：版本化 m
 - [x] `IMAGE-02` 按分类单张和批量上传图片。实现：上传接口支持 `fileType` 参数指定分类，前端 UploadFileManager 提供上传类型下拉选择。
 - [x] `IMAGE-03` 查看图片详情并修改图片类型。实现：新增 `POST /api/file/updateType` 接口，前端图片卡片增加类型修改下拉菜单，详情弹窗显示类型字段。
 - [x] `IMAGE-04` 复制可公开访问的图片链接，作为简易图床使用。实现：UploadFileManager 每张图片已有复制链接按钮（`copyImageUrl`），结合外部图床配置（IMAGE 集成）上传的图片返回完整可公开访问 URL。
-- [ ] `IMAGE-05` 所有图标和壁纸选择位置接入统一图库选择器。
+- [x] `IMAGE-05` 所有图标和壁纸选择位置接入统一图库选择器。实现：新增 `GallerySelector` 统一组件，支持分类筛选与点击选中；IconEditor 图标图片选择接入图库选择器；Style 壁纸选择接入图库选择器。代码：`src/components/common/GallerySelector/index.vue`、`src/views/home/components/EditItem/IconEditor.vue`、`src/components/apps/Style/index.vue`。
 - [ ] `IMAGE-06` 管理员维护公共图库，所有账号只读选择使用。
 
 ### D. 登录、账号与窗口体验（6）

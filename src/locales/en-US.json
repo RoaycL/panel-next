@@ -138,7 +138,8 @@
       "typeOther": "Other",
       "upload": "Upload Image",
       "changeType": "Change Type",
-      "typeLabel": "Type"
+      "typeLabel": "Type",
+      "selectFromGallery": "Select from Gallery"
 	},
     "exportImport": {
       "appName": "Export/Import",
@@ -292,6 +293,7 @@
     "onlineIconLibrary": "Online icon library",
     "openMethod": "Open method",
     "selectUpload": "Local upload",
+    "selectFromGallery": "Select from Gallery",
     "url": "URL"
   },
   "login": {

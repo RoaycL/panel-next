@@ -139,7 +139,8 @@
       "typeOther": "其他",
       "upload": "上传图片",
       "changeType": "修改类型",
-      "typeLabel": "类型"
+      "typeLabel": "类型",
+      "selectFromGallery": "从图库选择"
 	},
     "exportImport": {
       "appName": "导出导入",
@@ -293,6 +294,7 @@
     "onlineIconLibrary": "在线图标库",
     "openMethod": "打开方式",
     "selectUpload": "本地上传",
+    "selectFromGallery": "从图库选择",
     "url": "地址"
   },
   "login": {
