@@ -17,6 +17,7 @@ import (
 	"sun-panel/lib/captcha"
 	"sun-panel/lib/cmn"
 	"sun-panel/lib/cmn/systemSetting"
+	sessionlib "sun-panel/lib/session"
 	"sun-panel/models"
 	"sun-panel/structs"
 	"time"
@@ -112,7 +113,22 @@ func InitApp() error {
 	// 初始化验证码配置
 	initCaptchaConfig()
 
+	// OPS-02: 从配置读取 Refresh Token 有效期
+	initRefreshTokenTTL()
+
 	return nil
+}
+
+func initRefreshTokenTTL() {
+	ttlHours := global.Config.GetValueString("base", "refresh_token_ttl_hours")
+	if ttlHours == "" {
+		return
+	}
+	hours, err := time.ParseDuration(ttlHours + "h")
+	if err != nil {
+		return
+	}
+	sessionlib.SetRefreshTokenTTL(hours)
 }
 
 func initCaptchaConfig() {

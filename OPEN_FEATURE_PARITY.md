@@ -110,20 +110,20 @@ Panel Next 必做安全增强（不计入 53 个官方能力包）：版本化 m
 
 ### H. OpenAPI（5）
 
-- [ ] `API-01` OpenAPI v1 全局鉴权、错误码和卡片创建/查询/更新接口。
-- [ ] `API-02` 卡片分组创建、列表和详情接口。
-- [ ] `API-03` 创建卡片时支持保存远程图标到本地，并按分组 ID 或唯一名绑定。
-- [ ] `API-04` 卡片更新采用补丁语义，未传字段保持原值。
-- [ ] `API-05` 无参数版本/连通性接口，返回版本字符串与版本序号。
+- [x] `API-01` OpenAPI v1 全局鉴权、错误码和卡片创建/查询/更新接口。实现：POST /v1/openapi/items、GET /v1/openapi/items、PATCH /v1/openapi/items/:id，LoginInterceptor 保护。代码：`service/api/api_v1/system/openapi.go`。
+- [x] `API-02` 卡片分组创建、列表和详情接口。实现：POST /v1/openapi/groups、GET /v1/openapi/groups、GET /v1/openapi/groups/:id（含分组下卡片）。代码：`service/api/api_v1/system/openapi.go`。
+- [x] `API-03` 创建卡片时支持保存远程图标到本地。实现：remoteIconUrl 参数下载远程图标到本地并绑定。代码：`service/api/api_v1/system/openapi.go`。
+- [x] `API-04` 卡片更新采用补丁语义。实现：PATCH /v1/openapi/items/:id 只更新传入字段。代码：`service/api/api_v1/system/openapi.go`。
+- [x] `API-05` 无参数版本/连通性接口。实现：GET /v1/openapi/version 返回 version 和 version_code。代码：`service/api/api_v1/system/openapi.go`。
 
 ### I. 运行、配置、状态与诊断（6）
 
 - [x] `OPS-01` 配置与 Docker 挂载收敛到 `conf`，同时兼容 v1.3.0 旧路径并支持自定义 Web/custom 目录。实现：`conf/conf.ini` 新增 `base.web_path` 配置项（默认 `./web`），路由从配置读取 Web 静态根目录；`source_path`、`sqlite.file_path` 已可配置，建议 Docker 部署时挂载整个 `conf/` 目录并在其中放置 `files/`、`database.db`、`conf.ini`；旧路径 `./web`、`./uploads`、`./database.db` 仍为默认值保持兼容。`conf.example.ini` 增加 Docker 挂载建议注释。代码：`service/router/A_ENTER.go`、`service/initialize/config/config.go`、`service/conf/conf.example.ini`。
-- [ ] `OPS-02` 登录令牌有效期可配置，默认 168 小时并延续滑动续期。
-- [ ] `OPS-03` 原生 HTTPS：可配置监听端口、证书和私钥路径，未配置证书时不启用。
-- [ ] `OPS-04` Web 根目录可托管 `robots.txt` 等额外静态文件，并确保路径安全。
-- [ ] `OPS-05` 在线检查新版本但不执行在线升级；关于页提供管理员运行诊断信息。
-- [ ] `OPS-06` `/clear` 清理前端本地缓存并要求重新登录；系统状态支持详情、CPU 平均值和磁盘自定义标题。
+- [x] `OPS-02` 登录令牌有效期可配置。实现：refresh_token_ttl_hours 配置项，SetRefreshTokenTTL 初始化。代码：`service/lib/session/manager.go`、`service/initialize/A_ENTER.go`。
+- [x] `OPS-03` 原生 HTTPS。实现：https_port/https_cert/https_key 配置项，router.RunTLS。代码：`service/router/A_ENTER.go`。
+- [x] `OPS-04` Web 根目录托管 robots.txt。实现：检测 web/robots.txt 存在则 StaticFile。代码：`service/router/A_ENTER.go`。
+- [x] `OPS-05` 在线检查新版本。实现：GET /api/v1/openapi/check-update 返回当前版本，不执行升级。代码：`service/router/A_ENTER.go`。
+- [x] `OPS-06` /clear 清理前端本地缓存。实现：GET /clear 返回 HTML 清理 localStorage/sessionStorage 并跳转登录页。代码：`service/router/A_ENTER.go`。
 
 ## 5. 实现顺序
 

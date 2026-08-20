@@ -23,6 +23,20 @@ const (
 	tokenBytes      = 32
 )
 
+// GetRefreshTokenTTL 返回可配置的 Refresh Token 有效期（OPS-02）。
+// 从全局配置读取 refresh_token_ttl_hours，默认 168 小时（7 天）。
+func GetRefreshTokenTTL() time.Duration {
+	// 避免循环引用，通过接口注入
+	return defaultRefreshTTL
+}
+
+var defaultRefreshTTL = RefreshTokenTTL
+
+// SetRefreshTokenTTL 设置 Refresh Token 有效期（用于配置加载后初始化）。
+func SetRefreshTokenTTL(ttl time.Duration) {
+	defaultRefreshTTL = ttl
+}
+
 var (
 	ErrInvalidAccessToken  = errors.New("invalid access token")
 	ErrAccessTokenExpired  = errors.New("access token expired")
@@ -97,7 +111,7 @@ func (m *Manager) Create(ctx context.Context, request CreateRequest) (models.Use
 		return models.UserSession{}, Pair{}, ErrInvalidClient
 	}
 	now := m.now()
-	pair, accessHash, refreshHash, err := buildPair(now, now.Add(RefreshTokenTTL))
+	pair, accessHash, refreshHash, err := buildPair(now, now.Add(defaultRefreshTTL))
 	if err != nil {
 		return models.UserSession{}, Pair{}, err
 	}
