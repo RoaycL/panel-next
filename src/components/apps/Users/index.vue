@@ -28,13 +28,27 @@ const createColumns = ({
       title: t('common.username'),
       key: 'username',
       render(row: User.Info) {
-        let publicVisitHtml = ''
-        if (publicVisitUserId.value && publicVisitUserId.value === row.id)
-          publicVisitHtml = `[${t('adminSettingUsers.pblicText')}]-`
+        const elements: any[] = [h('span', row.username)]
 
-        if (row.username === authStore.userInfo?.username)
-          return `${publicVisitHtml}${row.username} (${t('adminSettingUsers.currentUseUsername')})`
-        return publicVisitHtml + row.username
+        if (row.username === authStore.userInfo?.username) {
+          elements.push(h(NTag, {
+            size: 'small',
+            type: 'success',
+            class: 'ml-2',
+            bordered: false,
+          }, { default: () => t('adminSettingUsers.currentUseUsername') }))
+        }
+
+        if (publicVisitUserId.value && publicVisitUserId.value === row.id) {
+          elements.push(h(NTag, {
+            size: 'small',
+            type: 'warning',
+            class: 'ml-2',
+            bordered: false,
+          }, { default: () => t('adminSettingUsers.pblicText') }))
+        }
+
+        return h('div', { class: 'flex items-center' }, elements)
       },
     },
     {

@@ -1,17 +1,21 @@
 <script setup lang="ts">
 import { computed, useAttrs } from 'vue'
 import { NModal } from 'naive-ui'
-const props = defineProps<{
+
+const props = withDefaults(defineProps<{
   title?: string
   show: boolean
   size?: 'medium' | 'small' | 'large' | 'huge' | undefined
-}>()
+  draggable?: boolean
+  resizable?: boolean
+}>(), {
+  draggable: true,
+  resizable: true,
+})
 
-const emit = defineEmits<Emit>()
-interface Emit {
+const emit = defineEmits<{
   (e: 'update:show', show: boolean): void
-//   (e: 'done', item: Panel.Info): void// 创建完成
-}
+}>()
 
 const attrs = useAttrs()
 
@@ -20,7 +24,6 @@ const bindAttrs = computed<{ class: string; style: string }>(() => ({
   style: (attrs.style as string) || '',
 }))
 
-// 更新值父组件传来的值
 const showModal = computed({
   get: () => props.show,
   set: (show: boolean) => {
@@ -30,7 +33,18 @@ const showModal = computed({
 </script>
 
 <template>
-  <NModal v-model:show="showModal" preset="card" :size="size" v-bind="bindAttrs" style="border-radius: 1rem;" :style="$parent" :title="title">
+  <NModal
+    v-model:show="showModal"
+    preset="card"
+    :size="size"
+    v-bind="bindAttrs"
+    :style="$parent"
+    :title="title"
+    :draggable="draggable"
+    :resizable="resizable"
+    :bordered="false"
+    style="border-radius: 1rem;"
+  >
     <template #cover>
       <slot name="cover" />
     </template>
@@ -49,3 +63,15 @@ const showModal = computed({
     <slot />
   </NModal>
 </template>
+
+<style scoped>
+/* 移动端全屏优化 */
+@media (max-width: 640px) {
+  :deep(.n-modal) {
+    max-width: 100% !important;
+    margin: 0 !important;
+    height: 100vh !important;
+    border-radius: 0 !important;
+  }
+}
+</style>

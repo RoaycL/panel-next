@@ -140,4 +140,4 @@ pnpm run build-only
 
 ## 当前下一步
 
-`EXT-08` 等具备桌面 Chrome 环境后再人工验收，不阻塞后续开发。`WIDGET-01` 至 `WIDGET-07` 已全部完成；`BRAND-01` 至 `BRAND-06`、`OPS-01`、`IMAGE-01` 至 `IMAGE-06` 与 `AUTH-03`/`AUTH-04` 已完成；当前推进 `AUTH-01`/`AUTH-02`（多账号切换）与 `AUTH-05`/`AUTH-06`。
+`EXT-08` 等具备桌面 Chrome 环境后再人工验收，不阻塞后续开发。`WIDGET-01` 至 `WIDGET-07` 已全部完成；`BRAND-01` 至 `BRAND-06`、`OPS-01`、`IMAGE-01` 至 `IMAGE-06` 与 `AUTH-03`/`AUTH-04`/`AUTH-05`/`AUTH-06` 已完成；当前推进 `AUTH-01`/`AUTH-02`（多账号会话切换）。

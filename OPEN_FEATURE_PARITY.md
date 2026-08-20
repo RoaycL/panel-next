@@ -76,8 +76,8 @@ Panel Next 必做安全增强（不计入 53 个官方能力包）：版本化 m
 - [ ] `AUTH-02` 已失效会话切换时进入重新认证流程，避免重复账号记录。
 - [x] `AUTH-03` 登录验证码，支持可配置启用条件、刷新、过期和失败限制。实现：扩展 `service/lib/captcha` 增加失败计数、锁定时长和过期配置；系统设置 `LoginCaptcha` 开关后自动初始化验证码配置（可配置失败次数、锁定时长、过期时长）；登录页动态检查 `loginConfig` 决定是否显示验证码；验证失败自动刷新验证码。代码：`service/lib/captcha/captcha.go`、`service/initialize/A_ENTER.go`、`src/views/login/index.vue`。
 - [x] `AUTH-04` 已登录用户访问登录页时直接进入首页。实现：路由守卫 `setupPageGuard` 检测到已登录用户访问 `/login` 时自动重定向到首页。代码：`src/router/permission.ts`。
-- [ ] `AUTH-05` 内置弹窗支持拖动、缩放、多窗口并存和移动端全屏。
-- [ ] `AUTH-06` 账号管理清晰标识当前账号与公开访问账号，并保持角色隔离。
+- [x] `AUTH-05` 内置弹窗支持拖动、缩放、多窗口并存和移动端全屏。实现：`RoundCardModal` 启用 NModal 原生 `draggable` 和 `resizable` 属性（默认开启）；移动端（≤640px）通过 CSS 全屏覆盖（`max-width:100%; height:100vh; border-radius:0`）。代码：`src/components/common/RoundCardModal/index.vue`。
+- [x] `AUTH-06` 账号管理清晰标识当前账号与公开访问账号，并保持角色隔离。实现：Users 管理应用用户名列改为用 NTag 标签标注"当前使用"（success 绿色）和"公开访问"（warning 橙色），比纯文字前缀更清晰；角色隔离保持既有 AdminInterceptor 和 role 字段。代码：`src/components/apps/Users/index.vue`。
 
 ### E. Docker 管理与 Docker 卡片（7）
 
