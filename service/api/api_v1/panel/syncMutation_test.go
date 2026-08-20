@@ -135,6 +135,66 @@ func TestUserConfigMutationRejectsNonCanonicalRevision(t *testing.T) {
 	}
 }
 
+func TestUserConfigMutationPreservesUnprovidedSections(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db := newMutationTestDB(t)
+	api := UserConfig{}
+
+	first := callPanelMutation(t, 9, map[string]any{
+		"expectedRevision": "0",
+		"data": map[string]any{
+			"panel":        map[string]any{"logoText": "Panel", "widgets": map[string]any{"schemaVersion": 1, "widgets": []any{}}},
+			"searchEngine": map[string]any{"list": []any{map[string]any{"name": "Bing"}}},
+		},
+	}, api.Set)
+	if first.Code != 0 {
+		t.Fatalf("initial save failed: %+v", first)
+	}
+
+	panelOnly := callPanelMutation(t, 9, map[string]any{
+		"expectedRevision": first.Data.Revision,
+		"data":             map[string]any{"panel": map[string]any{"logoText": "PanelOnly"}},
+	}, api.Set)
+	if panelOnly.Code != 0 {
+		t.Fatalf("panel-only save failed: %+v", panelOnly)
+	}
+
+	var afterPanelOnly models.UserConfig
+	if err := db.First(&afterPanelOnly, "user_id = ?", 9).Error; err != nil {
+		t.Fatal(err)
+	}
+	var engine map[string]any
+	if err := json.Unmarshal([]byte(afterPanelOnly.SearchEngineJson), &engine); err != nil {
+		t.Fatalf("panel-only save clobbered search engine: %q", afterPanelOnly.SearchEngineJson)
+	}
+	if list, ok := engine["list"].([]any); !ok || len(list) != 1 {
+		t.Fatalf("panel-only save lost the stored search engine: %q", afterPanelOnly.SearchEngineJson)
+	}
+
+	engineOnly := callPanelMutation(t, 9, map[string]any{
+		"expectedRevision": panelOnly.Data.Revision,
+		"data":             map[string]any{"searchEngine": map[string]any{"list": []any{}}},
+	}, api.Set)
+	if engineOnly.Code != 0 {
+		t.Fatalf("search-engine-only save failed: %+v", engineOnly)
+	}
+
+	var config models.UserConfig
+	if err := db.First(&config, "user_id = ?", 9).Error; err != nil {
+		t.Fatal(err)
+	}
+	if config.PanelJson == "" || config.PanelJson == "null" {
+		t.Fatalf("search-engine-only save clobbered panel: %q", config.PanelJson)
+	}
+	var panel map[string]any
+	if err := json.Unmarshal([]byte(config.PanelJson), &panel); err != nil {
+		t.Fatalf("stored panel is not valid JSON: %q", config.PanelJson)
+	}
+	if panel["logoText"] != "PanelOnly" {
+		t.Fatalf("unexpected stored panel: %q", config.PanelJson)
+	}
+}
+
 func TestItemMutationCannotUseAnotherAccountsGroup(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db := newMutationTestDB(t)

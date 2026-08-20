@@ -78,9 +78,15 @@ func (a *UserConfig) Set(c *gin.Context) {
 			UserID: userInfo.ID, ResourceType: models.SyncResourcePanel,
 			ResourceID: strconv.FormatUint(uint64(userInfo.ID), 10), Operation: models.SyncOperationUpsert,
 		}, ExpectedRevision: expectedRevision}, func(next int64) (any, error) {
-			result := tx.Model(&models.UserConfig{}).Where("user_id = ?", userInfo.ID).Updates(map[string]any{
-				"panel_json": req.PanelJson, "search_engine_json": req.SearchEngineJson, "revision": next,
-			})
+			// 未提交的配置段保持原值，避免部分保存清空另一段配置。
+			updates := map[string]any{"revision": next}
+			if req.Panel != nil {
+				updates["panel_json"] = req.PanelJson
+			}
+			if req.SearchEngine != nil {
+				updates["search_engine_json"] = req.SearchEngineJson
+			}
+			result := tx.Model(&models.UserConfig{}).Where("user_id = ?", userInfo.ID).Updates(updates)
 			if result.Error != nil {
 				return nil, result.Error
 			}

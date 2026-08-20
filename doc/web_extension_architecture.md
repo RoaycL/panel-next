@@ -221,6 +221,8 @@ DELETE /api/v1/sessions/:id
 
 首批内置定义为 `core.clock`、`core.date`、`core.search`，后续加入 `core.weather`、`core.trending` 与 `core.countdown`。通用 WidgetHost 通过定义的异步 loader 渲染并透传配置/事件；首页历史时钟和搜索配置映射为注册表实例，保持升级兼容。热搜组件的数据源是可替换的：`service/lib/trending` 以 Provider 接口聚合微博/百度/知乎/Hacker News，通过注册表按名替换或扩展，公共代理端点统一实施校验、超时、缓存和陈旧降级。倒计时/纪念日组件纯本地计算，不发起网络请求。
 
+内容组件区使用 12 列网格与 v1 布局信封：编辑模式支持拖拽排序、按定义边界缩放、隐藏/显示、移除与从注册表新增实例，布局作为 `panelConfig.widgets` 随面板配置经 `userConfig/set` mutation（`expectedRevision`）同步，并随 bootstrap/增量同步在双端刷新。损坏、未知或重复实例在加载时隔离并回退默认布局。
+
 - 有缓存时应立即绘制基本布局，不因后端离线显示空白页。
 - Extension 的缓存读取和应用发生在首次渲染前；网络刷新不阻塞已缓存首屏。
 - 首屏不加载管理页、备份页和不需要的小组件代码。

@@ -322,6 +322,32 @@
     "today": "就是今天",
     "invalid": "日期无效"
   },
+  "widgetLayout": {
+    "edit": "编辑组件",
+    "add": "添加组件",
+    "save": "保存布局",
+    "cancel": "取消",
+    "drag": "拖动排序",
+    "widen": "加宽",
+    "narrow": "变窄",
+    "stretch": "增高",
+    "shrink": "变矮",
+    "hide": "隐藏",
+    "show": "显示",
+    "remove": "移除",
+    "saveSuccess": "组件布局已保存",
+    "saveFail": "组件布局保存失败",
+    "types": {
+      "core": {
+        "clock": "时钟",
+        "date": "日期",
+        "search": "搜索框",
+        "weather": "天气",
+        "trending": "热搜资讯",
+        "countdown": "倒计时/纪念日"
+      }
+    }
+  },
   "settingUserInfo": {
     "confirmLogoutText": "你确定要退出登录吗？",
     "confirmPassword": "确认新密码",

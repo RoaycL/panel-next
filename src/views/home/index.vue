@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { VueDraggable } from 'vue-draggable-plus'
 import { NBackTop, NButton, NButtonGroup, NDropdown, NModal, NSkeleton, NSpin, useDialog, useMessage } from 'naive-ui'
-import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { AppIcon } from './components'
 import { SystemMonitor } from '@/components/deskModule'
 import { SvgIcon } from '@/components/common'
 import { deletes, getListByGroupId, saveSort } from '@/api/panel/itemIcon'
 import { getList as getGroupList } from '@/api/panel/itemIconGroup'
+import { set as setUserConfig } from '@/api/panel/userConfig'
 
 import { setTitle, updateLocalUserInfo } from '@/utils/cmn'
 import { useAuthStore, usePanelState, useUserStore } from '@/store'
@@ -20,7 +21,8 @@ import { getBootstrap } from '@/api/sync'
 import { onSyncConflict, setSyncRevision } from '@/sync/revision'
 import type { DashboardGroup } from '@/dashboard/core'
 import { createDashboardState, createItemSortRequest, filterDashboardGroups, normalizeDashboardGroups, selectItemUrl } from '@/dashboard/core'
-import { WidgetHost, createHeaderClockWidget, createHeaderSearchWidget, createHeaderWeatherWidget, createTrendingWidget, createCountdownWidget } from '@/widgets'
+import type { WidgetInstance } from '@/widgets'
+import { WidgetHost, createHeaderClockWidget, createHeaderSearchWidget, createHeaderWeatherWidget, createTrendingWidget, createCountdownWidget, generateWidgetInstanceId, serializeWidgetLayout, widgetRegistry } from '@/widgets'
 
 withDefaults(defineProps<{
   layout?: 'web' | 'extension'
@@ -95,8 +97,128 @@ const sessionTitle = computed(() => authStore.accessExpiresAt
 const headerClockWidget = computed(() => createHeaderClockWidget(!panelState.panelConfig.clockShowSecond))
 const headerSearchWidget = createHeaderSearchWidget()
 const headerWeatherWidget = createHeaderWeatherWidget()
-const trendingWidget = createTrendingWidget()
-const countdownWidget = createCountdownWidget(t('countdown.newYearDay'), '2027-01-01', 'yearly')
+
+const widgetInstances = ref<WidgetInstance[]>([])
+const widgetEditMode = ref(false)
+const widgetLayoutDirty = ref(false)
+const widgetLayoutSaving = ref(false)
+
+function createDefaultWidgetInstances(): WidgetInstance[] {
+  return [createTrendingWidget(), createCountdownWidget(t('countdown.newYearDay'), '2027-01-01', 'yearly')]
+}
+
+function buildWidgetInstances(stored: unknown): WidgetInstance[] {
+  if (!stored)
+    return createDefaultWidgetInstances()
+  try {
+    const result = widgetRegistry.loadLayout(stored)
+    if (result.droppedWidgetIds.length)
+      console.warn('Dropped invalid widget instances.', result.droppedWidgetIds)
+    return result.layout.widgets
+  }
+  catch {
+    return createDefaultWidgetInstances()
+  }
+}
+
+// 布局来自面板配置，随 bootstrap/增量同步刷新；编辑中的未保存改动不被后台刷新覆盖。
+watch(() => panelState.panelConfig.widgets, (stored) => {
+  if (widgetEditMode.value && widgetLayoutDirty.value)
+    return
+  widgetInstances.value = buildWidgetInstances(stored)
+}, { immediate: true })
+
+const visibleWidgetInstances = computed(() => widgetInstances.value.filter(instance => !instance.hidden))
+
+const widgetAddOptions = computed(() => widgetRegistry.list().map(definition => ({
+  label: t(`widgetLayout.types.${definition.type}`),
+  key: definition.type,
+})))
+
+function widgetTypeLabel(type: string) {
+  return t(`widgetLayout.types.${type}`)
+}
+
+function widgetCellStyle(instance: WidgetInstance) {
+  const columns = Math.min(Math.max(instance.size.columns, 1), 12)
+  return {
+    gridColumn: `span ${columns} / span ${columns}`,
+    gridRow: `span ${Math.max(instance.size.rows, 1)}`,
+  }
+}
+
+function canResizeWidget(instance: WidgetInstance, axis: 'columns' | 'rows', delta: number) {
+  const bounds = widgetRegistry.get(instance.type)?.size
+  if (!bounds)
+    return false
+  const next = instance.size[axis] + delta
+  return next >= bounds.min[axis] && next <= bounds.max[axis]
+}
+
+function resizeWidget(instance: WidgetInstance, axis: 'columns' | 'rows', delta: number) {
+  const bounds = widgetRegistry.get(instance.type)?.size
+  if (!bounds)
+    return
+  const next = Math.min(bounds.max[axis], Math.max(bounds.min[axis], instance.size[axis] + delta))
+  if (next !== instance.size[axis]) {
+    instance.size[axis] = next
+    widgetLayoutDirty.value = true
+  }
+}
+
+function toggleWidgetHidden(instance: WidgetInstance) {
+  instance.hidden = !instance.hidden
+  widgetLayoutDirty.value = true
+}
+
+function removeWidgetInstance(index: number) {
+  widgetInstances.value.splice(index, 1)
+  widgetLayoutDirty.value = true
+}
+
+function handleWidgetAdd(type: string | number) {
+  try {
+    const instance = widgetRegistry.create(String(type), generateWidgetInstanceId(String(type)), { column: 0, row: widgetInstances.value.length })
+    widgetInstances.value.push(instance)
+    widgetLayoutDirty.value = true
+  }
+  catch (error) {
+    console.warn('Failed to create widget instance.', error)
+  }
+}
+
+function enterWidgetLayoutEdit() {
+  widgetEditMode.value = true
+  widgetLayoutDirty.value = false
+}
+
+function cancelWidgetLayoutEdit() {
+  widgetInstances.value = buildWidgetInstances(panelState.panelConfig.widgets)
+  widgetLayoutDirty.value = false
+  widgetEditMode.value = false
+}
+
+async function saveWidgetLayout() {
+  if (widgetLayoutSaving.value)
+    return
+  widgetLayoutSaving.value = true
+  try {
+    panelState.panelConfig.widgets = serializeWidgetLayout(widgetInstances.value)
+    panelState.recordState()
+    const { code, msg } = await setUserConfig({ panel: panelState.panelConfig })
+    if (code === 0) {
+      widgetLayoutDirty.value = false
+      widgetEditMode.value = false
+      ms.success(t('widgetLayout.saveSuccess'))
+    }
+    else {
+      ms.error(`${t('widgetLayout.saveFail')}:${msg}`)
+    }
+  }
+  finally {
+    widgetLayoutSaving.value = false
+  }
+}
 
 function openPage(openMethod: number, url: string, title?: string) {
   switch (openMethod) {
@@ -508,9 +630,83 @@ function handleAddItem(itemIconGroupId?: number) {
           <div v-if="panelState.panelConfig.searchBoxShow" class="home-search flex mt-[20px] mx-auto sm:w-full lg:w-[80%]">
             <WidgetHost :instance="headerSearchWidget" @item-search="itemFrontEndSearch" />
           </div>
-          <div class="home-widgets mx-auto mt-[24px] w-full flex flex-wrap justify-center gap-[14px]">
-            <WidgetHost :instance="trendingWidget" />
-            <WidgetHost :instance="countdownWidget" />
+          <div class="home-widgets mx-auto mt-[24px] w-full">
+            <div v-if="canEdit" class="widget-toolbar">
+              <button v-if="!widgetEditMode" type="button" class="widget-tool-button" @click="enterWidgetLayoutEdit">
+                {{ t('widgetLayout.edit') }}
+              </button>
+              <template v-else>
+                <NDropdown trigger="click" :options="widgetAddOptions" @select="handleWidgetAdd">
+                  <button type="button" class="widget-tool-button">
+                    {{ t('widgetLayout.add') }}
+                  </button>
+                </NDropdown>
+                <button type="button" class="widget-tool-button" :disabled="widgetLayoutSaving" @click="saveWidgetLayout">
+                  {{ t('widgetLayout.save') }}
+                </button>
+                <button type="button" class="widget-tool-button" @click="cancelWidgetLayoutEdit">
+                  {{ t('widgetLayout.cancel') }}
+                </button>
+              </template>
+            </div>
+
+            <!-- 浏览模式 -->
+            <div v-if="!widgetEditMode" class="widget-grid">
+              <div
+                v-for="instance in visibleWidgetInstances" :key="instance.id"
+                class="widget-cell" :style="widgetCellStyle(instance)"
+              >
+                <WidgetHost :instance="instance" @item-search="itemFrontEndSearch" />
+              </div>
+            </div>
+
+            <!-- 编辑模式：拖放排序、缩放、隐藏与删除 -->
+            <VueDraggable
+              v-else
+              v-model="widgetInstances" item-key="id" :animation="200"
+              handle=".widget-edit-handle"
+              class="widget-grid widget-grid-editing"
+            >
+              <div
+                v-for="(instance, index) in widgetInstances" :key="instance.id"
+                class="widget-cell" :style="widgetCellStyle(instance)"
+              >
+                <div v-if="instance.hidden" class="widget-hidden-card">
+                  <span class="widget-edit-handle" :title="t('widgetLayout.drag')">{{ '⠿' }}</span>
+                  <span class="widget-hidden-name">{{ widgetTypeLabel(instance.type) }}</span>
+                  <button type="button" class="widget-edit-action" :title="t('widgetLayout.show')" @click="toggleWidgetHidden(instance)">
+                    {{ '👁' }}
+                  </button>
+                  <button type="button" class="widget-edit-action" :title="t('widgetLayout.remove')" @click="removeWidgetInstance(index)">
+                    {{ '✕' }}
+                  </button>
+                </div>
+                <div v-else class="widget-edit-card">
+                  <div class="widget-edit-bar">
+                    <span class="widget-edit-handle" :title="t('widgetLayout.drag')">{{ '⠿' }}</span>
+                    <button type="button" class="widget-edit-action" :title="t('widgetLayout.narrow')" :disabled="!canResizeWidget(instance, 'columns', -1)" @click="resizeWidget(instance, 'columns', -1)">
+                      {{ '−' }}
+                    </button>
+                    <button type="button" class="widget-edit-action" :title="t('widgetLayout.widen')" :disabled="!canResizeWidget(instance, 'columns', 1)" @click="resizeWidget(instance, 'columns', 1)">
+                      {{ '＋' }}
+                    </button>
+                    <button type="button" class="widget-edit-action" :title="t('widgetLayout.shrink')" :disabled="!canResizeWidget(instance, 'rows', -1)" @click="resizeWidget(instance, 'rows', -1)">
+                      {{ '⌃' }}
+                    </button>
+                    <button type="button" class="widget-edit-action" :title="t('widgetLayout.stretch')" :disabled="!canResizeWidget(instance, 'rows', 1)" @click="resizeWidget(instance, 'rows', 1)">
+                      {{ '⌄' }}
+                    </button>
+                    <button type="button" class="widget-edit-action" :title="t('widgetLayout.hide')" @click="toggleWidgetHidden(instance)">
+                      {{ '🚫' }}
+                    </button>
+                    <button type="button" class="widget-edit-action" :title="t('widgetLayout.remove')" @click="removeWidgetInstance(index)">
+                      {{ '✕' }}
+                    </button>
+                  </div>
+                  <WidgetHost :instance="instance" @item-search="itemFrontEndSearch" />
+                </div>
+              </div>
+            </VueDraggable>
           </div>
         </div>
 
@@ -886,6 +1082,128 @@ html {
   max-width: min(100%, 940px);
 }
 
+.widget-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.widget-tool-button {
+  padding: 6px 12px;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 999px;
+  color: white;
+  background: rgb(18 25 39 / 68%);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 16%);
+  backdrop-filter: blur(14px);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.widget-tool-button:hover {
+  background: rgb(38 48 70 / 78%);
+}
+
+.widget-tool-button:disabled {
+  cursor: wait;
+  opacity: .55;
+}
+
+.widget-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.widget-grid-editing {
+  outline: 1px dashed rgb(255 255 255 / 22%);
+  outline-offset: 8px;
+  border-radius: 12px;
+}
+
+.widget-cell {
+  display: flex;
+  min-width: 0;
+}
+
+.widget-cell > * {
+  flex: 1;
+  min-width: 0;
+}
+
+.widget-edit-card,
+.widget-hidden-card {
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  flex-direction: column;
+  border: 1px dashed rgb(255 255 255 / 38%);
+  border-radius: 16px;
+}
+
+.widget-edit-card > :deep(*) {
+  position: relative;
+  z-index: 0;
+}
+
+.widget-edit-bar {
+  position: absolute;
+  z-index: 10;
+  top: 6px;
+  right: 8px;
+  display: flex;
+  gap: 3px;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: rgb(18 25 39 / 82%);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 28%);
+}
+
+.widget-edit-handle {
+  color: rgb(255 255 255 / 85%);
+  cursor: grab;
+  font-size: 13px;
+  line-height: 1.4;
+  user-select: none;
+}
+
+.widget-edit-action {
+  min-width: 22px;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: rgb(255 255 255 / 85%);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.widget-edit-action:disabled {
+  cursor: default;
+  opacity: .3;
+}
+
+.widget-hidden-card {
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 10px 14px;
+  color: rgb(255 255 255 / 72%);
+  background: rgb(18 25 39 / 42%);
+}
+
+.widget-hidden-name {
+  overflow: hidden;
+  font-size: 13px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .extension-home .header-weather {
   margin-left: auto;
 }
@@ -1002,8 +1320,19 @@ html {
   }
 
   .home-widgets {
-    gap: 10px;
     margin-top: 14px;
+  }
+
+  .widget-grid {
+    gap: 10px;
+  }
+
+  .widget-cell {
+    grid-column: span 12 / span 12 !important;
+  }
+
+  .widget-edit-bar {
+    gap: 1px;
   }
 
   .extension-home .home-content {

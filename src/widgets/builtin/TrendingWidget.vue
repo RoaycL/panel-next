@@ -94,7 +94,7 @@ onUnmounted(() => {
 .trending-card {
   position: relative;
   box-sizing: border-box;
-  width: min(100%, 640px);
+  width: 100%;
   padding: 14px 16px 12px;
   border: 1px solid rgb(255 255 255 / 16%);
   border-radius: 16px;

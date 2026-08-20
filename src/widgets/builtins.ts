@@ -1,7 +1,8 @@
 import type { TrendingSource } from '@/api/trending'
-import type { WidgetConfigSchema, WidgetInstance } from './types'
+import type { WidgetConfigSchema, WidgetInstance, WidgetLayout } from './types'
 import { TRENDING_SOURCES } from '@/api/trending'
 import { widgetRegistry } from './registry'
+import { WIDGET_LAYOUT_SCHEMA_VERSION } from './types'
 
 export interface ClockWidgetConfig {
   hideSecond: boolean
@@ -132,12 +133,12 @@ if (!widgetRegistry.get('core.clock')) {
   }).register({
     type: 'core.trending', currentVersion: 1, configSchema: trendingSchema,
     defaultConfig: () => ({ source: 'weibo', limit: 10 }),
-    size: { default: { columns: 4, rows: 2 }, min: { columns: 2, rows: 1 }, max: { columns: 8, rows: 4 } },
+    size: { default: { columns: 6, rows: 2 }, min: { columns: 3, rows: 1 }, max: { columns: 12, rows: 4 } },
     load: () => import('./builtin/TrendingWidget.vue').then(module => module.default),
   }).register({
     type: 'core.countdown', currentVersion: 1, configSchema: countdownSchema,
     defaultConfig: () => ({ title: '元旦', date: '2027-01-01', repeat: 'yearly' }),
-    size: { default: { columns: 2, rows: 1 }, min: { columns: 2, rows: 1 }, max: { columns: 4, rows: 2 } },
+    size: { default: { columns: 3, rows: 2 }, min: { columns: 2, rows: 1 }, max: { columns: 6, rows: 2 } },
     load: () => import('./builtin/CountdownWidget.vue').then(module => module.default),
   })
 }
@@ -160,4 +161,22 @@ export function createTrendingWidget(source: TrendingSource = 'weibo', limit = 1
 
 export function createCountdownWidget(title: string, date: string, repeat: CountdownRepeat = 'none'): WidgetInstance<CountdownWidgetConfig> {
   return widgetRegistry.create('core.countdown', 'content.countdown', { column: 1, row: 0 }, { title, date, repeat })
+}
+
+/** 将组件实例序列化为 v1 布局信封，按数组顺序写入稳定网格位置。 */
+export function serializeWidgetLayout(instances: readonly WidgetInstance[]): WidgetLayout {
+  return {
+    schemaVersion: WIDGET_LAYOUT_SCHEMA_VERSION,
+    widgets: instances.map((instance, index) => ({
+      ...instance,
+      position: { column: 0, row: index },
+    })),
+  }
+}
+
+/** 生成符合注册表 ID 规则的新组件实例 ID。 */
+export function generateWidgetInstanceId(type: string): string {
+  const suffix = Date.now().toString(36)
+  const id = `${type}.${suffix}`
+  return id.length > 64 ? `${id.slice(0, 64 - suffix.length)}${suffix}` : id
 }

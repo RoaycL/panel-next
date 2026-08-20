@@ -121,7 +121,7 @@ function clampToMonthEnd(year: number, month: number, day: number) {
   flex-direction: column;
   justify-content: center;
   gap: 4px;
-  width: min(100%, 236px);
+  width: 100%;
   min-height: 92px;
   padding: 12px 16px;
   border: 1px solid rgb(255 255 255 / 16%);

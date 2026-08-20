@@ -60,6 +60,7 @@ declare namespace Panel {
         systemMonitorShowTitle?:boolean
         systemMonitorPublicVisitModeShow?:boolean
         netModeChangeButtonShow?:boolean
+        widgets?:import('@/widgets').WidgetLayout
     }
 
     interface userConfig{

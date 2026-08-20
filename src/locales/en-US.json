@@ -322,6 +322,32 @@
     "today": "It's today",
     "invalid": "Invalid date"
   },
+  "widgetLayout": {
+    "edit": "Edit widgets",
+    "add": "Add widget",
+    "save": "Save layout",
+    "cancel": "Cancel",
+    "drag": "Drag to reorder",
+    "widen": "Widen",
+    "narrow": "Narrow",
+    "stretch": "Stretch",
+    "shrink": "Shorten",
+    "hide": "Hide",
+    "show": "Show",
+    "remove": "Remove",
+    "saveSuccess": "Widget layout saved",
+    "saveFail": "Failed to save widget layout",
+    "types": {
+      "core": {
+        "clock": "Clock",
+        "date": "Date",
+        "search": "Search box",
+        "weather": "Weather",
+        "trending": "Trending",
+        "countdown": "Countdown / anniversary"
+      }
+    }
+  },
   "settingUserInfo": {
     "confirmLogoutText": "Are you sure you want to logout?",
     "confirmPassword": "Confirm new password",
