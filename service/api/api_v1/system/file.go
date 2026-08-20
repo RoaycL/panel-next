@@ -59,11 +59,18 @@ func (a *FileApi) UploadImg(c *gin.Context) {
 		filepath := fmt.Sprintf("%s%s%s", fildDir, fileName, fileExt)
 		c.SaveUploadedFile(f, filepath)
 
+		// 获取图片类型分类
+		fileType := c.PostForm("fileType")
+		if fileType != "icon" && fileType != "wallpaper" {
+			fileType = "other"
+		}
+
 		// 像数据库添加记录
 		mFile := models.File{}
-		mFile.AddFile(userInfo.ID, f.Filename, fileExt, filepath)
+		mFile.AddFileWithType(userInfo.ID, f.Filename, fileExt, filepath, fileType)
 		apiReturn.SuccessData(c, gin.H{
 			"imageUrl": filepath[1:],
+			"type":     fileType,
 		})
 	}
 }
@@ -131,7 +138,15 @@ func (a *FileApi) GetList(c *gin.Context) {
 	list := []models.File{}
 	userInfo, _ := base.GetCurrentUserInfo(c)
 	var count int64
-	if err := global.Db.Order("created_at desc").Find(&list, "user_id=?", userInfo.ID).Count(&count).Error; err != nil {
+
+	// 支持按类型过滤
+	fileType := c.Query("type")
+	query := global.Db.Model(&models.File{}).Where("user_id=?", userInfo.ID)
+	if fileType != "" {
+		query = query.Where("type=?", fileType)
+	}
+
+	if err := query.Order("created_at desc").Find(&list).Count(&count).Error; err != nil {
 		apiReturn.ErrorDatabase(c, err.Error())
 		return
 	}
@@ -145,6 +160,7 @@ func (a *FileApi) GetList(c *gin.Context) {
 			"createTime": v.CreatedAt,
 			"updateTime": v.UpdatedAt,
 			"path":       v.Src,
+			"type":       v.Type,
 		})
 	}
 	apiReturn.SuccessListData(c, data, count)
@@ -178,4 +194,32 @@ func (a *FileApi) Deletes(c *gin.Context) {
 
 	apiReturn.Success(c)
 
+}
+
+// UpdateType 修改图片类型分类
+func (a *FileApi) UpdateType(c *gin.Context) {
+	userInfo, _ := base.GetCurrentUserInfo(c)
+	req := struct {
+		ID   uint   `json:"id"`
+		Type string `json:"type"`
+	}{}
+	if err := c.ShouldBindBodyWith(&req, binding.JSON); err != nil {
+		apiReturn.ErrorParamFomat(c, err.Error())
+		return
+	}
+	if req.Type != "icon" && req.Type != "wallpaper" && req.Type != "other" {
+		apiReturn.ErrorParamFomat(c, "type")
+		return
+	}
+
+	result := global.Db.Model(&models.File{}).Where("id = ? AND user_id = ?", req.ID, userInfo.ID).Update("type", req.Type)
+	if result.Error != nil {
+		apiReturn.ErrorDatabase(c, result.Error.Error())
+		return
+	}
+	if result.RowsAffected == 0 {
+		apiReturn.ErrorDataNotFound(c)
+		return
+	}
+	apiReturn.Success(c)
 }

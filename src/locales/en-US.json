@@ -131,7 +131,14 @@
 		"imgbedSaveFail": "Failed to save image host config",
 		"imgbedTest": "Test connection",
 		"imgbedTestSuccess": "Image host connection OK",
-		"imgbedTestFail": "Image host connection test failed"
+      "imgbedTestFail": "Image host connection test failed",
+      "typeAll": "All",
+      "typeIcon": "Icons",
+      "typeWallpaper": "Wallpapers",
+      "typeOther": "Other",
+      "upload": "Upload Image",
+      "changeType": "Change Type",
+      "typeLabel": "Type"
 	},
     "exportImport": {
       "appName": "Export/Import",

@@ -6,6 +6,8 @@ declare namespace File {
 		fileName: string
 		method: number
 		ext: string
+		type?: string // icon/wallpaper/other
+		path?: string
 	}
 
 

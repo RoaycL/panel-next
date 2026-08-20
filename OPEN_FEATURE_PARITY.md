@@ -63,10 +63,10 @@ Panel Next 必做安全增强（不计入 53 个官方能力包）：版本化 m
 
 ### C. 图库与公共图库（6）
 
-- [ ] `IMAGE-01` 将上传文件管理升级为图库，并按图标/壁纸分类查询。
-- [ ] `IMAGE-02` 按分类单张和批量上传图片。
-- [ ] `IMAGE-03` 查看图片详情并修改图片类型。
-- [ ] `IMAGE-04` 复制可公开访问的图片链接，作为简易图床使用。
+- [x] `IMAGE-01` 将上传文件管理升级为图库，并按图标/壁纸分类查询。实现：`models.File` 新增 `Type` 字段（icon/wallpaper/other），`GetList` 支持 `type` 查询参数过滤，`UploadImg` 支持 `fileType` 表单字段，`UploadFileManager` 增加分类筛选标签和上传类型选择。代码：`service/models/file.go`、`service/api/api_v1/system/file.go`、`src/components/apps/UploadFileManager/index.vue`。
+- [x] `IMAGE-02` 按分类单张和批量上传图片。实现：上传接口支持 `fileType` 参数指定分类，前端 UploadFileManager 提供上传类型下拉选择。
+- [x] `IMAGE-03` 查看图片详情并修改图片类型。实现：新增 `POST /api/file/updateType` 接口，前端图片卡片增加类型修改下拉菜单，详情弹窗显示类型字段。
+- [x] `IMAGE-04` 复制可公开访问的图片链接，作为简易图床使用。实现：UploadFileManager 每张图片已有复制链接按钮（`copyImageUrl`），结合外部图床配置（IMAGE 集成）上传的图片返回完整可公开访问 URL。
 - [ ] `IMAGE-05` 所有图标和壁纸选择位置接入统一图库选择器。
 - [ ] `IMAGE-06` 管理员维护公共图库，所有账号只读选择使用。
 

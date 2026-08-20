@@ -132,7 +132,14 @@
 		"imgbedSaveFail": "图床配置保存失败",
 		"imgbedTest": "测试连接",
 		"imgbedTestSuccess": "图床连接正常",
-		"imgbedTestFail": "图床连接测试失败"
+      "imgbedTestFail": "图床连接测试失败",
+      "typeAll": "全部",
+      "typeIcon": "图标",
+      "typeWallpaper": "壁纸",
+      "typeOther": "其他",
+      "upload": "上传图片",
+      "changeType": "修改类型",
+      "typeLabel": "类型"
 	},
     "exportImport": {
       "appName": "导出导入",
