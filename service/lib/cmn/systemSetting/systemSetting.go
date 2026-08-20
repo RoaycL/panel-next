@@ -39,7 +39,10 @@ type Register struct {
 }
 
 type Login struct {
-	LoginCaptcha bool `json:"loginCaptcha"` // 登录验证码
+	LoginCaptcha bool `json:"loginCaptcha"` // 登录验证码开关
+	CaptchaMaxFailCount int `json:"captchaMaxFailCount"` // 最大失败次数
+	CaptchaLockDuration string `json:"captchaLockDuration"` // 锁定时长（如 "10m"）
+	CaptchaExpireDuration string `json:"captchaExpireDuration"` // 过期时长（如 "5m"）
 }
 
 type ApplicationSetting struct {
