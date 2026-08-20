@@ -223,7 +223,11 @@ async function saveWidgetLayout() {
 function openPage(openMethod: number, url: string, title?: string) {
   switch (openMethod) {
     case 1:
-      runtime.openUrl(url, 'current')
+      // CARD-06: 如果当前页面在 iframe 中，使用父窗口打开
+      if (window.top !== null && window.top !== window.self)
+        window.top!.location.href = url
+      else
+        runtime.openUrl(url, 'current')
       break
     case 2:
       runtime.openUrl(url, 'tab')

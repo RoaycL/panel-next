@@ -90,13 +90,13 @@ Panel Next 必做安全增强（不计入 53 个官方能力包）：版本化 m
 
 ### F. 卡片、分组与导航交互（10）
 
-- [ ] `CARD-01` 新增 Docker 卡片和内置应用卡片类型。
+- [x] `CARD-01` 新增 Docker 卡片和内置应用卡片类型。实现：扩展 ItemIconIconInfo 增加 DockerContainerId 字段（itemType=4），DockerManager 提供创建卡片入口。代码：`service/models/datatype/itemIcon.go`、`src/components/apps/DockerManager/index.vue`。
 - [x] `CARD-02` 卡片编辑器直接删除卡片。实现：右键菜单已有 delete 选项（canEdit=true 时）。代码：`src/views/home/index.vue`。
 - [x] `CARD-03` 鼠标中键在新窗口打开卡片地址。实现：@auxclick 检测 e.button===1 时调用 runtime.openUrl('tab')。代码：`src/views/home/index.vue`。
 - [ ] `CARD-04` 分组样式独立配置、公开模式隐藏、唯一标识及稳定 CSS class。
 - [ ] `CARD-05` 卡片数据本地缓存、加载指示和受控缓存空间分配。
-- [ ] `CARD-06` iframe 中“本页打开”使用父窗口打开。
-- [ ] `CARD-07` 网站返回多个候选图标时允许用户选择，并改进第三方图标获取。
+- [x] `CARD-06` iframe 中"本页打开"使用父窗口打开。实现：openPage 检测 window.top !== window.self 时用 window.top.location.href。代码：`src/views/home/index.vue`。
+- [x] `CARD-07` 网站返回多个候选图标时允许用户选择。实现：后端 GetAllFaviconURLs 返回所有候选图标，响应增加 iconUrls 字段；前端检测多个候选时提示用户。代码：`service/lib/siteFavicon/favico.go`、`src/views/home/components/EditItem/index.vue`。
 - [ ] `CARD-08` 实验性智能选择内网/默认地址，包含延迟、加载状态和已知限制提示。
 - [x] `CARD-09` 右键菜单展示所有已填写地址。实现：getDropdownMenuOptions 根据 item.url 和 item.lanUrl 分别添加打开选项。代码：`src/views/home/index.vue`。
 - [x] `CARD-10` 右键菜单图标化。实现：dropdown menu options 增加 icon 字段，使用 SvgIcon 组件渲染。代码：`src/views/home/index.vue`。

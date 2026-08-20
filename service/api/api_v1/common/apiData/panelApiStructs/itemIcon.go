@@ -20,5 +20,6 @@ type ItemIconGetSiteFaviconReq struct {
 }
 
 type ItemIconGetSiteFaviconResp struct {
-	IconUrl string `json:"iconUrl"`
+	IconUrl  string   `json:"iconUrl"`
+	IconUrls []string `json:"iconUrls,omitempty"` // CARD-07: 所有候选图标
 }

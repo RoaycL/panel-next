@@ -114,8 +114,12 @@ const handleValidateButtonClick = (e: MouseEvent) => {
 async function getIconByUrl(url: string, loadingIndex: number) {
   getIconLoading.value[loadingIndex] = true
   try {
-    const { code, data } = await getSiteFavicon<{ iconUrl: string }>(url)
+    const { code, data } = await getSiteFavicon<{ iconUrl: string; iconUrls?: string[] }>(url)
     if (code === 0) {
+      // CARD-07: 如果有多个候选图标，提示用户选择
+      if (data.iconUrls && data.iconUrls.length > 1) {
+        ms.info(t('iconItem.multipleIconsFound', { count: data.iconUrls.length }))
+      }
       model.value.icon = {
         itemType: 2,
         src: data.iconUrl,

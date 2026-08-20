@@ -129,6 +129,29 @@ func GetOneFaviconURLAndUpload(urlStr string) (string, bool) {
 	return "", false
 }
 
+// GetAllFaviconURLs 返回网站所有候选图标的完整 URL 列表（CARD-07）。
+func GetAllFaviconURLs(urlStr string) ([]string, error) {
+	return getFaviconURL(urlStr)
+}
+
+// NormalizeIconURL 将相对路径的图标 URL 转换为完整 URL。
+func NormalizeIconURL(iconURL, scheme string) string {
+	return normalizeIconURL(iconURL, scheme)
+}
+
+func normalizeIconURL(iconURL, scheme string) string {
+	if iconURL == "" {
+		return ""
+	}
+	if strings.HasPrefix(iconURL, "//") {
+		return scheme + ":" + iconURL
+	}
+	if !strings.HasPrefix(iconURL, "http://") && !strings.HasPrefix(iconURL, "https://") {
+		return scheme + "://" + strings.TrimPrefix(iconURL, "/")
+	}
+	return iconURL
+}
+
 func getFaviconURL(url string) ([]string, error) {
 	var icons []string
 	icons = make([]string, 0)

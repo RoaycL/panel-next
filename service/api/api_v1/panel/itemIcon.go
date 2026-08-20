@@ -383,6 +383,16 @@ func (a *ItemIcon) GetSiteFavicon(c *gin.Context) {
 	}
 	global.Logger.Debug("fullUrl:", fullUrl)
 
+	// CARD-07: 获取所有候选图标 URL
+	allIconURLs, _ := siteFavicon.GetAllFaviconURLs(req.Url)
+	resp.IconUrls = make([]string, 0, len(allIconURLs))
+	for _, iconURL := range allIconURLs {
+		normalized := siteFavicon.NormalizeIconURL(iconURL, parsedURL.Scheme)
+		if normalized != "" {
+			resp.IconUrls = append(resp.IconUrls, normalized)
+		}
+	}
+
 	// 生成保存目录
 	configUpload := global.Config.GetValueString("base", "source_path")
 	savePath := fmt.Sprintf("%s/%d/%d/%d/", configUpload, time.Now().Year(), time.Now().Month(), time.Now().Day())

@@ -156,7 +156,8 @@
       "upload": "Upload Image",
       "changeType": "Change Type",
       "typeLabel": "Type",
-      "selectFromGallery": "Select from Gallery"
+    "selectFromGallery": "Select from Gallery",
+    "multipleIconsFound": "Found {count} candidate icons, using the first one"
 	},
 	"publicGallery": {
 		"appName": "Public Gallery",

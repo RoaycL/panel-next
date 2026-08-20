@@ -157,7 +157,8 @@
       "upload": "上传图片",
       "changeType": "修改类型",
       "typeLabel": "类型",
-      "selectFromGallery": "从图库选择"
+    "selectFromGallery": "从图库选择",
+    "multipleIconsFound": "找到 {count} 个候选图标，已使用第一个"
 	},
 	"publicGallery": {
 		"appName": "公共图库",
