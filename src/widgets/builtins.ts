@@ -23,6 +23,14 @@ export interface TrendingWidgetConfig {
   limit: number
 }
 
+export type CountdownRepeat = 'none' | 'yearly'
+
+export interface CountdownWidgetConfig {
+  title: string
+  date: string
+  repeat: CountdownRepeat
+}
+
 const clockSchema: WidgetConfigSchema<ClockWidgetConfig> = {
   parse(value) {
     if (typeof value !== 'object' || value === null)
@@ -81,6 +89,26 @@ const trendingSchema: WidgetConfigSchema<TrendingWidgetConfig> = {
   },
 }
 
+const countdownSchema: WidgetConfigSchema<CountdownWidgetConfig> = {
+  parse(value) {
+    if (typeof value !== 'object' || value === null)
+      throw new Error('Invalid countdown widget config.')
+    const config = value as Partial<CountdownWidgetConfig>
+    const title = typeof config.title === 'string' ? config.title.trim() : ''
+    if (!title || title.length > 40)
+      throw new Error('Invalid countdown widget config.')
+    if (typeof config.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(config.date))
+      throw new Error('Invalid countdown widget config.')
+    const [year, month, day] = config.date.split('-').map(Number)
+    const probe = new Date(year, month - 1, day)
+    if (year < 1900 || probe.getFullYear() !== year || probe.getMonth() !== month - 1 || probe.getDate() !== day)
+      throw new Error('Invalid countdown widget config.')
+    if (config.repeat !== 'none' && config.repeat !== 'yearly')
+      throw new Error('Invalid countdown widget config.')
+    return { title, date: config.date, repeat: config.repeat }
+  },
+}
+
 if (!widgetRegistry.get('core.clock')) {
   widgetRegistry.register({
     type: 'core.clock', currentVersion: 1, configSchema: clockSchema,
@@ -106,6 +134,11 @@ if (!widgetRegistry.get('core.clock')) {
     defaultConfig: () => ({ source: 'weibo', limit: 10 }),
     size: { default: { columns: 4, rows: 2 }, min: { columns: 2, rows: 1 }, max: { columns: 8, rows: 4 } },
     load: () => import('./builtin/TrendingWidget.vue').then(module => module.default),
+  }).register({
+    type: 'core.countdown', currentVersion: 1, configSchema: countdownSchema,
+    defaultConfig: () => ({ title: '元旦', date: '2027-01-01', repeat: 'yearly' }),
+    size: { default: { columns: 2, rows: 1 }, min: { columns: 2, rows: 1 }, max: { columns: 4, rows: 2 } },
+    load: () => import('./builtin/CountdownWidget.vue').then(module => module.default),
   })
 }
 
@@ -123,4 +156,8 @@ export function createHeaderWeatherWidget(): WidgetInstance<WeatherWidgetConfig>
 
 export function createTrendingWidget(source: TrendingSource = 'weibo', limit = 10): WidgetInstance<TrendingWidgetConfig> {
   return widgetRegistry.create('core.trending', 'content.trending', { column: 0, row: 0 }, { source, limit })
+}
+
+export function createCountdownWidget(title: string, date: string, repeat: CountdownRepeat = 'none'): WidgetInstance<CountdownWidgetConfig> {
+  return widgetRegistry.create('core.countdown', 'content.countdown', { column: 1, row: 0 }, { title, date, repeat })
 }

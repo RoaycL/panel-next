@@ -314,6 +314,14 @@
       "hackernews": "Hacker News"
     }
   },
+  "countdown": {
+    "title": "Countdown & anniversary",
+    "newYearDay": "New Year's Day",
+    "daysRemaining": "days to go",
+    "daysPassed": "days ago",
+    "today": "It's today",
+    "invalid": "Invalid date"
+  },
   "settingUserInfo": {
     "confirmLogoutText": "Are you sure you want to logout?",
     "confirmPassword": "Confirm new password",

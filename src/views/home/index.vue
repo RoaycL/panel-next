@@ -20,7 +20,7 @@ import { getBootstrap } from '@/api/sync'
 import { onSyncConflict, setSyncRevision } from '@/sync/revision'
 import type { DashboardGroup } from '@/dashboard/core'
 import { createDashboardState, createItemSortRequest, filterDashboardGroups, normalizeDashboardGroups, selectItemUrl } from '@/dashboard/core'
-import { WidgetHost, createHeaderClockWidget, createHeaderSearchWidget, createHeaderWeatherWidget, createTrendingWidget } from '@/widgets'
+import { WidgetHost, createHeaderClockWidget, createHeaderSearchWidget, createHeaderWeatherWidget, createTrendingWidget, createCountdownWidget } from '@/widgets'
 
 withDefaults(defineProps<{
   layout?: 'web' | 'extension'
@@ -96,6 +96,7 @@ const headerClockWidget = computed(() => createHeaderClockWidget(!panelState.pan
 const headerSearchWidget = createHeaderSearchWidget()
 const headerWeatherWidget = createHeaderWeatherWidget()
 const trendingWidget = createTrendingWidget()
+const countdownWidget = createCountdownWidget(t('countdown.newYearDay'), '2027-01-01', 'yearly')
 
 function openPage(openMethod: number, url: string, title?: string) {
   switch (openMethod) {
@@ -507,8 +508,9 @@ function handleAddItem(itemIconGroupId?: number) {
           <div v-if="panelState.panelConfig.searchBoxShow" class="home-search flex mt-[20px] mx-auto sm:w-full lg:w-[80%]">
             <WidgetHost :instance="headerSearchWidget" @item-search="itemFrontEndSearch" />
           </div>
-          <div class="home-trending flex mx-auto mt-[24px] w-full justify-center">
+          <div class="home-widgets mx-auto mt-[24px] w-full flex flex-wrap justify-center gap-[14px]">
             <WidgetHost :instance="trendingWidget" />
+            <WidgetHost :instance="countdownWidget" />
           </div>
         </div>
 
@@ -880,8 +882,8 @@ html {
   margin-left: 18px;
 }
 
-.home-trending {
-  max-width: min(92%, 680px);
+.home-widgets {
+  max-width: min(100%, 940px);
 }
 
 .extension-home .header-weather {
@@ -999,7 +1001,8 @@ html {
     margin: 8px 0 0;
   }
 
-  .home-trending {
+  .home-widgets {
+    gap: 10px;
     margin-top: 14px;
   }
 
