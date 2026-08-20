@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { VueDraggable } from 'vue-draggable-plus'
 import { NBackTop, NButton, NButtonGroup, NDropdown, NModal, NSkeleton, NSpin, useDialog, useMessage } from 'naive-ui'
-import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, h, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { AppIcon } from './components'
 import { SystemMonitor } from '@/components/deskModule'
 import { SvgIcon } from '@/components/common'
@@ -328,6 +328,15 @@ function handleRightMenuSelect(key: string | number) {
   }
 }
 
+// CARD-03: 鼠标中键在新窗口打开卡片地址
+function handleAuxClick(e: MouseEvent, itemGroup: DashboardGroup, item: Panel.ItemInfo) {
+  if (e.button === 1) {
+    e.preventDefault()
+    const jumpUrl = selectItemUrl(item, panelState.networkMode === PanelStateNetworkModeEnum.lan)
+    runtime.openUrl(jumpUrl, 'tab')
+  }
+}
+
 function handleContextMenu(e: MouseEvent, itemGroup: DashboardGroup, item: Panel.ItemInfo) {
   if (itemGroup.sortStatus)
     return
@@ -386,21 +395,25 @@ function getDropdownMenuOptions() {
     {
       label: t('iconItem.newWindowOpen'),
       key: 'newWindows',
+      icon: () => h(SvgIcon, { icon: 'mdi:open-in-new' }),
     },
 
   ]
 
-  if (currentRightSelectItem.value?.lanUrl && panelState.networkMode === PanelStateNetworkModeEnum.wan) {
-    dropdownMenuOptions.push({
-      label: t('panelHome.openLanUrl'),
-      key: 'openLanUrl',
-    })
-  }
-
-  if (currentRightSelectItem.value?.lanUrl && panelState.networkMode === PanelStateNetworkModeEnum.lan) {
+  // CARD-09: 展示所有已填写地址
+  if (currentRightSelectItem.value?.url) {
     dropdownMenuOptions.push({
       label: t('panelHome.openWanUrl'),
       key: 'openWanUrl',
+      icon: () => h(SvgIcon, { icon: 'mdi:web' }),
+    })
+  }
+
+  if (currentRightSelectItem.value?.lanUrl) {
+    dropdownMenuOptions.push({
+      label: t('panelHome.openLanUrl'),
+      key: 'openLanUrl',
+      icon: () => h(SvgIcon, { icon: 'mdi:lan' }),
     })
   }
 
@@ -408,9 +421,11 @@ function getDropdownMenuOptions() {
     dropdownMenuOptions.push({
       label: t('common.edit'),
       key: 'edit',
+      icon: () => h(SvgIcon, { icon: 'mdi:pencil' }),
     }, {
       label: t('common.delete'),
       key: 'delete',
+      icon: () => h(SvgIcon, { icon: 'mdi:delete' }),
     })
   }
 
@@ -766,7 +781,7 @@ function handleAddItem(itemIconGroupId?: number) {
                   filter=".not-drag"
                   :disabled="!itemGroup.sortStatus"
                 >
-                  <div v-for="item, index in itemGroup.items" :key="index" :title="item.description" @contextmenu="(e) => handleContextMenu(e, itemGroup, item)">
+                  <div v-for="item, index in itemGroup.items" :key="index" :title="item.description" @contextmenu="(e) => handleContextMenu(e, itemGroup, item)" @auxclick="(e) => handleAuxClick(e, itemGroup, item)">
                     <AppIcon
                       :class="itemGroup.sortStatus ? 'cursor-move' : 'cursor-pointer'"
                       :item-info="item"
@@ -803,7 +818,7 @@ function handleAddItem(itemIconGroupId?: number) {
                   filter=".not-drag"
                   :disabled="!itemGroup.sortStatus"
                 >
-                  <div v-for="item, index in itemGroup.items" :key="index" :title="item.description" @contextmenu="(e) => handleContextMenu(e, itemGroup, item)">
+                  <div v-for="item, index in itemGroup.items" :key="index" :title="item.description" @contextmenu="(e) => handleContextMenu(e, itemGroup, item)" @auxclick="(e) => handleAuxClick(e, itemGroup, item)">
                     <AppIcon
                       :class="itemGroup.sortStatus ? 'cursor-move' : 'cursor-pointer'"
                       :item-info="item"
