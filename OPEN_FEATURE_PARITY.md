@@ -56,7 +56,7 @@ Panel Next 必做安全增强（不计入 53 个官方能力包）：版本化 m
 - [x] `BRAND-02` 全局 favicon/站点图标，并在保存刷新后立即生效且不闪烁默认标题。实现：`SITE_FAVICON` 同源路径校验 + 首页 HTML `<link rel="icon">` 动态替换 + 登录页运行时注入 favicon。保存后刷新即生效（`no-cache` 响应头），无需重新部署。与 BRAND-01 共用注入与测试。
 - [x] `BRAND-03` 自定义登录页背景图。实现：`LOGIN_BACKGROUND` 同源路径 + `GET /api/siteInfo` 返回 + 登录页 `onMounted` 拉取并应用背景样式。管理员 SiteSetting 应用上传与设置。
 - [x] `BRAND-04` 在线编辑全局 `index.js` 与 `index.css`，保留文件方式配置。实现：`GLOBAL_INDEX_CSS`/`GLOBAL_INDEX_JS` 设置项，管理员可在线编辑并保存到 DB（上限 256KB）；首页 HTML 注入时 DB 有值则内联 `<style>`/`<script>` 替换 `/custom/index.*` 引用，DB 为空则保留文件方式。SiteSetting 应用提供 textarea 编辑器（等宽字体）。代码：`service/router/indexPage.go`、`src/components/apps/SiteSetting/index.vue`。测试：内联替换、空值保留文件引用。
-- [ ] `BRAND-05` 壁纸上传支持 AVIF；HEIC 在运行环境可可靠解码时启用，否则明确报错。
+- [x] `BRAND-05` 壁纸上传支持 AVIF；HEIC 在运行环境可可靠解码时启用，否则明确报错。实现：UploadImg/UploadFiles 白名单增加 `.avif`；`.heic`/`.heif` 拒绝并返回 1301（不支持格式）；前端 Style/SiteSetting 上传 accept 属性加 `.avif`。AVIF 服务端存储原样、浏览器原生支持解码；HEIC 当前不引入解码库，明确拒绝。代码：`service/api/api_v1/system/file.go`、`src/components/apps/Style/index.vue`、`src/components/apps/SiteSetting/index.vue`。测试：AVIF 接受、HEIC 拒绝。
 - [ ] `BRAND-06` 导航页 Logo、时钟独立显示开关。
 
 “登录页文字”暂未在正式版公开日志中找到可靠证据，先列为候选增强，不计入对齐统计；取得公开证据或用户确认后再排期。

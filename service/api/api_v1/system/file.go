@@ -37,8 +37,15 @@ func (a *FileApi) UploadImg(c *gin.Context) {
 			".webp",
 			".svg",
 			".ico",
+			".avif",
 		}
-
+		heicExts := []string{".heic", ".heif"}
+		for _, ext := range heicExts {
+			if fileExt == ext {
+				apiReturn.ErrorByCode(c, 1301)
+				return
+			}
+		}
 		if !cmn.InArray(agreeExts, fileExt) {
 			apiReturn.ErrorByCode(c, 1301)
 			return
@@ -71,10 +78,31 @@ func (a *FileApi) UploadFiles(c *gin.Context) {
 		return
 	}
 	files := form.File["files[]"]
+	agreeExts := []string{
+		".png",
+		".jpg",
+		".gif",
+		".jpeg",
+		".webp",
+		".svg",
+		".ico",
+		".avif",
+	}
+	heicExts := []string{".heic", ".heif"}
 	errFiles := []string{}
 	succMap := map[string]string{}
 	for _, f := range files {
 		fileExt := strings.ToLower(path.Ext(f.Filename))
+		if !cmn.InArray(agreeExts, fileExt) {
+			errFiles = append(errFiles, f.Filename)
+			continue
+		}
+		for _, ext := range heicExts {
+			if fileExt == ext {
+				errFiles = append(errFiles, f.Filename)
+				continue
+			}
+		}
 		fileName := cmn.Md5(fmt.Sprintf("%s%s", f.Filename, time.Now().String()))
 		fildDir := fmt.Sprintf("%s/%d/%d/%d/", configUpload, time.Now().Year(), time.Now().Month(), time.Now().Day())
 		isExist, _ := cmn.PathExists(fildDir)

@@ -196,6 +196,7 @@ function resetPanelConfig() {
         :action="uploadAction"
         :show-file-list="false"
         name="imgfile"
+        accept=".webp,.png,.jpg,.jpeg,.gif,.svg,.avif"
         :headers="{
           Authorization: `Bearer ${authStore.token}`,
           token: authStore.token as string,
