@@ -140,4 +140,4 @@ pnpm run build-only
 
 ## 当前下一步
 
-`EXT-08` 等具备桌面 Chrome 环境后再人工验收，不阻塞后续开发。`WIDGET-01` 至 `WIDGET-07` 已全部完成；`BRAND-01` 至 `BRAND-05` 已完成（标题、favicon、登录背景、全局 JS/CSS 在线编辑、AVIF 支持），当前推进 `BRAND-06`：导航页 Logo、时钟独立显示开关。
+`EXT-08` 等具备桌面 Chrome 环境后再人工验收，不阻塞后续开发。`WIDGET-01` 至 `WIDGET-07` 已全部完成；`BRAND-01` 至 `BRAND-06` 已全部完成（标题、favicon、登录背景、全局 JS/CSS 在线编辑、AVIF 支持、Logo/时钟独立开关），当前推进 `OPS-01`：配置与 Docker 挂载收敛到 `conf`，同时兼容 v1.3.0 旧路径并支持自定义 Web/custom 目录。

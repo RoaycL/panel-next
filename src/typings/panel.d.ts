@@ -46,8 +46,10 @@ declare namespace Panel {
         iconTextIconHideTitle?:boolean
         logoText?:string
         logoImageSrc?:string
+        logoShow?:boolean
         clockShowSecond?:boolean
         clockColor?:string
+        clockShow?:boolean
         searchBoxShow?:boolean
         searchBoxSearchIcon?:boolean
         marginTop?:number

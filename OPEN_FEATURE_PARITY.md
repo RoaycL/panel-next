@@ -57,7 +57,7 @@ Panel Next 必做安全增强（不计入 53 个官方能力包）：版本化 m
 - [x] `BRAND-03` 自定义登录页背景图。实现：`LOGIN_BACKGROUND` 同源路径 + `GET /api/siteInfo` 返回 + 登录页 `onMounted` 拉取并应用背景样式。管理员 SiteSetting 应用上传与设置。
 - [x] `BRAND-04` 在线编辑全局 `index.js` 与 `index.css`，保留文件方式配置。实现：`GLOBAL_INDEX_CSS`/`GLOBAL_INDEX_JS` 设置项，管理员可在线编辑并保存到 DB（上限 256KB）；首页 HTML 注入时 DB 有值则内联 `<style>`/`<script>` 替换 `/custom/index.*` 引用，DB 为空则保留文件方式。SiteSetting 应用提供 textarea 编辑器（等宽字体）。代码：`service/router/indexPage.go`、`src/components/apps/SiteSetting/index.vue`。测试：内联替换、空值保留文件引用。
 - [x] `BRAND-05` 壁纸上传支持 AVIF；HEIC 在运行环境可可靠解码时启用，否则明确报错。实现：UploadImg/UploadFiles 白名单增加 `.avif`；`.heic`/`.heif` 拒绝并返回 1301（不支持格式）；前端 Style/SiteSetting 上传 accept 属性加 `.avif`。AVIF 服务端存储原样、浏览器原生支持解码；HEIC 当前不引入解码库，明确拒绝。代码：`service/api/api_v1/system/file.go`、`src/components/apps/Style/index.vue`、`src/components/apps/SiteSetting/index.vue`。测试：AVIF 接受、HEIC 拒绝。
-- [ ] `BRAND-06` 导航页 Logo、时钟独立显示开关。
+- [x] `BRAND-06` 导航页 Logo、时钟独立显示开关。实现：`panelConfig` 新增 `logoShow`/`clockShow` 布尔字段（默认 true），首页 header 根据开关控制 Logo 文字与 ClockWidget 显隐；分隔符仅在两者均显示时渲染。Style 设置应用新增"显示 Logo"与"显示时钟"开关，时钟秒数开关改为依赖时钟显示。代码：`src/views/home/index.vue`、`src/components/apps/Style/index.vue`、`src/store/modules/panel/helper.ts`、`src/typings/panel.d.ts`。
 
 “登录页文字”暂未在正式版公开日志中找到可靠证据，先列为候选增强，不计入对齐统计；取得公开证据或用户确认后再排期。
 

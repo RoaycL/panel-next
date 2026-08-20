@@ -92,6 +92,10 @@ function resetPanelConfig() {
           <NInput v-model:value="panelState.panelConfig.logoText" type="text" show-count :maxlength="20" placeholder="请输入文字" />
         </div>
       </div>
+      <div class="flex items-center mt-[10px]">
+        <span class="mr-[10px]">{{ $t('apps.baseSettings.logoShow') }}</span>
+        <NSwitch v-model:value="panelState.panelConfig.logoShow" />
+      </div>
     </NCard>
 
     <NCard style="border-radius:10px" class="mt-[10px]" size="small">
@@ -99,6 +103,10 @@ function resetPanelConfig() {
         {{ $t('apps.baseSettings.clock') }}
       </div>
       <div class="flex items-center mt-[5px]">
+        <span class="mr-[10px]">{{ $t('apps.baseSettings.clockShow') }}</span>
+        <NSwitch v-model:value="panelState.panelConfig.clockShow" />
+      </div>
+      <div v-if="panelState.panelConfig.clockShow" class="flex items-center mt-[5px]">
         <span class="mr-[10px]">{{ $t('apps.baseSettings.clockSecondShow') }}</span>
         <NSwitch v-model:value="panelState.panelConfig.clockShowSecond" />
       </div>
