@@ -13,6 +13,7 @@ import { setTitle, updateLocalUserInfo } from '@/utils/cmn'
 import { useAuthStore, usePanelState, useUserStore } from '@/store'
 import { PanelPanelConfigStyleEnum, PanelStateNetworkModeEnum } from '@/enums'
 import { VisitMode } from '@/enums/auth'
+import { persistentStorage } from '@/utils/storage'
 import { router } from '@/router'
 import { t } from '@/locales'
 import { getRuntime } from '@/runtime'
@@ -263,11 +264,18 @@ function handWindowIframeIdLoad(_payload: Event) {
 }
 
 async function getList() {
+  // CARD-05: 先读取本地缓存快速渲染，后台刷新
+  const cached = persistentStorage.get<Panel.ItemIconGroup[]>('card-list-cache')
+  if (cached) {
+    items.value = normalizeDashboardGroups(cached)
+    refreshFilteredItems()
+  }
   // 获取组数据
   const { code, data } = await getGroupList<Common.ListResponse<Panel.ItemIconGroup[]>>()
   if (code !== 0 || !data?.list)
     return false
   items.value = normalizeDashboardGroups(data.list)
+  persistentStorage.set('card-list-cache', data.list)
   await Promise.all(items.value.map(async (element, index) => {
     if (element.id)
       await updateItemIconGroupByNet(index, element.id)
@@ -753,7 +761,7 @@ function handleAddItem(itemIconGroupId?: number) {
           <div
             v-for="(itemGroup, itemGroupIndex) in filterItems" :key="itemGroupIndex"
             class="item-list mt-[50px]"
-            :class="itemGroup.sortStatus ? 'shadow-2xl border shadow-[0_0_30px_10px_rgba(0,0,0,0.3)]  p-[10px] rounded-2xl' : ''"
+            :class="[itemGroup.sortStatus ? 'shadow-2xl border shadow-[0_0_30px_10px_rgba(0,0,0,0.3)]  p-[10px] rounded-2xl' : '', `group-${itemGroup.id}`]"
             @mouseenter="handleSetHoverStatus(itemGroup, true)"
             @mouseleave="handleSetHoverStatus(itemGroup, false)"
           >
