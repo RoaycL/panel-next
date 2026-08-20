@@ -119,7 +119,7 @@ Panel Next 必做安全增强（不计入 53 个官方能力包）：版本化 m
 
 ### I. 运行、配置、状态与诊断（6）
 
-- [ ] `OPS-01` 配置与 Docker 挂载收敛到 `conf`，同时兼容 v1.3.0 旧路径并支持自定义 Web/custom 目录。
+- [x] `OPS-01` 配置与 Docker 挂载收敛到 `conf`，同时兼容 v1.3.0 旧路径并支持自定义 Web/custom 目录。实现：`conf/conf.ini` 新增 `base.web_path` 配置项（默认 `./web`），路由从配置读取 Web 静态根目录；`source_path`、`sqlite.file_path` 已可配置，建议 Docker 部署时挂载整个 `conf/` 目录并在其中放置 `files/`、`database.db`、`conf.ini`；旧路径 `./web`、`./uploads`、`./database.db` 仍为默认值保持兼容。`conf.example.ini` 增加 Docker 挂载建议注释。代码：`service/router/A_ENTER.go`、`service/initialize/config/config.go`、`service/conf/conf.example.ini`。
 - [ ] `OPS-02` 登录令牌有效期可配置，默认 168 小时并延续滑动续期。
 - [ ] `OPS-03` 原生 HTTPS：可配置监听端口、证书和私钥路径，未配置证书时不启用。
 - [ ] `OPS-04` Web 根目录可托管 `robots.txt` 等额外静态文件，并确保路径安全。

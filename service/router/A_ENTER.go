@@ -32,7 +32,10 @@ func InitRouters(addr string) error {
 
 	// WEB文件服务
 	{
-		webPath := "./web"
+		webPath := global.Config.GetValueStringOrDefault("base", "web_path")
+		if webPath == "" {
+			webPath = "./web"
+		}
 		if err := registerIndexPage(router, webPath); err != nil {
 			return err
 		}
