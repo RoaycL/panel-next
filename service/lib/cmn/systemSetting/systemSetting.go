@@ -17,7 +17,9 @@ const (
 	PANEL_PUBLIC_USER_ID  = "panel_public_user_id"  // 公开访问模式用户id *uint|null
 	SITE_TITLE            = "site_title"            // 全局站点标题 储存类型：字符串
 	SITE_FAVICON          = "site_favicon"          // 全局站点图标 储存类型：字符串（同源路径）
-	LOGIN_BACKGROUND      = "login_background"      // 登录页背景图 储存类型：字符串（同源路径）
+	LOGIN_BACKGROUND      = "login_background"     // 登录页背景图 储存类型：字符串（同源路径）
+	GLOBAL_INDEX_CSS      = "global_index_css"      // 全局自定义 CSS 储存类型：字符串
+	GLOBAL_INDEX_JS       = "global_index_js"       // 全局自定义 JS 储存类型：字符串
 )
 
 type SystemSettingCache struct {

@@ -17,6 +17,8 @@ const siteSetting = ref<SiteBranding>({
   siteTitle: '',
   siteFavicon: '',
   loginBackground: '',
+  globalIndexCss: '',
+  globalIndexJs: '',
 })
 
 const uploadAction = getRuntime().resolveUrl('/api/file/uploadImg')
@@ -141,6 +143,32 @@ onMounted(fetchSiteSetting)
         <span class="mr-[10px]">{{ t('apps.siteSettings.customImageAddress') }}</span>
         <NInput v-model:value="siteSetting.loginBackground" type="text" :placeholder="t('apps.siteSettings.customImagePlaceholder')" />
       </div>
+    </NCard>
+
+    <NCard style="border-radius:10px" class="mt-[10px]" size="small">
+      <div class="text-slate-500 mb-[5px] font-bold">
+        {{ t('apps.siteSettings.globalCss') }}
+      </div>
+      <NInput
+        v-model:value="siteSetting.globalIndexCss"
+        type="textarea"
+        :rows="8"
+        :placeholder="t('apps.siteSettings.globalCssPlaceholder')"
+        style="font-family: monospace;"
+      />
+    </NCard>
+
+    <NCard style="border-radius:10px" class="mt-[10px]" size="small">
+      <div class="text-slate-500 mb-[5px] font-bold">
+        {{ t('apps.siteSettings.globalJs') }}
+      </div>
+      <NInput
+        v-model:value="siteSetting.globalIndexJs"
+        type="textarea"
+        :rows="8"
+        :placeholder="t('apps.siteSettings.globalJsPlaceholder')"
+        style="font-family: monospace;"
+      />
     </NCard>
 
     <div class="mt-[10px] flex gap-[10px]">

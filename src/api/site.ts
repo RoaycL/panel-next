@@ -4,6 +4,8 @@ export interface SiteBranding {
   siteTitle: string
   siteFavicon: string
   loginBackground: string
+  globalIndexCss: string
+  globalIndexJs: string
 }
 
 export function getSiteInfo() {

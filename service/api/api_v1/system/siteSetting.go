@@ -15,6 +15,7 @@ import (
 const (
 	maxSiteTitleLength    = 80
 	maxBrandingPathLength = 500
+	maxGlobalScriptLength = 256 << 10 // 256KB
 )
 
 type SiteSettingApi struct{}
@@ -23,6 +24,8 @@ type siteBranding struct {
 	SiteTitle       string `json:"siteTitle"`
 	SiteFavicon     string `json:"siteFavicon"`
 	LoginBackground string `json:"loginBackground"`
+	GlobalIndexCSS  string `json:"globalIndexCss"`
+	GlobalIndexJS   string `json:"globalIndexJs"`
 }
 
 func readSiteBranding() siteBranding {
@@ -35,6 +38,12 @@ func readSiteBranding() siteBranding {
 	}
 	if value, err := global.SystemSetting.GetValueString(systemSetting.LOGIN_BACKGROUND); err == nil {
 		branding.LoginBackground = value
+	}
+	if value, err := global.SystemSetting.GetValueString(systemSetting.GLOBAL_INDEX_CSS); err == nil {
+		branding.GlobalIndexCSS = value
+	}
+	if value, err := global.SystemSetting.GetValueString(systemSetting.GLOBAL_INDEX_JS); err == nil {
+		branding.GlobalIndexJS = value
 	}
 	return branding
 }
@@ -51,6 +60,11 @@ func validateBrandingPath(value string) bool {
 		return false
 	}
 	return true
+}
+
+// validateGlobalScript 限制全局自定义脚本大小，空值视为合法。
+func validateGlobalScript(value string) bool {
+	return value == "" || len(value) <= maxGlobalScriptLength
 }
 
 func (a *SiteSettingApi) Get(c *gin.Context) {
@@ -72,18 +86,25 @@ func (a *SiteSettingApi) Set(c *gin.Context) {
 		apiReturn.ErrorParamFomat(c, "siteFavicon or loginBackground")
 		return
 	}
+	if !validateGlobalScript(req.GlobalIndexCSS) || !validateGlobalScript(req.GlobalIndexJS) {
+		apiReturn.ErrorParamFomat(c, "globalIndexCss or globalIndexJs")
+		return
+	}
 
-	if err := global.SystemSetting.Set(systemSetting.SITE_TITLE, req.SiteTitle); err != nil {
-		apiReturn.ErrorDatabase(c, err.Error())
-		return
-	}
-	if err := global.SystemSetting.Set(systemSetting.SITE_FAVICON, req.SiteFavicon); err != nil {
-		apiReturn.ErrorDatabase(c, err.Error())
-		return
-	}
-	if err := global.SystemSetting.Set(systemSetting.LOGIN_BACKGROUND, req.LoginBackground); err != nil {
-		apiReturn.ErrorDatabase(c, err.Error())
-		return
+	for _, pair := range []struct {
+		name  string
+		value string
+	}{
+		{systemSetting.SITE_TITLE, req.SiteTitle},
+		{systemSetting.SITE_FAVICON, req.SiteFavicon},
+		{systemSetting.LOGIN_BACKGROUND, req.LoginBackground},
+		{systemSetting.GLOBAL_INDEX_CSS, req.GlobalIndexCSS},
+		{systemSetting.GLOBAL_INDEX_JS, req.GlobalIndexJS},
+	} {
+		if err := global.SystemSetting.Set(pair.name, pair.value); err != nil {
+			apiReturn.ErrorDatabase(c, err.Error())
+			return
+		}
 	}
 	apiReturn.SuccessData(c, readSiteBranding())
 }

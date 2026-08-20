@@ -111,7 +111,11 @@
 		"editBackground": "Edit background",
 		"save": "Save",
 		"saveSuccess": "Site settings saved",
-		"saveFail": "Failed to save"
+		"saveFail": "Failed to save",
+		"globalCss": "Global custom CSS",
+		"globalCssPlaceholder": "/* Enter global CSS here; leave empty to use /custom/index.css file */",
+		"globalJs": "Global custom JS",
+		"globalJsPlaceholder": "// Enter global JS here; leave empty to use /custom/index.js file"
 	},
     "exportImport": {
       "appName": "Export/Import",

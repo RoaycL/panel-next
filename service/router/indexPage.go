@@ -19,19 +19,25 @@ var (
 )
 
 // readSiteBrandingForPage 读取注入首页所需的品牌设置，缺失时回退空值。
-func readSiteBrandingForPage() (siteTitle, siteFavicon string) {
+func readSiteBrandingForPage() (siteTitle, siteFavicon, globalCSS, globalJS string) {
 	if value, err := global.SystemSetting.GetValueString(systemSetting.SITE_TITLE); err == nil {
 		siteTitle = strings.TrimSpace(value)
 	}
 	if value, err := global.SystemSetting.GetValueString(systemSetting.SITE_FAVICON); err == nil {
 		siteFavicon = strings.TrimSpace(value)
 	}
-	return siteTitle, siteFavicon
+	if value, err := global.SystemSetting.GetValueString(systemSetting.GLOBAL_INDEX_CSS); err == nil {
+		globalCSS = value
+	}
+	if value, err := global.SystemSetting.GetValueString(systemSetting.GLOBAL_INDEX_JS); err == nil {
+		globalJS = value
+	}
+	return siteTitle, siteFavicon, globalCSS, globalJS
 }
 
-// injectSiteBranding 将站点标题与图标注入构建产物 index.html。
-// 所有值都经过 HTML 转义；favicon 还必须是已通过接口校验的同源路径。
-func injectSiteBranding(pageHTML, siteTitle, siteFavicon string) string {
+// injectSiteBranding 将站点标题、图标与全局自定义 CSS/JS 注入构建产物 index.html。
+// 全局脚本仅当 DB 有值时内联；为空时保留 index.html 中 /custom/index.* 的文件引用。
+func injectSiteBranding(pageHTML, siteTitle, siteFavicon, globalCSS, globalJS string) string {
 	if siteTitle != "" {
 		pageHTML = titlePattern.ReplaceAllString(pageHTML, "<title>"+html.EscapeString(siteTitle)+"</title>")
 	}
@@ -42,6 +48,12 @@ func injectSiteBranding(pageHTML, siteTitle, siteFavicon string) string {
 		} else {
 			pageHTML = strings.Replace(pageHTML, "<title>", replacement+"<title>", 1)
 		}
+	}
+	if globalCSS != "" {
+		pageHTML = strings.Replace(pageHTML, `<link rel="stylesheet"  href="/custom/index.css">`, "<style>\n"+globalCSS+"\n</style>", 1)
+	}
+	if globalJS != "" {
+		pageHTML = strings.Replace(pageHTML, `<script src="/custom/index.js"></script>`, "<script>\n"+globalJS+"\n</script>", 1)
 	}
 	return pageHTML
 }
@@ -54,9 +66,9 @@ func registerIndexPage(router *gin.Engine, webPath string) error {
 	}
 	pageHTML := string(raw)
 	router.GET("/", func(c *gin.Context) {
-		siteTitle, siteFavicon := readSiteBrandingForPage()
+		siteTitle, siteFavicon, globalCSS, globalJS := readSiteBrandingForPage()
 		c.Header("Cache-Control", "no-cache")
-		c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(injectSiteBranding(pageHTML, siteTitle, siteFavicon)))
+		c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(injectSiteBranding(pageHTML, siteTitle, siteFavicon, globalCSS, globalJS)))
 	})
 	return nil
 }

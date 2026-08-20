@@ -140,4 +140,4 @@ pnpm run build-only
 
 ## 当前下一步
 
-`EXT-08` 等具备桌面 Chrome 环境后再人工验收，不阻塞后续开发。`WIDGET-01` 至 `WIDGET-07` 已全部完成；`BRAND-01` 至 `BRAND-03` 已完成（全局标题、favicon、登录背景），当前推进 `BRAND-04`：在线编辑全局 `index.js` 与 `index.css`，保留文件方式配置。
+`EXT-08` 等具备桌面 Chrome 环境后再人工验收，不阻塞后续开发。`WIDGET-01` 至 `WIDGET-07` 已全部完成；`BRAND-01` 至 `BRAND-04` 已完成（标题、favicon、登录背景、全局 JS/CSS 在线编辑），当前推进 `BRAND-05`：壁纸上传支持 AVIF；HEIC 在运行环境可可靠解码时启用，否则明确报错。

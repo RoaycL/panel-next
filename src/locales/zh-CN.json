@@ -112,7 +112,11 @@
 		"editBackground": "编辑背景",
 		"save": "保存",
 		"saveSuccess": "站点设置已保存",
-		"saveFail": "保存失败"
+		"saveFail": "保存失败",
+		"globalCss": "全局自定义 CSS",
+		"globalCssPlaceholder": "/* 在此输入全局 CSS，留空则使用 /custom/index.css 文件 */",
+		"globalJs": "全局自定义 JS",
+		"globalJsPlaceholder": "// 在此输入全局 JS，留空则使用 /custom/index.js 文件"
 	},
     "exportImport": {
       "appName": "导出导入",
