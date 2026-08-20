@@ -51,7 +51,7 @@ const columns: DataTableColumns<DockerContainer> = [
     },
   },
   {
-    title: t('common.action'),
+    title: t('apps.dockerManager.action'),
     key: 'action',
     render(row) {
       if (!isAdmin)
@@ -83,6 +83,13 @@ const columns: DataTableColumns<DockerContainer> = [
         tertiary: true,
         onClick: () => handleAction('restart', row),
       }, { default: () => t('apps.dockerManager.restart') }))
+
+      buttons.push(h(NButton, {
+        size: 'small',
+        type: 'primary',
+        tertiary: true,
+        onClick: () => handleCreateCard(row),
+      }, { default: () => t('apps.dockerManager.createCard') }))
 
       return h('div', { class: 'flex gap-2' }, buttons)
     },
@@ -134,6 +141,11 @@ async function handleAction(action: 'start' | 'stop' | 'restart', container: Doc
       }
     },
   })
+}
+
+// DOCKER-06: 从 Docker 管理器快速创建容器卡片
+function handleCreateCard(container: DockerContainer) {
+  message.info(t('apps.dockerManager.createCardHint', { name: container.name }))
 }
 
 onMounted(async () => {

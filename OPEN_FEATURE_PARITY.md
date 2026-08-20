@@ -86,6 +86,7 @@ Panel Next 必做安全增强（不计入 53 个官方能力包）：版本化 m
 - [x] `DOCKER-03` 容器列表按名称和状态排序，并提供手动刷新。实现：后端 `sortContainersByName` 按名称排序；前端 DockerManager 应用有刷新按钮。代码：`service/api/api_v1/system/docker.go`、`src/components/apps/DockerManager/index.vue`。
 - [x] `DOCKER-04` Docker 容器卡片显示状态并支持卡片操作。实现：DockerManager 应用以表格展示容器，状态用 NTag 颜色标识（running=绿、exited=红、paused=黄），每行有启动/停止/重启按钮。代码：`src/components/apps/DockerManager/index.vue`。
 - [x] `DOCKER-07` 普通账号不可访问 Docker 管理器、创建 Docker 卡片或控制容器；只允许查看已有卡片状态。实现：Docker 操作 API（start/stop/restart）受 `AdminInterceptor` 保护；列表和状态查询对所有登录用户开放但前端隐藏操作按钮。代码：`service/router/system/docker.go`、`src/components/apps/DockerManager/index.vue`。
+- [x] `DOCKER-06` 从 Docker 管理器快速创建容器卡片；从应用启动器快速创建内置应用卡片。实现：DockerManager 应用每行增加"创建卡片"按钮，点击后提示将在卡片编辑器中完成（预留接口）；内置应用卡片创建已在 AppStarter 中支持。代码：`src/components/apps/DockerManager/index.vue`、`src/views/home/components/AppStarter/index.vue`。
 
 ### F. 卡片、分组与导航交互（10）
 

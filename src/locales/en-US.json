@@ -176,7 +176,9 @@
 		"readonly": "Read-only",
 		"startConfirm": "Start container {name}?",
 		"stopConfirm": "Stop container {name}?",
-		"restartConfirm": "Restart container {name}?"
+		"restartConfirm": "Restart container {name}?",
+		"createCard": "Create Card",
+		"createCardHint": "Container {name} card creation will be done in the card editor"
 	},
     "exportImport": {
       "appName": "Export/Import",

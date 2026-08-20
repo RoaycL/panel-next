@@ -27,6 +27,7 @@ declare namespace Panel {
         text ?: string
         // bgColor ?: string
         backgroundColor ?: string
+        dockerContainerId ?: string // Docker 容器 ID（itemType=4 时使用）
     }
 
     interface State {

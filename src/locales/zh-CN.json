@@ -177,7 +177,9 @@
 		"readonly": "只读",
 		"startConfirm": "确定启动容器 {name} 吗？",
 		"stopConfirm": "确定停止容器 {name} 吗？",
-		"restartConfirm": "确定重启容器 {name} 吗？"
+		"restartConfirm": "确定重启容器 {name} 吗？",
+		"createCard": "创建卡片",
+		"createCardHint": "容器 {name} 的卡片创建功能将在卡片编辑器中完成"
 	},
     "exportImport": {
       "appName": "导出导入",
