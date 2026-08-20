@@ -118,7 +118,21 @@
 		"globalCss": "全局自定义 CSS",
 		"globalCssPlaceholder": "/* 在此输入全局 CSS，留空则使用 /custom/index.css 文件 */",
 		"globalJs": "全局自定义 JS",
-		"globalJsPlaceholder": "// 在此输入全局 JS，留空则使用 /custom/index.js 文件"
+		"globalJsPlaceholder": "// 在此输入全局 JS，留空则使用 /custom/index.js 文件",
+		"imgbedTitle": "外部图床",
+		"imgbedDescription": "配置外部图床服务（兼容 CloudFlare-ImgBed API），上传的图片将存储到图床而非本地服务器。",
+		"imgbedConfigured": "已配置",
+		"imgbedNotConfigured": "未配置",
+		"imgbedBaseUrl": "图床地址",
+		"imgbedBaseUrlPlaceholder": "https://img.example.com",
+		"imgbedToken": "API Token",
+		"imgbedTokenPlaceholder": "在图床管理面板创建的 API Token（需 upload 权限）",
+		"imgbedSave": "保存图床配置",
+		"imgbedSaveSuccess": "图床配置已保存",
+		"imgbedSaveFail": "图床配置保存失败",
+		"imgbedTest": "测试连接",
+		"imgbedTestSuccess": "图床连接正常",
+		"imgbedTestFail": "图床连接测试失败"
 	},
     "exportImport": {
       "appName": "导出导入",

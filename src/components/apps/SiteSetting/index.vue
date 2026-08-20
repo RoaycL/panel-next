@@ -5,6 +5,7 @@ import { getRuntime } from '@/runtime'
 import { useAuthStore } from '@/store'
 import { getSiteSetting, setSiteSetting  } from '@/api/site'
 import type {SiteBranding} from '@/api/site';
+import { getImgbedConfig, setImgbedConfig, testImgbedConfig } from '@/api/imgbed'
 import { t } from '@/locales'
 
 const authStore = useAuthStore()
@@ -12,6 +13,50 @@ const ms = useMessage()
 const loading = ref(false)
 const showFaviconInput = ref(false)
 const showBackgroundInput = ref(false)
+
+// 图床配置
+const imgbedConfig = ref<{ baseUrl: string; token: string }>({ baseUrl: '', token: '' })
+const imgbedConfigured = ref(false)
+const imgbedSaving = ref(false)
+const imgbedTesting = ref(false)
+
+async function fetchImgbedConfig() {
+  const res = await getImgbedConfig()
+  if (res.code === 0 && res.data) {
+    imgbedConfig.value = { baseUrl: res.data.baseUrl, token: res.data.token }
+    imgbedConfigured.value = res.data.configured
+  }
+}
+
+async function saveImgbedConfig() {
+  imgbedSaving.value = true
+  try {
+    const res = await setImgbedConfig(imgbedConfig.value)
+    if (res.code === 0) {
+      ms.success(t('apps.siteSettings.imgbedSaveSuccess'))
+      imgbedConfig.value = { baseUrl: res.data.baseUrl, token: res.data.token }
+      imgbedConfigured.value = res.data.configured
+    } else {
+      ms.error(`${t('apps.siteSettings.imgbedSaveFail')}:${res.msg}`)
+    }
+  } finally {
+    imgbedSaving.value = false
+  }
+}
+
+async function testImgbedConnection() {
+  imgbedTesting.value = true
+  try {
+    const res = await testImgbedConfig()
+    if (res.code === 0) {
+      ms.success(t('apps.siteSettings.imgbedTestSuccess'))
+    } else {
+      ms.error(`${t('apps.siteSettings.imgbedTestFail')}:${res.msg}`)
+    }
+  } finally {
+    imgbedTesting.value = false
+  }
+}
 
 const siteSetting = ref<SiteBranding>({
   siteTitle: '',
@@ -65,7 +110,10 @@ function handleSave() {
   })
 }
 
-onMounted(fetchSiteSetting)
+onMounted(() => {
+  fetchSiteSetting()
+  fetchImgbedConfig()
+})
 </script>
 
 <template>
@@ -182,5 +230,45 @@ onMounted(fetchSiteSetting)
         {{ t('apps.siteSettings.editBackground') }}
       </NButton>
     </div>
+
+    <NCard style="border-radius:10px" class="mt-[20px]" size="small">
+      <div class="text-slate-500 mb-[5px] font-bold">
+        {{ t('apps.siteSettings.imgbedTitle') }}
+        <span v-if="imgbedConfigured" class="ml-2 text-green-500 text-sm">● {{ t('apps.siteSettings.imgbedConfigured') }}</span>
+        <span v-else class="ml-2 text-gray-400 text-sm">○ {{ t('apps.siteSettings.imgbedNotConfigured') }}</span>
+      </div>
+      <div class="text-slate-400 text-xs mb-[10px]">
+        {{ t('apps.siteSettings.imgbedDescription') }}
+      </div>
+      <div class="mb-[10px]">
+        <div class="text-slate-500 mb-[2px]">
+          {{ t('apps.siteSettings.imgbedBaseUrl') }}
+        </div>
+        <NInput
+          v-model:value="imgbedConfig.baseUrl"
+          type="text"
+          :placeholder="t('apps.siteSettings.imgbedBaseUrlPlaceholder')"
+        />
+      </div>
+      <div class="mb-[10px]">
+        <div class="text-slate-500 mb-[2px]">
+          {{ t('apps.siteSettings.imgbedToken') }}
+        </div>
+        <NInput
+          v-model:value="imgbedConfig.token"
+          type="password"
+          show-password-on="click"
+          :placeholder="t('apps.siteSettings.imgbedTokenPlaceholder')"
+        />
+      </div>
+      <div class="flex gap-[10px]">
+        <NButton type="primary" :loading="imgbedSaving" @click="saveImgbedConfig">
+          {{ t('apps.siteSettings.imgbedSave') }}
+        </NButton>
+        <NButton :loading="imgbedTesting" :disabled="!imgbedConfigured" @click="testImgbedConnection">
+          {{ t('apps.siteSettings.imgbedTest') }}
+        </NButton>
+      </div>
+    </NCard>
   </div>
 </template>

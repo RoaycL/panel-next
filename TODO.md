@@ -140,4 +140,4 @@ pnpm run build-only
 
 ## 当前下一步
 
-`EXT-08` 等具备桌面 Chrome 环境后再人工验收，不阻塞后续开发。`WIDGET-01` 至 `WIDGET-07` 已全部完成；`BRAND-01` 至 `BRAND-06` 与 `OPS-01` 已全部完成，当前转向 `IMAGE-*`：将上传文件管理升级为图库，并按图标/壁纸分类查询（详见 `OPEN_FEATURE_PARITY.md`）。
+`EXT-08` 等具备桌面 Chrome 环境后再人工验收，不阻塞后续开发。`WIDGET-01` 至 `WIDGET-07` 已全部完成；`BRAND-01` 至 `BRAND-06` 与 `OPS-01` 已全部完成；已实现外部图床集成（兼容 CloudFlare-ImgBed API，管理员可配置图床地址与 API Token，登录用户通过后端代理上传），当前继续推进 `IMAGE-*`。

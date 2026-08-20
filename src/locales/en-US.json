@@ -117,7 +117,21 @@
 		"globalCss": "Global custom CSS",
 		"globalCssPlaceholder": "/* Enter global CSS here; leave empty to use /custom/index.css file */",
 		"globalJs": "Global custom JS",
-		"globalJsPlaceholder": "// Enter global JS here; leave empty to use /custom/index.js file"
+		"globalJsPlaceholder": "// Enter global JS here; leave empty to use /custom/index.js file",
+		"imgbedTitle": "External image hosting",
+		"imgbedDescription": "Configure an external image hosting service (compatible with CloudFlare-ImgBed API). Uploaded images are stored on the image host instead of the local server.",
+		"imgbedConfigured": "Configured",
+		"imgbedNotConfigured": "Not configured",
+		"imgbedBaseUrl": "Image host URL",
+		"imgbedBaseUrlPlaceholder": "https://img.example.com",
+		"imgbedToken": "API Token",
+		"imgbedTokenPlaceholder": "API Token created in the image host admin panel (requires upload permission)",
+		"imgbedSave": "Save image host config",
+		"imgbedSaveSuccess": "Image host config saved",
+		"imgbedSaveFail": "Failed to save image host config",
+		"imgbedTest": "Test connection",
+		"imgbedTestSuccess": "Image host connection OK",
+		"imgbedTestFail": "Image host connection test failed"
 	},
     "exportImport": {
       "appName": "Export/Import",
