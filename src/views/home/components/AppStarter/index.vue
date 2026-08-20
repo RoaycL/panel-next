@@ -123,6 +123,12 @@ onMounted(() => {
     icon: 'mdi:devices',
     auth: 1,
   }
+  const dockerManagerApp: App = {
+    name: t('apps.dockerManager.appName'),
+    componentName: 'DockerManager',
+    icon: 'mdi:docker',
+    auth: 1,
+  }
   // 初始化
   if (authStore.userInfo?.role === 1) {
     apps.value.push(backupApp)
@@ -130,6 +136,7 @@ onMounted(() => {
     apps.value.push(siteSettingApp)
     apps.value.push(publicGalleryApp)
     apps.value.push(userSessionsApp)
+    apps.value.push(dockerManagerApp)
   }
 
   window.addEventListener('resize', handleResize)

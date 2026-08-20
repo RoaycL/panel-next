@@ -16,4 +16,5 @@ func Init(routerGroup *gin.RouterGroup) {
 	InitSiteSettingRouter(routerGroup)
 	InitImgbedRouter(routerGroup)
 	InitPublicFileRouter(routerGroup)
+	InitDockerRouter(routerGroup)
 }

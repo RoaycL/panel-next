@@ -140,4 +140,4 @@ pnpm run build-only
 
 ## 当前下一步
 
-`EXT-08` 等具备桌面 Chrome 环境后再人工验收，不阻塞后续开发。`WIDGET-01` 至 `WIDGET-07` 已全部完成；`BRAND-01` 至 `BRAND-06`、`OPS-01`、`IMAGE-01` 至 `IMAGE-06`、`AUTH-03` 至 `AUTH-06` 与 `AUTH-01`/`AUTH-02` 已完成；当前转向「官方公开功能对齐」主线：按既定顺序推进 `BRAND-*` 后续项（如 `BRAND-04` 全局 JS/CSS 在线编辑）与其余 `CARD-*`、`SEARCH-*` 等能力包。
+`EXT-08` 等具备桌面 Chrome 环境后再人工验收，不阻塞后续开发。`WIDGET-01` 至 `WIDGET-07` 已全部完成；`BRAND-01` 至 `BRAND-06`、`OPS-01`、`IMAGE-01` 至 `IMAGE-06`、`AUTH-01` 至 `AUTH-06` 与 `DOCKER-01` 至 `DOCKER-04`/`DOCKER-07` 已完成；当前推进 `DOCKER-05`/`DOCKER-06` 及其余 `CARD-*`、`SEARCH-*` 能力包。

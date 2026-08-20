@@ -15,4 +15,5 @@ type ApiSystem struct {
 	BackupApi             BackupApi
 	SiteSettingApi        SiteSettingApi
 	PublicFileApi         PublicFileApi
+	DockerApi             DockerApi
 }

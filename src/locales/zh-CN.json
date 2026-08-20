@@ -163,6 +163,22 @@
 		"appName": "公共图库",
 		"alertText": "管理员维护的公共图库，所有账号可只读选择使用。"
 	},
+	"dockerManager": {
+		"appName": "Docker 管理",
+		"alertText": "管理 Docker 容器：启动、停止和重启。",
+		"unavailable": "Docker 不可用：未检测到 Docker Engine 或 Socket 未挂载。",
+		"name": "容器名称",
+		"image": "镜像",
+		"status": "状态",
+		"ports": "端口",
+		"start": "启动",
+		"stop": "停止",
+		"restart": "重启",
+		"readonly": "只读",
+		"startConfirm": "确定启动容器 {name} 吗？",
+		"stopConfirm": "确定停止容器 {name} 吗？",
+		"restartConfirm": "确定重启容器 {name} 吗？"
+	},
     "exportImport": {
       "appName": "导出导入",
       "errorConfigFileFormat": "配置文件格式不正确，无法导入",

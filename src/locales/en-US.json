@@ -162,6 +162,22 @@
 		"appName": "Public Gallery",
 		"alertText": "Administrator-maintained public gallery, all accounts can read-only select and use."
 	},
+	"dockerManager": {
+		"appName": "Docker Manager",
+		"alertText": "Manage Docker containers: start, stop and restart.",
+		"unavailable": "Docker unavailable: Docker Engine not detected or Socket not mounted.",
+		"name": "Container Name",
+		"image": "Image",
+		"status": "Status",
+		"ports": "Ports",
+		"start": "Start",
+		"stop": "Stop",
+		"restart": "Restart",
+		"readonly": "Read-only",
+		"startConfirm": "Start container {name}?",
+		"stopConfirm": "Stop container {name}?",
+		"restartConfirm": "Restart container {name}?"
+	},
     "exportImport": {
       "appName": "Export/Import",
       "errorConfigFileFormat": "The configuration file format is incorrect and cannot be imported",

@@ -12,6 +12,7 @@ import ItemCard from './ItemCard/index.vue'
 import GallerySelector from './GallerySelector/index.vue'
 import PublicGallery from '../apps/PublicGallery/index.vue'
 import UserSessions from '../apps/UserSessions/index.vue'
+import DockerManager from '../apps/DockerManager/index.vue'
 
 export {
   Verification,
@@ -28,4 +29,5 @@ export {
   GallerySelector,
   PublicGallery,
   UserSessions,
+  DockerManager,
 }
