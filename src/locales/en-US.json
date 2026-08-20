@@ -11,6 +11,7 @@
       "usernameRequired": "Enter username with at least 5 characters"
     },
     "passwordPlaceholder": "Enter password",
+    "captchaPlaceholder": "Enter captcha code",
     "pblicText": "Public",
     "role": "Role",
     "setOrUnsetPublicMode": "Set/Unset public access",

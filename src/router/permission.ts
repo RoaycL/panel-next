@@ -7,6 +7,13 @@ export function setupPageGuard(router: Router) {
   router.beforeEach(async (to, from, next) => {
     const authStore = useAuthStore()
     const userStore = useUserStore()
+    
+    // AUTH-04: 已登录用户访问登录页直接跳转首页
+    if (to.name === 'login' && authStore.token) {
+      next({ name: 'Home' })
+      return
+    }
+    
     if (getRuntime().kind === 'extension' && !authStore.token && to.name !== 'login') {
       next({ name: 'login' })
       return

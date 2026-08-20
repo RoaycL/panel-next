@@ -4,19 +4,21 @@ import { computed, onMounted, ref } from 'vue'
 import { login } from '@/api'
 import { getSiteInfo } from '@/api/site'
 import { useAppStore, useAuthStore } from '@/store'
-import { SvgIcon } from '@/components/common'
+import { SvgIcon, Captcha } from '@/components/common'
 import { router } from '@/router'
 import { t } from '@/locales'
 import { languageOptions } from '@/utils/defaultData'
 import type { Language } from '@/store/modules/app/helper'
 
-// const userStore = useUserStore()
 const authStore = useAuthStore()
 const appStore = useAppStore()
 const ms = useMessage()
 const loading = ref(false)
 const languageValue = ref<Language>(appStore.language)
 const siteTitle = ref('')
+const showCaptcha = ref(false)
+const captchaRef = ref<InstanceType<typeof Captcha> | null>(null)
+const captchaId = ref('')
 const siteBranding = ref<{ loginBackground?: string } | null>(null)
 
 const loginTitle = computed(() => siteTitle.value || t('common.appName'))
@@ -43,26 +45,27 @@ function applyFavicon(favicon: string) {
   link.href = favicon
 }
 
-onMounted(async () => {
-  const res = await getSiteInfo()
-  if (res.code === 0 && res.data) {
-    siteTitle.value = res.data.siteTitle
-    siteBranding.value = { loginBackground: res.data.loginBackground }
-    if (res.data.siteTitle)
-      document.title = res.data.siteTitle
-    applyFavicon(res.data.siteFavicon)
-  }
-})
-
-// const isShowCaptcha = ref<boolean>(false)
-// const isShowRegister = ref<boolean>(false)
-
 const form = ref<Login.LoginReqest>({
   username: '',
   password: '',
 })
 
-const loginPost = async () => {
+async function checkLoginConfig() {
+  try {
+    const { getLoginConfig } = await import('@/api')
+    const res = await getLoginConfig<{ loginCaptcha: boolean }>()
+    if (res.code === 0 && res.data?.loginCaptcha) {
+      showCaptcha.value = true
+      captchaId.value = `${Date.now()}`
+      await captchaRef.value?.refresh()
+    }
+  }
+  catch {
+    // 静默失败
+  }
+}
+
+async function loginPost() {
   loading.value = true
   try {
     const res = await login<Login.DeviceSessionLoginResponse>(form.value)
@@ -79,20 +82,37 @@ const loginPost = async () => {
     }
     else {
       loading.value = false
-      // captchaRef.value.refresh()
+      if (showCaptcha.value) {
+        captchaId.value = `${Date.now()}`
+        captchaRef.value?.refresh()
+      }
     }
   }
   catch (error) {
     loading.value = false
-    // 请检查网络或者服务器错误
     console.log(error)
   }
 }
+
+// const isShowCaptcha = ref<boolean>(false)
+// const isShowRegister = ref<boolean>(false)
 
 function handleSubmit() {
   // 点击登录按钮触发
   loginPost()
 }
+
+onMounted(async () => {
+  const res = await getSiteInfo()
+  if (res.code === 0 && res.data) {
+    siteTitle.value = res.data.siteTitle
+    siteBranding.value = { loginBackground: res.data.loginBackground }
+    if (res.data.siteTitle)
+      document.title = res.data.siteTitle
+    applyFavicon(res.data.siteFavicon)
+  }
+  await checkLoginConfig()
+})
 
 function handleChangeLanuage(value: Language) {
   languageValue.value = value
@@ -134,12 +154,12 @@ function handleChangeLanuage(value: Language) {
           </NInput>
         </NFormItem>
 
-        <!-- <NFormItem v-if="isShowCaptcha">
+        <NFormItem v-if="showCaptcha">
           <div class="w-[120px] h-[34px] mr-[20px] rounded border flex cursor-pointer">
-            <Captcha ref="captchaRef" src="/api/captcha/getImage" />
+            <Captcha ref="captchaRef" :src="`/api/captcha/getImage?captchaId=${captchaId}`" />
           </div>
-          <NInput v-model:value="form.vcode" type="text" placeholder="请输入图像验证码" />
-        </NFormItem> -->
+          <NInput v-model:value="form.vcode" type="text" :placeholder="$t('login.captchaPlaceholder')" />
+        </NFormItem>
         <NFormItem style="margin-top: 10px">
           <NButton type="primary" block :loading="loading" @click="handleSubmit">
             {{ $t('login.loginButton') }}

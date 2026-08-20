@@ -14,7 +14,9 @@ import (
 	"sun-panel/initialize/runlog"
 	"sun-panel/initialize/systemSettingCache"
 	"sun-panel/initialize/userToken"
+	"sun-panel/lib/captcha"
 	"sun-panel/lib/cmn"
+	"sun-panel/lib/cmn/systemSetting"
 	"sun-panel/models"
 	"sun-panel/structs"
 	"time"
@@ -107,7 +109,29 @@ func InitApp() error {
 	global.SystemSetting = systemSettingCache.InItSystemSettingCache()
 	global.SystemMonitor = global.NewCache[interface{}](5*time.Hour, -1, "systemMonitorCache")
 
+	// 初始化验证码配置
+	initCaptchaConfig()
+
 	return nil
+}
+
+func initCaptchaConfig() {
+	cfg := systemSetting.Login{}
+	if err := global.SystemSetting.GetValueByInterface(systemSetting.SYSTEM_APPLICATION, &cfg); err != nil {
+		return
+	}
+	if cfg.LoginCaptcha {
+		lockDuration, _ := time.ParseDuration(cfg.CaptchaLockDuration)
+		expireDuration, _ := time.ParseDuration(cfg.CaptchaExpireDuration)
+		captcha.SetConfig(captcha.CaptchaConfig{
+			Enabled:        true,
+			MaxFailCount:   cfg.CaptchaMaxFailCount,
+			LockDuration:   lockDuration,
+			ExpireDuration: expireDuration,
+			Width:          150,
+			Height:         50,
+		})
+	}
 }
 
 func DatabaseConnect() {

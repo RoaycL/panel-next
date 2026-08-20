@@ -11,6 +11,7 @@
       "usernameRequired": "请输入账号且大于5个字符"
     },
     "passwordPlaceholder": "请输入密码",
+    "captchaPlaceholder": "请输入验证码",
     "pblicText": "公开",
     "role": "角色",
     "setOrUnsetPublicMode": "设置/取消公开访问",
