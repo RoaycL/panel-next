@@ -23,6 +23,7 @@ var SunPanelLogicalTables = []LogicalTableSpec{
 	{Name: "item_icon", OrderBy: "id", OptionalOnRestore: []string{"revision"}},
 	{Name: "user_config", OrderBy: "user_id", OptionalOnRestore: []string{"revision", "updated_at"}},
 	{Name: "file", OrderBy: "id"},
+	{Name: "public_file", OrderBy: "id"},
 	{Name: "module_config", OrderBy: "id"},
 }
 

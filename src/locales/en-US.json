@@ -141,6 +141,10 @@
       "typeLabel": "Type",
       "selectFromGallery": "Select from Gallery"
 	},
+	"publicGallery": {
+		"appName": "Public Gallery",
+		"alertText": "Administrator-maintained public gallery, all accounts can read-only select and use."
+	},
     "exportImport": {
       "appName": "Export/Import",
       "errorConfigFileFormat": "The configuration file format is incorrect and cannot be imported",

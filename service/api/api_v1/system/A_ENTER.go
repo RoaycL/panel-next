@@ -14,4 +14,5 @@ type ApiSystem struct {
 	MonitorApi            MonitorApi
 	BackupApi             BackupApi
 	SiteSettingApi        SiteSettingApi
+	PublicFileApi         PublicFileApi
 }

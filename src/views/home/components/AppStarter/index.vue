@@ -111,11 +111,18 @@ onMounted(() => {
     icon: 'mdi:web',
     auth: 1,
   }
+  const publicGalleryApp: App = {
+    name: t('apps.publicGallery.appName'),
+    componentName: 'PublicGallery',
+    icon: 'mdi:image-multiple-outline',
+    auth: 1,
+  }
   // 初始化
   if (authStore.userInfo?.role === 1) {
     apps.value.push(backupApp)
     apps.value.push(adminApp)
     apps.value.push(siteSettingApp)
+    apps.value.push(publicGalleryApp)
   }
 
   window.addEventListener('resize', handleResize)

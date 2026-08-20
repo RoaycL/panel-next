@@ -189,6 +189,7 @@ func CreateDatabase(driver string, db *gorm.DB) error {
 		&models.InstanceMetadata{},
 		&models.UserSyncState{},
 		&models.UserSyncChange{},
+		&models.PublicFile{},
 	)
 
 	return err

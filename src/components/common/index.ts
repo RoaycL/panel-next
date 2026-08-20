@@ -10,6 +10,7 @@ import JsonImportExport from './JsonImportExport/index.vue'
 import AppLoader from './AppLoader/index.vue'
 import ItemCard from './ItemCard/index.vue'
 import GallerySelector from './GallerySelector/index.vue'
+import PublicGallery from '../apps/PublicGallery/index.vue'
 
 export {
   Verification,
@@ -24,4 +25,5 @@ export {
   AppLoader,
   ItemCard,
   GallerySelector,
+  PublicGallery,
 }

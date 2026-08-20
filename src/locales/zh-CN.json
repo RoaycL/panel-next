@@ -142,6 +142,10 @@
       "typeLabel": "类型",
       "selectFromGallery": "从图库选择"
 	},
+	"publicGallery": {
+		"appName": "公共图库",
+		"alertText": "管理员维护的公共图库，所有账号可只读选择使用。"
+	},
     "exportImport": {
       "appName": "导出导入",
       "errorConfigFileFormat": "配置文件格式不正确，无法导入",

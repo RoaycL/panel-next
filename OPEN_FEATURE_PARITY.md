@@ -68,7 +68,7 @@ Panel Next 必做安全增强（不计入 53 个官方能力包）：版本化 m
 - [x] `IMAGE-03` 查看图片详情并修改图片类型。实现：新增 `POST /api/file/updateType` 接口，前端图片卡片增加类型修改下拉菜单，详情弹窗显示类型字段。
 - [x] `IMAGE-04` 复制可公开访问的图片链接，作为简易图床使用。实现：UploadFileManager 每张图片已有复制链接按钮（`copyImageUrl`），结合外部图床配置（IMAGE 集成）上传的图片返回完整可公开访问 URL。
 - [x] `IMAGE-05` 所有图标和壁纸选择位置接入统一图库选择器。实现：新增 `GallerySelector` 统一组件，支持分类筛选与点击选中；IconEditor 图标图片选择接入图库选择器；Style 壁纸选择接入图库选择器。代码：`src/components/common/GallerySelector/index.vue`、`src/views/home/components/EditItem/IconEditor.vue`、`src/components/apps/Style/index.vue`。
-- [ ] `IMAGE-06` 管理员维护公共图库，所有账号只读选择使用。
+- [x] `IMAGE-06` 管理员维护公共图库，所有账号只读选择使用。实现：新增 `PublicFile` 模型（纳入 AutoMigrate 和逻辑备份白名单），管理员 API（上传/删除/修改类型，AdminInterceptor 保护），所有登录用户可读 API（`GET /publicFile/getList`）；`PublicGallery` 管理应用（管理员专用，AppStarter 注册）；`GallerySelector` 支持个人图库与公共图库标签切换。代码：`service/models/publicFile.go`、`service/api/api_v1/system/publicFile.go`、`service/router/system/publicFile.go`、`src/components/apps/PublicGallery/index.vue`、`src/components/common/GallerySelector/index.vue`。
 
 ### D. 登录、账号与窗口体验（6）
 
