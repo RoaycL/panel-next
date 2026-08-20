@@ -12,7 +12,10 @@ func InitOpenness(router *gin.RouterGroup) {
 		router.GET("loginConfig", api.LoginConfig)
 		router.GET("getDisclaimer", api.GetDisclaimer)
 		router.GET("getAboutDescription", api.GetAboutDescription)
-		router.GET("v1/widgets/weather", api.Weather)
-		router.GET("v1/widgets/trending", api.Trending)
+		widgets := router.Group("v1/widgets", WidgetRateLimit(DefaultWidgetLimiter))
+		{
+			widgets.GET("weather", api.Weather)
+			widgets.GET("trending", api.Trending)
+		}
 	}
 }

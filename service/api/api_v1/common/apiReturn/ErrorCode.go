@@ -27,4 +27,5 @@ var ErrorCodeMap = map[int]string{
 	1501: "Sync cursor is ahead of the server",              // 同步游标超前，需要重新 bootstrap
 	1502: "Sync revision conflict; refresh before retrying", // 写入基于旧版本，禁止静默覆盖
 
+	1600: "Rate limit exceeded", // 请求频率超出限制
 }

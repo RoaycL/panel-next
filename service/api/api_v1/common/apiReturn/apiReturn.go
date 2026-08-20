@@ -1,12 +1,15 @@
 package apiReturn
 
 import (
+	"strconv"
 	"sun-panel/global"
 
 	"github.com/gin-gonic/gin"
 )
 
 const ERROR_CODE_SUCCESS = 0 // 错误码 无任何错误
+
+const ERROR_CODE_RATE_LIMITED = 1600 // 错误码 请求频率超出限制
 
 const (
 	// 验证器类
@@ -84,6 +87,14 @@ func ErrorCode(ctx *gin.Context, code int, errMsg string, data interface{}) {
 // 返回错误 普通提示错误
 func Error(ctx *gin.Context, errMsg string) {
 	ErrorCode(ctx, -1, errMsg, nil)
+}
+
+// 返回错误 请求频率超出限制；retryAfterSeconds 为当前窗口剩余秒数，<=0 时不设置响应头
+func ErrorRateLimited(ctx *gin.Context, retryAfterSeconds int) {
+	if retryAfterSeconds > 0 {
+		ctx.Header("Retry-After", strconv.Itoa(retryAfterSeconds))
+	}
+	ErrorByCodeAndMsg(ctx, ERROR_CODE_RATE_LIMITED, ErrorCodeMap[ERROR_CODE_RATE_LIMITED])
 }
 
 // 返回错误 需要个性化定义的错误|带返回数据的错误
