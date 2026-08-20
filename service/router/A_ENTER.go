@@ -33,7 +33,9 @@ func InitRouters(addr string) error {
 	// WEB文件服务
 	{
 		webPath := "./web"
-		router.StaticFile("/", webPath+"/index.html")
+		if err := registerIndexPage(router, webPath); err != nil {
+			return err
+		}
 		router.Static("/assets", webPath+"/assets")
 		router.Static("/custom", webPath+"/custom")
 		router.StaticFile("/favicon.ico", webPath+"/favicon.ico")

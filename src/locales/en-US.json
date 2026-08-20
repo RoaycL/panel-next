@@ -98,6 +98,21 @@
 		"restoreConfirmText": "This operation will replace the current data on the next start. Have you safely stored a downloaded backup?",
 		"restoreQueued": "Restore queued. Restart the service. Pre-restore backup: {name}"
 	},
+	"siteSettings": {
+		"appName": "Site settings",
+		"siteTitle": "Site title",
+		"siteTitlePlaceholder": "Enter site title (max 80 chars)",
+		"favicon": "Site favicon",
+		"uploadOrDragText": "Click or drag to upload .ico/.png/.svg",
+		"customImageAddress": "Custom image URL",
+		"customImagePlaceholder": "Enter same-origin path, e.g. /uploads/...",
+		"loginBackground": "Login background",
+		"editFavicon": "Edit favicon",
+		"editBackground": "Edit background",
+		"save": "Save",
+		"saveSuccess": "Site settings saved",
+		"saveFail": "Failed to save"
+	},
     "exportImport": {
       "appName": "Export/Import",
       "errorConfigFileFormat": "The configuration file format is incorrect and cannot be imported",

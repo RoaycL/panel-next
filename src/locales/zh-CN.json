@@ -97,6 +97,22 @@
 		"restoreConfirmTitle": "确认完整恢复",
 		"restoreConfirmText": "此操作将在下次启动时替换当前数据。确认已经妥善保存下载到本地的备份吗？",
 		"restoreQueued": "恢复已排队，请重启服务。恢复前备份：{name}"
+
+	},
+	"siteSettings": {
+		"appName": "站点设置",
+		"siteTitle": "站点标题",
+		"siteTitlePlaceholder": "请输入站点标题（最多 80 字符）",
+		"favicon": "站点图标",
+		"uploadOrDragText": "点击或拖拽上传 .ico/.png/.svg",
+		"customImageAddress": "自定义图片地址",
+		"customImagePlaceholder": "请输入同源路径，如 /uploads/...",
+		"loginBackground": "登录页背景",
+		"editFavicon": "编辑图标",
+		"editBackground": "编辑背景",
+		"save": "保存",
+		"saveSuccess": "站点设置已保存",
+		"saveFail": "保存失败"
 	},
     "exportImport": {
       "appName": "导出导入",

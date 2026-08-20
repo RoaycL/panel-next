@@ -42,3 +42,18 @@ func (a *Openness) GetAboutDescription(c *gin.Context) {
 		apiReturn.SuccessData(c, content)
 	}
 }
+
+// GetSiteInfo 返回全局品牌信息（站点标题、图标、登录页背景），无需认证。
+func (a *Openness) GetSiteInfo(c *gin.Context) {
+	branding := gin.H{"siteTitle": "", "siteFavicon": "", "loginBackground": ""}
+	if value, err := global.SystemSetting.GetValueString(systemSetting.SITE_TITLE); err == nil {
+		branding["siteTitle"] = value
+	}
+	if value, err := global.SystemSetting.GetValueString(systemSetting.SITE_FAVICON); err == nil {
+		branding["siteFavicon"] = value
+	}
+	if value, err := global.SystemSetting.GetValueString(systemSetting.LOGIN_BACKGROUND); err == nil {
+		branding["loginBackground"] = value
+	}
+	apiReturn.SuccessData(c, branding)
+}

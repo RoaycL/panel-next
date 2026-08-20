@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { NButton, NCard, NForm, NFormItem, NGradientText, NInput, NSelect, useMessage } from 'naive-ui'
-import { ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { login } from '@/api'
+import { getSiteInfo } from '@/api/site'
 import { useAppStore, useAuthStore } from '@/store'
 import { SvgIcon } from '@/components/common'
 import { router } from '@/router'
@@ -15,6 +16,43 @@ const appStore = useAppStore()
 const ms = useMessage()
 const loading = ref(false)
 const languageValue = ref<Language>(appStore.language)
+const siteTitle = ref('')
+const siteBranding = ref<{ loginBackground?: string } | null>(null)
+
+const loginTitle = computed(() => siteTitle.value || t('common.appName'))
+const loginBackgroundStyle = computed(() => {
+  const background = siteBranding.value?.loginBackground
+  return background
+    ? {
+        backgroundImage: `url(${background})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+      }
+    : undefined
+})
+
+function applyFavicon(favicon: string) {
+  if (!favicon)
+    return
+  let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
+  if (!link) {
+    link = document.createElement('link')
+    link.rel = 'icon'
+    document.head.appendChild(link)
+  }
+  link.href = favicon
+}
+
+onMounted(async () => {
+  const res = await getSiteInfo()
+  if (res.code === 0 && res.data) {
+    siteTitle.value = res.data.siteTitle
+    siteBranding.value = { loginBackground: res.data.loginBackground }
+    if (res.data.siteTitle)
+      document.title = res.data.siteTitle
+    applyFavicon(res.data.siteFavicon)
+  }
+})
 
 // const isShowCaptcha = ref<boolean>(false)
 // const isShowRegister = ref<boolean>(false)
@@ -63,7 +101,7 @@ function handleChangeLanuage(value: Language) {
 </script>
 
 <template>
-  <div class="login-container">
+  <div class="login-container" :style="loginBackgroundStyle">
     <NCard class="login-card" style="border-radius: 20px;">
       <div class="mb-5 flex items-center justify-end">
         <div class="mr-2">
@@ -76,7 +114,7 @@ function handleChangeLanuage(value: Language) {
 
       <div class="login-title  ">
         <NGradientText :size="30" type="success" class="!font-bold">
-          {{ $t('common.appName') }}
+          {{ loginTitle }}
         </NGradientText>
       </div>
       <NForm :model="form" label-width="100px" @keydown.enter="handleSubmit">

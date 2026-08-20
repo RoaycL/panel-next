@@ -105,10 +105,17 @@ onMounted(() => {
     icon: 'clarity-hard-disk-solid',
     auth: 1,
   }
+  const siteSettingApp: App = {
+    name: t('apps.siteSettings.appName'),
+    componentName: 'SiteSetting',
+    icon: 'mdi:web',
+    auth: 1,
+  }
   // 初始化
   if (authStore.userInfo?.role === 1) {
     apps.value.push(backupApp)
     apps.value.push(adminApp)
+    apps.value.push(siteSettingApp)
   }
 
   window.addEventListener('resize', handleResize)

@@ -13,4 +13,5 @@ type ApiSystem struct {
 	ModuleConfigApi       ModuleConfigApi
 	MonitorApi            MonitorApi
 	BackupApi             BackupApi
+	SiteSettingApi        SiteSettingApi
 }

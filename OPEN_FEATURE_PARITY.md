@@ -52,9 +52,9 @@ Panel Next 必做安全增强（不计入 53 个官方能力包）：版本化 m
 
 ### B. 全局品牌与个性化（6）
 
-- [ ] `BRAND-01` 全局站点标题。
-- [ ] `BRAND-02` 全局 favicon/站点图标，并在保存刷新后立即生效且不闪烁默认标题。
-- [ ] `BRAND-03` 自定义登录页背景图。
+- [x] `BRAND-01` 全局站点标题。实现：`systemSetting.SITE_TITLE` + 管理员 `GET/POST /api/siteSetting/get|set` + 公开 `GET /api/siteInfo`；首页 HTML 动态注入 `<title>`（`service/router/indexPage.go`），无默认标题闪烁。代码：`service/api/api_v1/system/siteSetting.go`、`service/router/indexPage.go`。测试：注入转义、默认保留、缺失 favicon 兜底。
+- [x] `BRAND-02` 全局 favicon/站点图标，并在保存刷新后立即生效且不闪烁默认标题。实现：`SITE_FAVICON` 同源路径校验 + 首页 HTML `<link rel="icon">` 动态替换 + 登录页运行时注入 favicon。保存后刷新即生效（`no-cache` 响应头），无需重新部署。与 BRAND-01 共用注入与测试。
+- [x] `BRAND-03` 自定义登录页背景图。实现：`LOGIN_BACKGROUND` 同源路径 + `GET /api/siteInfo` 返回 + 登录页 `onMounted` 拉取并应用背景样式。管理员 SiteSetting 应用上传与设置。
 - [ ] `BRAND-04` 在线编辑全局 `index.js` 与 `index.css`，保留文件方式配置。
 - [ ] `BRAND-05` 壁纸上传支持 AVIF；HEIC 在运行环境可可靠解码时启用，否则明确报错。
 - [ ] `BRAND-06` 导航页 Logo、时钟独立显示开关。
