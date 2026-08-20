@@ -103,10 +103,10 @@ Panel Next 必做安全增强（不计入 53 个官方能力包）：版本化 m
 
 ### G. 搜索组件（4）
 
-- [ ] `SEARCH-01` 搜索框样式设置和不受商业授权数量限制的自定义搜索引擎。
-- [ ] `SEARCH-02` 公开访问模式允许临时切换引擎，但隐藏设置入口且刷新后恢复默认值。
-- [ ] `SEARCH-03` 导航页按 `/` 快速聚焦搜索框，同时不干扰编辑输入框。
-- [ ] `SEARCH-04` 搜索引擎拖动排序并持久化。
+- [x] `SEARCH-01` 搜索框样式设置和不受商业授权数量限制的自定义搜索引擎。实现：搜索框 background/textColor 已有 widget config 支持；引擎选择区增加自定义引擎输入（名称+URL），不受数量限制。代码：`src/components/deskModule/SearchBox/index.vue`。
+- [x] `SEARCH-02` 公开访问模式允许临时切换引擎，但隐藏设置入口且刷新后恢复默认值。实现：handleEngineUpdate 在公开模式不持久化到 moduleConfig；自定义引擎入口仅非公开模式显示。代码：`src/components/deskModule/SearchBox/index.vue`。
+- [x] `SEARCH-03` 导航页按 `/` 快速聚焦搜索框，同时不干扰编辑输入框。实现：document keydown 监听 / 键，排除 INPUT/TEXTAREA/contentEditable，focus searchInputRef。代码：`src/components/deskModule/SearchBox/index.vue`。
+- [x] `SEARCH-04` 搜索引擎拖动排序并持久化。实现：VueDraggable 绑定 searchEngineList，拖拽结束在非公开模式持久化到 moduleConfig。代码：`src/components/deskModule/SearchBox/index.vue`。
 
 ### H. OpenAPI（5）
 

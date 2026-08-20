@@ -301,7 +301,9 @@
     },
     "searchBox": {
       "inputPlaceholder": "请输入搜索内容",
-      "openWithNewOpen": "新窗口打开"
+      "openWithNewOpen": "新窗口打开",
+      "customEngineName": "引擎名称",
+      "customEngineUrl": "引擎地址（含%s）"
     },
     "systemMonitor": {
       "cpuState": "CPU状态",

@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { NAvatar, NCheckbox } from 'naive-ui'
+import { onMounted, onUnmounted, ref } from 'vue'
+import { VueDraggable } from 'vue-draggable-plus'
+import { NAvatar, NButton, NCheckbox, NInput } from 'naive-ui'
 import { SvgIcon } from '@/components/common'
 import { useModuleConfig } from '@/store/modules'
 import { useAuthStore } from '@/store'
@@ -34,6 +35,7 @@ const runtime = getRuntime()
 const searchTerm = ref('')
 const isFocused = ref(false)
 const searchSelectListShow = ref(false)
+const searchInputRef = ref<HTMLInputElement | null>(null)
 const defaultSearchEngineList = ref<DeskModule.SearchBox.SearchEngine[]>([
   {
     iconSrc: SvgSrcGoogle,
@@ -60,6 +62,26 @@ const defaultState: State = {
 
 const state = ref<State>({ ...defaultState })
 
+// SEARCH-01: 自定义搜索引擎
+const customEngineName = ref('')
+const customEngineUrl = ref('')
+
+function addCustomEngine() {
+  const name = customEngineName.value.trim()
+  const url = customEngineUrl.value.trim()
+  if (!name || !url)
+    return
+  state.value.searchEngineList.push({
+    iconSrc: '',
+    title: name,
+    url: url.includes('%s') ? url : `${url}%s`,
+  })
+  if (authStore.visitMode !== VisitMode.VISIT_MODE_PUBLIC)
+    moduleConfig.saveToCloud(moduleConfigName, state.value)
+  customEngineName.value = ''
+  customEngineUrl.value = ''
+}
+
 const onFocus = (): void => {
   isFocused.value = true
 }
@@ -69,15 +91,15 @@ const onBlur = (): void => {
 }
 
 function handleEngineClick() {
-  // 访客模式不允许修改
-  if (authStore.visitMode === VisitMode.VISIT_MODE_PUBLIC)
-    return
+  // SEARCH-02: 公开访问模式允许临时切换引擎但不显示设置
   searchSelectListShow.value = !searchSelectListShow.value
 }
 
 function handleEngineUpdate(engine: DeskModule.SearchBox.SearchEngine) {
   state.value.currentSearchEngine = engine
-  moduleConfig.saveToCloud(moduleConfigName, state.value)
+  // SEARCH-02: 公开访问模式不持久化，刷新后恢复默认
+  if (authStore.visitMode !== VisitMode.VISIT_MODE_PUBLIC)
+    moduleConfig.saveToCloud(moduleConfigName, state.value)
   searchSelectListShow.value = false
 }
 
@@ -118,7 +140,24 @@ onMounted(() => {
     else
       state.value = defaultState
   })
+
+  // SEARCH-03: 按 / 快速聚焦搜索框，不干扰编辑输入框
+  document.addEventListener('keydown', handleSlashKey)
 })
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleSlashKey)
+})
+
+function handleSlashKey(e: KeyboardEvent) {
+  if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey)
+    return
+  const target = e.target as HTMLElement
+  if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable))
+    return
+  e.preventDefault()
+  searchInputRef.value?.focus()
+}
 </script>
 
 <template>
@@ -128,7 +167,7 @@ onMounted(() => {
         <NAvatar :src="state.currentSearchEngine.iconSrc" style="background-color: transparent;" :size="20" />
       </div>
 
-      <input v-model="searchTerm" :placeholder="$t('deskModule.searchBox.inputPlaceholder')" @focus="onFocus" @blur="onBlur" @input="handleItemSearch">
+      <input ref="searchInputRef" v-model="searchTerm" :placeholder="$t('deskModule.searchBox.inputPlaceholder')" @focus="onFocus" @blur="onBlur" @input="handleItemSearch">
 
       <div v-if="searchTerm !== ''" class="search-box-btn-clear w-[25px] mr-[10px] flex justify-center cursor-pointer" @click="handleClearSearchTerm">
         <SvgIcon style="width: 20px;height: 20px;" icon="line-md:close-small" />
@@ -140,27 +179,35 @@ onMounted(() => {
 
     <!-- 搜索引擎选择 -->
     <div v-if="searchSelectListShow" class="w-full mt-[10px] rounded-xl p-[10px]" :style="{ background }">
-      <div class="flex items-center">
-        <div class="flex items-center">
+      <div class="flex items-center flex-wrap gap-[10px]">
+        <VueDraggable
+          v-model="state.searchEngineList"
+          :animation="200"
+          class="flex items-center flex-wrap gap-[10px]"
+          @end="authStore.visitMode !== VisitMode.VISIT_MODE_PUBLIC && moduleConfig.saveToCloud(moduleConfigName, state)"
+        >
           <div
-            v-for="item, index in defaultSearchEngineList"
+            v-for="item, index in state.searchEngineList"
             :key="index"
             :title="item.title"
-            class="w-[40px] h-[40px] mr-[10px]  cursor-pointer bg-[#ffffff] flex items-center justify-center rounded-xl"
+            class="w-[40px] h-[40px] cursor-pointer bg-[#ffffff] flex items-center justify-center rounded-xl"
             @click="handleEngineUpdate(item)"
           >
             <NAvatar :src="item.iconSrc" style="background-color: transparent;" :size="20" />
           </div>
-        <!-- <div class="w-[40px] h-[40px] ml-[10px] flex justify-center items-center cursor-pointer" @click="handleEngineClick">
-          <NAvatar style="background-color: transparent;" :size="30">
-            <SvgIcon icon="lets-icons:setting-alt-fill" style="font-size: 20px;" />
-          </NAvatar>
-        </div> -->
+        </VueDraggable>
+        <!-- SEARCH-01: 自定义搜索引擎（非公开模式） -->
+        <div v-if="authStore.visitMode !== VisitMode.VISIT_MODE_PUBLIC" class="flex items-center gap-[5px]">
+          <NInput v-model:value="customEngineName" size="tiny" :placeholder="$t('deskModule.searchBox.customEngineName')" style="width: 80px;" />
+          <NInput v-model:value="customEngineUrl" size="tiny" :placeholder="$t('deskModule.searchBox.customEngineUrl')" style="width: 120px;" />
+          <NButton size="tiny" @click="addCustomEngine">
+            {{ $t('common.add') }}
+          </NButton>
         </div>
       </div>
 
       <div class="mt-[10px]">
-        <NCheckbox v-model:checked="state.newWindowOpen" @update-checked="moduleConfig.saveToCloud(moduleConfigName, state)">
+        <NCheckbox v-model:checked="state.newWindowOpen" @update:checked="moduleConfig.saveToCloud(moduleConfigName, state)">
           <span :style="{ color: textColor }">
             {{ $t('deskModule.searchBox.openWithNewOpen') }}
           </span>
