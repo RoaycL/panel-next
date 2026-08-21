@@ -10,7 +10,7 @@ import {
   useMessage,
 } from 'naive-ui'
 import { useRouter } from 'vue-router'
-import { SvgIcon, ItemIcon } from '@/components/common'
+import { SvgIcon, ItemIcon, ConflictResolverModal } from '@/components/common'
 import { useAuthStore, usePanelState, useUserStore } from '@/store'
 import { PanelStateNetworkModeEnum } from '@/enums'
 import { VisitMode } from '@/enums/auth'
@@ -18,6 +18,9 @@ import { getRuntime } from '@/runtime'
 import { readExtensionAppearance, readExtensionWidgets, saveExtensionAppearance, saveExtensionWidgets } from '@/runtime/extensionAppearance'
 import { readBootstrapSnapshot, refreshBootstrapSnapshot } from '@/sync/bootstrapCache'
 import { onSyncConflict, setSyncRevision } from '@/sync/revision'
+import { replayOfflineQueue } from '@/sync/offlineReplay'
+import { getPendingMutationCount } from '@/sync/offlineQueue'
+import type { ConflictDescriptor, ConflictResolutionChoice } from '@/sync/conflictResolver'
 import { getBootstrap } from '@/api/sync'
 import { getList as getGroupList } from '@/api/panel/itemIconGroup'
 import { getListByGroupId } from '@/api/panel/itemIcon'
@@ -43,6 +46,39 @@ const panelState = usePanelState()
 const authStore = useAuthStore()
 const userStore = useUserStore()
 const runtime = getRuntime()
+
+// 离线队列与冲突解决
+const conflictModalVisible = ref(false)
+const currentConflict = ref<ConflictDescriptor | null>(null)
+let conflictResolverPromiseResolve: ((choice: ConflictResolutionChoice) => void) | null = null
+
+const pendingMutationsCount = computed(() => {
+  const accountId = authStore.userInfo?.id
+  return accountId ? getPendingMutationCount(accountId) : 0
+})
+
+function onResolveConflict(choice: ConflictResolutionChoice) {
+  if (conflictResolverPromiseResolve) {
+    conflictResolverPromiseResolve(choice)
+    conflictResolverPromiseResolve = null
+  }
+}
+
+async function triggerOfflineReplay() {
+  const accountId = authStore.userInfo?.id
+  if (!accountId) return
+  const result = await replayOfflineQueue(accountId, (conflict) => {
+    currentConflict.value = conflict
+    conflictModalVisible.value = true
+    return new Promise<ConflictResolutionChoice>((resolve) => {
+      conflictResolverPromiseResolve = resolve
+    })
+  })
+  if (result.succeeded > 0) {
+    ms.success(`已成功同步 ${result.succeeded} 项离线修改`)
+    void refreshBootstrap()
+  }
+}
 
 const showWallpaperModal = ref(false)
 const showWidgetManager = ref(false)
@@ -559,9 +595,11 @@ onMounted(async () => {
   })
 
   await refreshBootstrap()
+  await triggerOfflineReplay()
   await Promise.all([fetchWeather(), fetchTrending()])
   startTrendingRoll()
   window.addEventListener('wheel', handleGroupWheel, { passive: false })
+  window.addEventListener('online', triggerOfflineReplay)
 })
 
 onUnmounted(() => {
@@ -570,6 +608,7 @@ onUnmounted(() => {
   if (wheelHintTimer) clearTimeout(wheelHintTimer)
   if (longPressTimer) clearTimeout(longPressTimer)
   window.removeEventListener('wheel', handleGroupWheel)
+  window.removeEventListener('online', triggerOfflineReplay)
 })
 </script>
 
@@ -606,8 +645,19 @@ onUnmounted(() => {
       <button type="button" class="rail-button" title="添加和管理小组件" @click="showWidgetManager = true">
         <SvgIcon icon="material-symbols:widgets-outline-rounded" />
       </button>
-      <button type="button" class="rail-button" title="刷新同步" @click="refreshBootstrap">
+      <button
+        type="button"
+        class="rail-button relative"
+        :title="pendingMutationsCount > 0 ? `有 ${pendingMutationsCount} 条离线修改待同步，点击立即重放` : '刷新同步'"
+        @click="pendingMutationsCount > 0 ? triggerOfflineReplay() : refreshBootstrap()"
+      >
         <SvgIcon icon="material-symbols:sync" :class="{ 'animate-spin': extensionSyncStatus === 'syncing' }" />
+        <span
+          v-if="pendingMutationsCount > 0"
+          class="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 text-black text-[9px] font-bold rounded-full flex items-center justify-center"
+        >
+          {{ pendingMutationsCount }}
+        </span>
       </button>
       <div class="rail-spacer" />
       <button type="button" class="rail-button" title="系统设置" @click="openSettings">
@@ -992,6 +1042,13 @@ onUnmounted(() => {
     >
       <GallerySelector type="wallpaper" @select="handleWallpaperSelect" />
     </NModal>
+
+    <!-- 离线冲突裁决弹窗 -->
+    <ConflictResolverModal
+      v-model:show="conflictModalVisible"
+      :conflict="currentConflict"
+      @resolve="onResolveConflict"
+    />
   </div>
 </template>
 

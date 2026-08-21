@@ -4,7 +4,7 @@ import { NBackTop, NButton, NButtonGroup, NDropdown, NModal, NSkeleton, NSpin, u
 import { computed, defineAsyncComponent, h, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { AppIcon } from './components'
 import { SystemMonitor } from '@/components/deskModule'
-import { SvgIcon } from '@/components/common'
+import { SvgIcon, ConflictResolverModal } from '@/components/common'
 import { deletes, getListByGroupId, saveSort } from '@/api/panel/itemIcon'
 import { getList as getGroupList } from '@/api/panel/itemIconGroup'
 import { set as setUserConfig } from '@/api/panel/userConfig'
@@ -20,6 +20,9 @@ import { getRuntime } from '@/runtime'
 import { readBootstrapSnapshot, refreshBootstrapSnapshot } from '@/sync/bootstrapCache'
 import { getBootstrap } from '@/api/sync'
 import { onSyncConflict, setSyncRevision } from '@/sync/revision'
+import { replayOfflineQueue } from '@/sync/offlineReplay'
+import { getPendingMutationCount } from '@/sync/offlineQueue'
+import type { ConflictDescriptor, ConflictResolutionChoice } from '@/sync/conflictResolver'
 import type { DashboardGroup } from '@/dashboard/core'
 import { createDashboardState, createItemSortRequest, filterDashboardGroups, normalizeDashboardGroups, selectItemUrl } from '@/dashboard/core'
 import type { WidgetInstance } from '@/widgets'
@@ -68,6 +71,42 @@ const lastSyncAt = ref<string | null>(null)
 let hasCachedSnapshot = false
 let extensionRefreshPromise: Promise<void> | null = null
 let removeSyncConflictListener: (() => void) | null = null
+
+// 离线队列与冲突解决
+const conflictModalVisible = ref(false)
+const currentConflict = ref<ConflictDescriptor | null>(null)
+let conflictResolverPromiseResolve: ((choice: ConflictResolutionChoice) => void) | null = null
+
+const pendingMutationsCount = computed(() => {
+  const accountId = authStore.userInfo?.id
+  return accountId ? getPendingMutationCount(accountId) : 0
+})
+
+function onResolveConflict(choice: ConflictResolutionChoice) {
+  if (conflictResolverPromiseResolve) {
+    conflictResolverPromiseResolve(choice)
+    conflictResolverPromiseResolve = null
+  }
+}
+
+async function triggerOfflineReplay() {
+  const accountId = authStore.userInfo?.id
+  if (!accountId) return
+  const result = await replayOfflineQueue(accountId, (conflict) => {
+    currentConflict.value = conflict
+    conflictModalVisible.value = true
+    return new Promise<ConflictResolutionChoice>((resolve) => {
+      conflictResolverPromiseResolve = resolve
+    })
+  })
+  if (result.succeeded > 0) {
+    ms.success(`已成功同步 ${result.succeeded} 项离线修改`)
+    if (runtime.kind === 'extension')
+      void refreshExtensionBootstrap()
+    else
+      void getList()
+  }
+}
 
 const canEdit = computed(() => authStore.visitMode === VisitMode.VISIT_MODE_LOGIN
   && (runtime.kind !== 'extension' || extensionSyncStatus.value === 'online'))
@@ -486,6 +525,7 @@ async function refreshExtensionBootstrap() {
 
 function handleBrowserOnline() {
   browserOnline.value = true
+  void triggerOfflineReplay()
   void refreshExtensionBootstrap()
 }
 
@@ -624,6 +664,16 @@ function handleAddItem(itemIconGroupId?: number) {
         @click="refreshExtensionBootstrap"
       >
         <span class="sync-dot" />{{ extensionSyncLabel }}
+      </button>
+      <button
+        v-if="pendingMutationsCount > 0"
+        type="button"
+        class="status-chip bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 cursor-pointer"
+        title="点击立即重放离线修改"
+        @click="triggerOfflineReplay"
+      >
+        <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+        {{ pendingMutationsCount }} 条待同步
       </button>
       <span class="status-chip" :title="sessionTitle">{{ sessionLabel }}</span>
     </div>
@@ -972,6 +1022,13 @@ function handleAddItem(itemIconGroupId?: number) {
         />
       </div>
     </NModal>
+
+    <!-- 离线冲突解决弹窗 -->
+    <ConflictResolverModal
+      v-model:show="conflictModalVisible"
+      :conflict="currentConflict"
+      @resolve="onResolveConflict"
+    />
   </div>
 </template>
 

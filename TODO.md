@@ -83,10 +83,10 @@ P1 验收门槛：不得修改生产数据库结构；不得发布到 Chrome 商
 
 ## P6：离线编辑与冲突处理（增强阶段）
 
-- [ ] `OFFLINE-01` 定义可重放 mutation 队列和幂等键。
-- [ ] `OFFLINE-02` 对新增、编辑、删除、排序分别设计冲突语义。
-- [ ] `OFFLINE-03` 提供冲突提示和用户选择，不采用最后写入静默覆盖。
-- [ ] `OFFLINE-04` 测试多端离线修改、重复提交、部分失败和恢复。
+- [x] `OFFLINE-01` 定义可重放 mutation 队列和幂等键。实现：`src/sync/offlineQueue.ts` 定义 `OfflineMutation` 结构与幂等键 `generateIdempotencyKey()`，按 Account ID 与 Origin 分区安全持久化到 `persistentStorage`；`src/sync/offlineReplay.ts` 实现队列 FIFO 重放与自动递增版本重试。
+- [x] `OFFLINE-02` 对新增、编辑、删除、排序分别设计冲突语义。实现：`src/sync/conflictResolver.ts` 实现细粒度冲突判定（新增天然追加、删除幂等确认、编辑卡片/分组/面板比对 Diff 字段并拦截过期 revision、排序自适应收敛）。
+- [x] `OFFLINE-03` 提供冲突提示和用户选择，不采用最后写入静默覆盖。实现：`src/components/common/ConflictResolverModal/index.vue` 冲突裁决对话框，提供「保留本地修改 (覆盖云端)」、「保留云端版本 (放弃本地)」、「另存为离线副本 (保留两份)」三种选择，杜绝 LWW 静默覆盖。
+- [x] `OFFLINE-04` 测试多端离线修改、重复提交、部分失败和恢复。实现：`scripts/validate-offline-sync.mjs` 覆盖队列持久化、幂等防重、新增/编辑/删除/配置冲突语义判定及解决策略，已接入 `pnpm run build:all` 自动化验证流水线。
 
 ## P7：发布与运维
 
@@ -143,8 +143,7 @@ pnpm run build-only
 
 ## 当前下一步
 
-`OPEN_FEATURE_PARITY.md` 中 53 个能力包已全部完成。双端基础架构（P0–P5）除 `EXT-08`（Chrome 手工验收，当前已在 Chrome 中加载验证，待补完整验收记录）和 P6（离线编辑增强阶段）外均已完成；`RELEASE-01` 至 `RELEASE-06` 已全部完成。后续工作重点：
+`OPEN_FEATURE_PARITY.md` 中 53 个能力包已全部完成。双端基础架构（P0–P6 全部完成，含 `OFFLINE-01` 至 `OFFLINE-04` 离线编辑与冲突处理）与 `RELEASE-01` 至 `RELEASE-06` 已全部完成。后续工作重点：
 
 1. `EXT-08`：完整手工验收扩展安装、新标签页覆盖、登录、卡片交互、重启浏览器后恢复。
-2. `OFFLINE-01` 至 `OFFLINE-04`：离线编辑与冲突处理（增强阶段，非阻塞）。
-3. 环境缺口：MySQL 真实恢复演练。
+2. 环境缺口：MySQL 真实恢复演练。
