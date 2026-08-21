@@ -95,7 +95,7 @@ P1 验收门槛：不得修改生产数据库结构；不得发布到 Chrome 商
 - [x] `RELEASE-03` 编写隐私政策、数据用途、账号删除和支持文档。实现：`doc/privacy.md`（数据收集/用途/存储安全/账号删除/导出/免责声明，自托管不向第三方上报数据）、`doc/support.md`（Docker/二进制部署、Chrome 扩展安装、扩展 ID 说明、默认账号、FAQ、账号删除指引）；README 增加文档链接并更新 CORS 描述。
 - [x] `RELEASE-04` 建立 Web 镜像与扩展 ZIP 的自动构建和校验和。实现：新增 `.github/workflows/release.yml`，tag 推送时自动构建前端与扩展、打包 ZIP 并生成 SHA-256 上传为 GitHub Artifact、构建推送 Docker 镜像（linux/amd64,arm64）；替换旧 docker-build-push workflow。修复 `bump-extension-version.mjs` 每次扩展构建递增版本导致版本源漂移（1.3.0→1.0.11）的问题，改为同步单一版本源 `service/assets/version`（10|1.3.0），构建不递增、正式发版改版本文件。
 - [x] `RELEASE-05` 建立 Chrome Web Store 手工发布清单，密钥不得进入仓库或 CI 日志。实现：`doc/chrome_store_release.md` 覆盖发布前检查清单、包构建、商店素材准备、上传与审核流程、扩展 ID 核对、密钥/凭据安全管理（私钥不提交、Docker/PG 凭据只在 CI Secrets 或 gitignore 文件）、发布后验证、版本升级与回滚。
-- [ ] `RELEASE-06` 建立升级、回滚、API 兼容矩阵和最低后端版本提示。
+- [x] `RELEASE-06` 建立升级、回滚、API 兼容矩阵和最低后端版本提示。实现：`doc/upgrade_rollback_compatibility.md`（Docker/扩展升级、数据库自动迁移、回滚注意事项、API v1 头协商矩阵、能力开关、最低后端版本提示、旧 Token 截止与扩展 Origin 兼容约束）；扩展 `validateServer` 增加 capabilities 最低版本校验，版本过旧时明确提示"服务器版本过旧，请升级 Panel Next 服务端"。
 
 ## 官方公开功能对齐
 
@@ -143,9 +143,8 @@ pnpm run build-only
 
 ## 当前下一步
 
-`OPEN_FEATURE_PARITY.md` 中 53 个能力包已全部完成。双端基础架构（P0–P5）除 `EXT-08`（Chrome 手工验收，当前已在 Chrome 中加载验证，待补完整验收记录）和 P6（离线编辑增强阶段）外均已完成；`RELEASE-01/02` 已完成。后续工作重点：
+`OPEN_FEATURE_PARITY.md` 中 53 个能力包已全部完成。双端基础架构（P0–P5）除 `EXT-08`（Chrome 手工验收，当前已在 Chrome 中加载验证，待补完整验收记录）和 P6（离线编辑增强阶段）外均已完成；`RELEASE-01` 至 `RELEASE-06` 已全部完成。后续工作重点：
 
 1. `EXT-08`：完整手工验收扩展安装、新标签页覆盖、登录、卡片交互、重启浏览器后恢复。
 2. `OFFLINE-01` 至 `OFFLINE-04`：离线编辑与冲突处理（增强阶段，非阻塞）。
-3. `RELEASE-03` 至 `RELEASE-06`：隐私政策/数据用途/账号删除文档、Web 镜像与扩展 ZIP 自动构建校验和、Chrome Web Store 手工发布清单、升级/回滚/API 兼容矩阵与最低后端版本提示。
-4. 环境缺口：MySQL 真实恢复演练。
+3. 环境缺口：MySQL 真实恢复演练。

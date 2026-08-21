@@ -186,6 +186,21 @@ async function validateServer(origin: string) {
       || (typeof register === 'object' && register !== null && typeof (register as { openRegister?: unknown }).openRegister === 'boolean')
     if (payload.code !== 0 || typeof payload.data?.loginCaptcha !== 'boolean' || !hasCompatibleRegisterSetting)
       throw new Error('目标地址不是兼容的 Panel Next / Sun-Panel 服务。')
+
+    // 校验最低后端 API 版本，给出明确升级提示
+    const capabilityResponse = await fetch(`${origin}/api/v1/client/capabilities`, {
+      cache: 'no-store',
+      credentials: 'omit',
+      signal: controller.signal,
+    })
+    if (capabilityResponse.ok) {
+      const capability = await capabilityResponse.json() as {
+        apiVersion?: { current?: unknown; minimum?: unknown }
+      }
+      const minimum = Number(capability.apiVersion?.minimum ?? 1)
+      if (!Number.isFinite(minimum) || minimum > 1)
+        throw new Error('服务器版本过旧，请升级 Panel Next 服务端后再连接。')
+    }
   }
   catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError')
