@@ -272,7 +272,7 @@
       "regularUser": "普通"
     },
     "save": "保存",
-    "saveFail": "保存成功",
+    "saveFail": "保存失败",
     "saveSort": "保存排序",
     "saveSuccess": "保存成功",
     "serverError": "服务器错误",

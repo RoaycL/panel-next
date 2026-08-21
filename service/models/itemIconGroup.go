@@ -10,7 +10,7 @@ type ItemIconGroup struct {
 	Title       string `gorm:"type:varchar(50)" json:"title"`
 	Description string `gorm:"type:varchar(1000)" json:"description"`
 	Sort        int    `json:"sort"`
-	Revision    int64  `gorm:"not null;default:0;index" json:"revision"`
+	Revision    int64  `gorm:"not null;default:0;index" json:"-"`
 	UserId      uint   `json:"userId"`
 	User        User   `json:"user"`
 }

@@ -86,11 +86,13 @@ const show = computed({
 async function editApi() {
   submitLoading.value = true
   try {
-    const { code, data, msg } = await edit<Panel.ItemInfo>(model.value)
+    const payload = { ...model.value }
+    delete (payload as any).revision
+    const { code, data, msg } = await edit<Panel.ItemInfo>(payload)
     if (code === 0) {
       show.value = false
       model.value = { ...restoreDefault }
-
+      ms.success(t('common.saveSuccess'))
       emit('done', data)
     }
     else {

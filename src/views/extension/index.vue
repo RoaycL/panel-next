@@ -608,7 +608,6 @@ onUnmounted(() => {
       </button>
       <div class="panel-section-title">
         <span>我的分组</span>
-        <small>滚轮可切换</small>
       </div>
       <div class="side-panel-scroll">
         <button
@@ -622,7 +621,6 @@ onUnmounted(() => {
           <span class="group-number">{{ String(index + 1).padStart(2, '0') }}</span>
           <span class="group-nav-copy">
             <strong>{{ group.title }}</strong>
-            <small>{{ group.count }} 个快捷方式</small>
           </span>
           <span class="group-dot" />
         </button>
@@ -836,7 +834,6 @@ onUnmounted(() => {
       <section class="cards-grid-section w-full max-w-[1280px]">
         <div class="active-group-meta">
           <span>{{ activeGroup?.title }}</span>
-          <small>{{ activeGroup?.count || 0 }} 个快捷方式 · 滚动鼠标滚轮切换分组</small>
         </div>
         <div v-if="displayedCards.length > 0" class="cards-grid">
           <div
