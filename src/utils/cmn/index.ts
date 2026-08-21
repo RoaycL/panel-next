@@ -3,13 +3,6 @@ import { useAuthStore, useUserStore } from '@/store'
 import { getAuthInfo } from '@/api/system/user'
 import type { VisitMode } from '@/enums/auth'
 
-const userStore = useUserStore()
-const authStore = useAuthStore()
-/**
- * 生成指定时间格式
- * @param format 时间格式 默认：'YYYY-MM-DD HH:mm:ss'
- * @returns string
- */
 export function buildTimeString(format?: string): string {
   if (!format)
     format = 'YYYY-MM-DD HH:mm:ss'
@@ -25,12 +18,10 @@ export function setTitle(titile: string) {
   document.title = titile
 }
 
-export function getTitle(titile: string) {
-  document.title = titile
-}
-
-//
 export async function updateLocalUserInfo() {
+  const userStore = useUserStore()
+  const authStore = useAuthStore()
+
   interface Req {
     user: User.Info
     visitMode: VisitMode
@@ -41,35 +32,6 @@ export async function updateLocalUserInfo() {
   authStore.setUserInfo(data.user)
   authStore.setVisitMode(data.visitMode)
 }
-
-// 权限受限暂时不用
-// export async function getFaviconUrl(url: string, extName = 'ico'): Promise<string | null> {
-//   try {
-//     // 获取网址的域名
-//     const { protocol, host } = new URL(url)
-//     const domain = `${protocol}//${host}`
-
-//     // 构建 favicon URL
-//     const faviconUrl = `${domain}/favicon.${extName}`
-
-//     // 检查 favicon 是否存在，包含 CORS 头部
-//     const response = await fetch(faviconUrl, { method: 'HEAD', mode: 'cors' })
-
-//     // 如果请求成功，返回 favicon URL
-//     if (response.ok) {
-//       return faviconUrl
-//     }
-//     else {
-//       console.log('Favicon not found.')
-//       return null
-//     }
-//   }
-//   catch (error) {
-//     // 如果出现错误，返回 null，表示找不到 favicon
-//     console.error('Error:', error)
-//     return null
-//   }
-// }
 
 export function getFaviconUrl(url: string): string {
   // 获取网址的域名
