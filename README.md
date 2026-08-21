@@ -4,155 +4,205 @@
 
 # Panel Next
 
-**一个面向 Web 与 Chrome 新标签页的自托管导航面板**
+**下一代自托管导航面板 · Web 与 Chrome 扩展新标签页双端桌面**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-2ea44f.svg)](./LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/RoaycL/panel-next?style=flat&logo=github)](https://github.com/RoaycL/panel-next)
-[![Development status](https://img.shields.io/badge/status-active%20development-376cf6)](https://github.com/RoaycL/panel-next/blob/main/TODO.md)
+[![Release](https://img.shields.io/badge/release-v1.3.0-blue.svg)](https://github.com/RoaycL/panel-next/releases)
+
+[功能特性](#-功能特性) • [快速开始](#-快速开始) • [Chrome 扩展安装](#-chrome-扩展安装) • [系统架构](#-系统架构) • [开发指南](#-本地开发) • [开源协议](#-开源协议)
 
 </div>
 
-Panel Next 基于 [Sun-Panel](https://github.com/hslr-s/sun-panel) 最后一个 MIT 开源版本 `v1.3.0` 独立演进。项目一方面根据公开文档和可观察行为独立补齐后续公开能力，另一方面建设共用同一后端、账号和数据的 Web/Chrome 新标签页双端架构。
+---
 
-Web 模式保持自托管导航面板的现有使用方式；Chrome 扩展模式覆盖浏览器新标签页，逐步提供类似 iTab 的快捷入口、组件布局和跨设备同步体验。
+## 📖 项目简介
 
-> [!IMPORTANT]
-> 当前项目处于积极开发阶段，尚未发布稳定版，也未发布到 Chrome Web Store。继续开发请先阅读 [主待办清单](https://github.com/RoaycL/panel-next/blob/main/TODO.md)、[双端架构](https://github.com/RoaycL/panel-next/blob/main/doc/web_extension_architecture.md)、[Chrome 扩展开发说明](https://github.com/RoaycL/panel-next/blob/main/doc/chrome_extension_development.md) 和 [开放功能对齐路线图](https://github.com/RoaycL/panel-next/blob/main/OPEN_FEATURE_PARITY.md)。
+**Panel Next** 是一款现代化的自托管个人导航面板与浏览器新标签页系统。项目基于开源基线独立演进，提供强大的 **Web 网页端** 与 **Chrome 扩展新标签页（Manifest V3）** 双端无缝协同体验。
 
-## 项目方向
+无论是在家庭服务器、NAS、云主机上自托管，还是作为日常浏览器的默认新标签页，Panel Next 都能为您提供极致丝滑、美观高雅、高度可定制的数字化仪表盘。
 
-- **一个后端，两个客户端**：Web 与 Chrome 新标签页共享 Go 后端、账号体系和业务数据。
-- **保持自托管**：用户掌控服务地址、账号、导航数据、图片和配置。
-- **渐进式演进**：保留现有 Vue/Go 主体，通过运行环境、存储、会话和同步适配器逐步解耦。
-- **最小权限扩展**：Chrome 扩展默认只使用本地存储，连接服务器时才申请用户所选 Origin 的访问权限。
-- **安全同步**：后端作为数据权威来源，后续提供可撤销设备会话、缓存回退、版本协商和冲突处理。
-- **独立实现**：只使用 MIT 源码、公开文档和可观察行为，不反编译、不提取或复制闭源代码与资源。
+---
 
-## 双端架构
+## ✨ 功能特性
+
+### 🖥️ 1. 双端深度协同 (Web & Chrome Extension)
+- **一个后端，双端体验**：Web 首页与 Chrome 新标签页共用一套 Go 后端、用户配置与业务数据。
+- **离线快照与即时秒开**：扩展新标签页支持本地可信快照预加载，断网或网络抖动时依然瞬时打开，恢复联网后自动后台增量刷新。
+- **细粒度权限控制**：Chrome 扩展遵循最小权限原则，仅声明 `storage` 权限，连接自建服务器时按需申请 Origin 授权。
+
+### 🧩 2. iTab 风格小组件系统 (Widget Framework)
+- **丰富内置组件**：
+  - **大号数字时钟 & 实时日期**：支持秒针显示、多种样式自由切换；
+  - **多源聚合搜索框**：内置百度、必应、Google 等主流引擎，支持自定义搜索及 Tab 快捷切换；
+  - **实时天气组件**：基于 Open-Meteo 代理，支持公制/英制、WMO 状态图标、内存缓存与离线陈旧降级；
+  - **全网热搜/资讯滚动**：支持微博热搜、百度热榜、知乎热榜、Hacker News 多数据源聚合，支持轮播滚动与链接安全直达；
+  - **纪念日 & 倒计时**：纯本地高精度计算，支持农历/公历周年日自动滚动，重要日子绝不错过。
+- **12 列响应式网格布局**：支持拖拽手柄自由排序、按步长缩放宽高、隐藏/显示组件，布局随账号实时多端同步。
+
+### 🔄 3. 强一致增量同步与离线冲突裁决
+- **账号级单调 Revision**：每次数据修改均由服务端原子递增版本并串行化 Changes 日志。
+- **离线 Mutation 队列**：网络离线期间书签增删改查、排序、样式修改安全持久化入队，联网后 FIFO 自动重放。
+- **拒绝最后写入静默覆盖 (No Silent LWW)**：内置并发冲突检测机制与可视化裁决对话框，支持「保留本地覆盖云端」、「保留云端放弃本地」、「另存为离线副本」三种裁决策略。
+
+### 🖼️ 4. Wallhaven 超清壁纸库与沉浸式 UI
+- **Wallhaven 官方源接入**：内置 4K/8K 热门、最新、随机壁纸库，一键更换桌面背景。
+- **高级视觉特效**：支持背景高斯模糊（0~20px）与暗色遮罩透明度自由调节，完美兼顾壁纸美感与文字可读性。
+- **精致暗黑模式**：全栈组件、模态框、抽屉导航采用统一的极简毛玻璃暗色设计，质感出众。
+
+### 🌐 5. 局域网 / 公网自适应模式 (LAN & WAN)
+- **双地址智能解析**：每个书签卡片支持分别配置内网地址 (LAN URL) 与公网地址 (WAN URL)。
+- **一键切换**：在顶部控制栏或快捷抽屉一键切换网络模式，内网环境下极速直达，外网环境下安全穿透。
+
+### 🐳 6. Docker 容器集成与系统监控
+- **容器自动发现**：连接 Docker Daemon 自动枚举运行中容器，一键将其转换为桌面快捷方式并关联容器状态。
+- **实时系统监控**：CPU 负载、内存占用、磁盘空间可视化仪表盘展示。
+
+### 🔐 7. 企业级安全与设备会话管理
+- **现代化设备会话**：256 位哈希 Token、30 天轮换 Refresh Token、防重放攻击与多设备独立软撤销。
+- **全数据库兼容**：开箱支持 **PostgreSQL 17**、**MySQL** 与 **SQLite**，支持版本化逻辑备份迁移与自动序列校准。
+
+---
+
+## 🚀 快速开始
+
+### 方式一：Docker Compose 一键部署（推荐）
+
+1. 创建 `docker-compose.yml` 文件：
+
+```yaml
+version: '3.8'
+
+services:
+  panel-next:
+    image: ghcr.io/roaycl/panel-next:latest
+    container_name: panel-next
+    restart: always
+    ports:
+      - "3003:3003"
+    volumes:
+      - ./data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro # 可选：如需 Docker 容器管理功能
+    environment:
+      - TZ=Asia/Shanghai
+```
+
+2. 启动服务：
+
+```bash
+docker compose up -d
+```
+
+3. 浏览器访问：`http://<你的服务器IP>:3003`（默认管理员账号：`admin`，默认密码：`123456`，请首次登录后立即修改密码）。
+
+---
+
+## 🧩 Chrome 扩展安装
+
+Panel Next 扩展将彻底接管浏览器的新标签页，提供如同原生桌面般强大的操作体验。
+
+1. 前往 GitHub [Releases 页面](https://github.com/RoaycL/panel-next/releases) 下载最新的 `panel-next-extension-v1.3.0.zip`；
+2. 解压 ZIP 压缩包到本地目录；
+3. 打开 Chrome 浏览器，访问 `chrome://extensions/`；
+4. 开启右上角的 **「开发者模式 (Developer mode)」**；
+5. 点击左上角的 **「加载已解压的扩展程序 (Load unpacked)」**，选择刚才解压的目录；
+6. 新建一个标签页，即可看到 Panel Next 桌面；点击侧边栏或右上角个人中心，输入您的服务端地址（例如 `http://192.168.1.100:3003`）即可完成绑定并同步所有书签与组件！
+
+---
+
+## 🏗️ 系统架构
 
 ```mermaid
-flowchart LR
-    Web["Web 客户端"] --> Core["共享 Vue 界面与业务核心"]
-    Ext["Chrome 新标签页扩展"] --> Core
-    Core --> API["Panel Next Go API"]
-    API --> Data["账号、导航、配置与同步数据"]
-    Web --> Local["localStorage / IndexedDB"]
-    Ext --> Chrome["chrome.storage.local"]
+flowchart TD
+    subgraph Clients["客户端层 (Dual Client Shells)"]
+        WebClient["Web 网页端 (Responsive)"]
+        ChromeExt["Chrome 新标签页扩展 (MV3)"]
+    end
+
+    subgraph Core["前端通用核心 (src/dashboard)"]
+        RuntimeAdapters["Runtime & Storage 适配器"]
+        WidgetRegistry["小组件注册表 (Widgets)"]
+        OfflineQueue["离线 Mutation 队列 & 冲突裁决"]
+        DashboardState["状态编排 & LAN/WAN 选择"]
+    end
+
+    subgraph Backend["后端服务层 (Go Gin & GORM)"]
+        APIRouter["API v1 路由 & 版本协商"]
+        SessionMgr["设备会话与 Token 轮换 (SHA-256)"]
+        SyncEngine["Revision 事务增量同步引擎"]
+        Proxies["天气 / 热搜 / 外部代理缓存"]
+    end
+
+    subgraph Storage["数据存储层"]
+        Postgres["PostgreSQL / MySQL / SQLite"]
+        DockerSock["Docker Engine API"]
+    end
+
+    WebClient --> Core
+    ChromeExt --> Core
+    Core --> APIRouter
+    APIRouter --> SessionMgr
+    APIRouter --> SyncEngine
+    APIRouter --> Proxies
+    SessionMgr --> Postgres
+    SyncEngine --> Postgres
+    APIRouter --> DockerSock
 ```
 
-- Web 使用同源 `/api`，保持已有部署和访问方式。
-- Chrome 扩展使用可配置的服务器 Origin，并通过公开接口验证兼容性。
-- 扩展本地状态按服务器 Origin 隔离，避免切换实例时混用会话。
-- 服务器数据、设备会话和离线缓存将按照路线图逐步实现版本化同步。
+---
 
-## 当前进度
+## 💻 本地开发
 
-### 已完成
+### 前置环境
+- **Node.js**: `>= 22.13`
+- **pnpm**: `11.20.0`
+- **Go**: `>= 1.20`
+- **PostgreSQL**: `>= 14` (推荐 17)
 
-- 升级 Vue、Vite、TypeScript、pnpm 等前端工具链，并建立 Web/Extension 双产物构建。
-- 实现 SQLite 完整备份恢复、MySQL/PostgreSQL 逻辑备份迁移、校验、快照与失败回滚。
-- 建立 Manifest V3 新标签页扩展入口和共享 `RuntimeAdapter` / `StorageAdapter`。
-- 接入 `chrome.storage.local` 预加载内存镜像，按服务器 Origin 隔离数据。
-- 实现服务器地址配置、兼容性验证、按 Origin 授权和服务器切换。
-
-### 正在推进
-
-- 扩展端账号登录验证及共享首页数据加载。
-- 分组、卡片、面板配置和缓存同步。
-- 全局品牌、图库、验证码、多账号、Docker 管理等公开能力对齐。
-
-### 后续阶段
-
-- 可撤销的多设备 Access/Refresh Token 会话。
-- 版本化 bootstrap、增量同步、离线缓存和冲突处理。
-- 时钟、天气、热搜、倒计时及可拖放组件系统。
-- Web 镜像、扩展 ZIP、自动校验和 Chrome Web Store 发布准备。
-
-完整状态以 [TODO.md](./TODO.md) 和 [OPEN_FEATURE_PARITY.md](./OPEN_FEATURE_PARITY.md) 为准。
-
-## 当前界面
-
-![Panel Next 当前 Web 基线界面](./doc/images/main-dark.png)
-
-当前截图主要展示继承自开源基线的 Web 导航能力。Chrome 新标签页体验和组件化布局仍在持续开发。
-
-## 本地开发
-
-### 环境要求
-
-- Node.js `>= 22.13`
-- pnpm `11.20.0`（以 `package.json` 的 `packageManager` 字段为准）
-- Go `>= 1.20`
-- PostgreSQL `>= 14`（推荐 17；新部署默认）
-- SQLite 相关 Go 构建需要可用的 CGO/C 编译环境
-
-### 获取代码
-
-```powershell
+### 1. 克隆项目与安装依赖
+```bash
 git clone https://github.com/RoaycL/panel-next.git
 cd panel-next
-git switch main
 corepack enable
-corepack pnpm install
+pnpm install
 ```
 
-### 前端开发与构建
+### 2. 启动开发服务器
+```bash
+# 启动前端开发调试服务
+pnpm run dev:web
 
-```powershell
-# Web 开发服务器
-corepack pnpm run dev:web
-
-# 类型检查、Web 构建、Extension 构建及扩展包校验
-corepack pnpm run build:all
-```
-
-构建产物：
-
-- Web：`dist`
-- Chrome 扩展：`dist/extension`
-
-扩展本地加载步骤见 [Chrome 扩展开发说明](./doc/chrome_extension_development.md)。
-
-### 后端验证
-
-```powershell
+# 启动后端服务
 cd service
-go test ./...
-go vet ./...
+go run main.go
 ```
 
-### PostgreSQL 配置
+### 3. 构建与全量测试
+```bash
+# 运行全套架构规则、类型检查、快照缓存、小组件与双端打包验证
+pnpm run build:all
 
-新生成的 `service/conf/conf.ini` 默认使用 `[postgres]`。本机部署可直接连接已有 PostgreSQL；容器部署连接宿主机或外部 PostgreSQL 时，需要把 `postgres.host` 设置为容器可访问的地址。已有明确配置为 SQLite/MySQL 的实例不会被静默切换，迁移前应先生成并验证备份。
+# 打包 Chrome 扩展 ZIP
+pnpm run package:extension
+```
 
-### Web/Extension 跨源配置
+---
 
-Web 同源访问默认可用，不需要开放 CORS。Chrome 扩展的 `chrome-extension://` Origin 会被自动放行（格式合法即可），无需配置。额外 Web 前端必须在 `conf/conf.ini` 的 `[cors] web_origins` 中配置精确 Origin。完整示例和反向代理要求见 [Chrome 扩展开发说明](./doc/chrome_extension_development.md#服务端-cors-配置)。
+## 📄 文档索引
 
-### 部署与文档
-
-- [部署与支持文档](./doc/support.md)
-- [隐私政策](./doc/privacy.md)
-- [备份与恢复说明](./doc/backup_restore_fork.md)
+- [双端架构技术规范](./doc/web_extension_architecture.md)
+- [Chrome 扩展开发与适配说明](./doc/chrome_extension_development.md)
+- [Chrome Web Store 发布清单](./doc/chrome_store_release.md)
+- [升级、回滚与版本兼容矩阵](./doc/upgrade_rollback_compatibility.md)
 - [设备会话安全设计](./doc/device_session_security.md)
-- [Web/Chrome 双端架构](./doc/web_extension_architecture.md)
+- [备份与恢复说明](./doc/backup_restore_fork.md)
+- [隐私政策](./doc/privacy.md)
+- [支持与帮助文档](./doc/support.md)
 
-## 开发约定
+---
 
-1. 开始任务前先查看 [TODO.md](./TODO.md)，按条目编号推进并更新状态。
-2. Web 功能必须保持兼容；扩展能力通过运行环境适配器接入，不在共享核心中直接散布 `chrome.*` 调用。
-3. 数据库、认证、备份和同步变更必须覆盖失败、回滚和账号隔离场景。
-4. 提交前至少执行相关类型检查、测试以及 Web/Extension 生产构建。
-5. 不提交服务器凭据、用户数据、`.env`、源码映射或扩展开发密钥。
+## 📜 开源协议
 
-## 来源、边界与许可
+Panel Next 代码历史源自 Sun-Panel `v1.3.0` MIT 开源版本，后续功能均基于开源基线、公开文档与标准规范独立演进实现。
 
-Panel Next 的代码历史源自 Sun-Panel `v1.3.0` MIT 开源版本，并保留原项目的版权与许可信息。本项目是社区独立演进项目，不是 Sun-Panel 官方版本，也不代表原作者或原项目维护者。
-
-后续能力的实现遵守以下边界：
-
-- 允许使用 MIT 开源代码、官方公开文档、公开发行说明和正常使用时可观察的行为。
-- 不下载闭源版本用于分析，不反编译、不反汇编、不提取资源、不复制闭源实现。
-- 对齐的是公开描述的产品能力，不复刻闭源授权机制、品牌素材或内部实现。
-
-项目继续以 [MIT License](./LICENSE) 发布。感谢 Sun-Panel 原作者及所有历史贡献者奠定的开源基础。
+项目完整遵守 [MIT License](./LICENSE) 协议发布。感谢开源社区以及所有历史贡献者的卓越付出！
