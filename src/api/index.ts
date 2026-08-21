@@ -12,7 +12,7 @@ export function login<T>(data: Login.LoginReqest) {
 
 export function getLoginConfig<T>() {
   return get<T>({
-    url: '/loginConfig',
+    url: '/openness/loginConfig',
   })
 }
 

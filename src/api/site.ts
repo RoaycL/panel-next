@@ -10,7 +10,7 @@ export interface SiteBranding {
 
 export function getSiteInfo() {
   return get<SiteBranding>({
-    url: '/siteInfo',
+    url: '/openness/siteInfo',
     silentNetworkError: true,
   })
 }
