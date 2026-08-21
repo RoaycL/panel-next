@@ -4,6 +4,7 @@ import { apiRespErrMsg, message } from './apiMessage'
 import { t } from '@/locales'
 import { useAppStore, useAuthStore } from '@/store'
 import { router } from '@/router'
+import { getRuntime } from '@/runtime'
 
 let loginMessageShow = false
 export interface HttpOption {
@@ -42,25 +43,27 @@ function http<T = any>(options: HttpOption, sessionRetry = false): Promise<Respo
     }
 
     if (res.data.code === 1001 || res.data.code === 1008 || res.data.code === 1009) {
-      // 避免重复弹窗
-      if (loginMessageShow === false) {
-        loginMessageShow = true
-        message.warning(t('api.loginExpires'), {
-        // message.warning('登录过期', {
-          onLeave() {
-            loginMessageShow = false
-          },
-        })
-      }
-
-      router.push({ path: '/login' })
       authStore.removeToken()
+      if (getRuntime().kind !== 'extension') {
+        // 避免重复弹窗
+        if (loginMessageShow === false) {
+          loginMessageShow = true
+          message.warning(t('api.loginExpires'), {
+            onLeave() {
+              loginMessageShow = false
+            },
+          })
+        }
+        router.push({ path: '/login' })
+      }
       return res.data
     }
 
     if (res.data.code === 1000) {
-      router.push({ path: '/login' })
       authStore.removeToken()
+      if (getRuntime().kind !== 'extension') {
+        router.push({ path: '/login' })
+      }
       return res.data
     }
 

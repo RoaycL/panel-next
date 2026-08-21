@@ -193,10 +193,27 @@ function openTrending(item: TrendingItem) {
     runtime.openUrl(item.url, 'tab')
 }
 
-// 4. 数据同步与状态
+const defaultPresetGroups: DashboardGroup[] = [
+  {
+    id: 1,
+    title: '🌟 常用推荐',
+    icon: '',
+    sort: 1,
+    hoverStatus: false,
+    items: [
+      { id: 101, title: 'GitHub', url: 'https://github.com', description: '全球开源代码平台', icon: { itemType: 2, src: 'mdi:github' }, openMethod: 1, itemIconGroupId: 1 },
+      { id: 102, title: 'Bilibili', url: 'https://www.bilibili.com', description: '哔哩哔哩 (゜-゜)つロ', icon: { itemType: 2, src: 'ri:bilibili-fill' }, openMethod: 1, itemIconGroupId: 1 },
+      { id: 103, title: 'YouTube', url: 'https://www.youtube.com', description: '全球视频流媒体', icon: { itemType: 2, src: 'ri:youtube-fill' }, openMethod: 1, itemIconGroupId: 1 },
+      { id: 104, title: 'V2EX', url: 'https://v2ex.com', description: '创意工作者社区', icon: { itemType: 2, src: 'mdi:code-tags' }, openMethod: 1, itemIconGroupId: 1 },
+      { id: 105, title: 'ChatGPT', url: 'https://chatgpt.com', description: 'AI 对话与创作助手', icon: { itemType: 2, src: 'mdi:robot' }, openMethod: 1, itemIconGroupId: 1 },
+      { id: 106, title: 'DeepSeek', url: 'https://chat.deepseek.com', description: '深度求索通用大模型', icon: { itemType: 2, src: 'solar:cpu-bold' }, openMethod: 1, itemIconGroupId: 1 },
+    ],
+  },
+]
+
 type ExtensionSyncStatus = 'idle' | 'syncing' | 'online' | 'cached' | 'offline' | 'error'
 const extensionSyncStatus = ref<ExtensionSyncStatus>('syncing')
-const groups = ref<DashboardGroup[]>([])
+const groups = ref<DashboardGroup[]>(defaultPresetGroups)
 let isRefreshing = false
 
 function applyBootstrapData(data: Sync.BootstrapResponseV1) {
@@ -206,7 +223,8 @@ function applyBootstrapData(data: Sync.BootstrapResponseV1) {
   authStore.setUserInfo(dashboard.account)
   authStore.setVisitMode(VisitMode.VISIT_MODE_LOGIN)
   userStore.updateUserInfo(dashboard.account)
-  groups.value = dashboard.groups
+  if (dashboard.groups && dashboard.groups.length > 0)
+    groups.value = dashboard.groups
 }
 
 async function refreshBootstrap() {

@@ -215,18 +215,20 @@ export function createExtensionRuntime(): RuntimeAdapter {
           serverOrigin = normalizeServerOrigin(storedOrigin)
         }
         catch {
-          serverOrigin = null
+          serverOrigin = 'https://next.roayc.com'
         }
+      }
+      else {
+        serverOrigin = 'https://next.roayc.com'
       }
       storage.setOrigin(serverOrigin)
     },
     getApiBaseUrl() {
-      if (!serverOrigin)
-        throw new Error('Extension server is not configured.')
-      return `${serverOrigin}/api`
+      const origin = serverOrigin || 'https://next.roayc.com'
+      return `${origin}/api`
     },
     getServerOrigin() {
-      return serverOrigin
+      return serverOrigin || 'https://next.roayc.com'
     },
     async configureServer(serverUrl) {
       const origin = normalizeServerOrigin(serverUrl)
