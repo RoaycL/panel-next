@@ -1,30 +1,32 @@
 const fs = require('fs')
-// const { execSync } = require('child_process')
-const moment = require('moment')
 
-// git 最新标签
-// const latestTag = execSync('git describe --tags --abbrev=0').toString().trim()
+// 从唯一发布版本源读取版本号（DUAL-02：service/assets/version 为唯一版本源）
+// 文件格式："<version_code>|<semantic_version>"，如 "10|1.3.0"
+let appVersion = ''
+try {
+  const versionSource = fs.readFileSync('service/assets/version', 'utf-8').trim()
+  const parts = versionSource.split('|')
+  if (parts.length >= 2)
+    appVersion = parts[1].trim()
+}
+catch {
+  // 读取失败时回退到日期标记
+  const moment = require('moment')
+  appVersion = moment().utc().format('YYYYMMDD')
+}
 
-// 设置默认时区为 'Asia/Shanghai'
-const packDate = moment().utc().format('YYYYMMDD')
-
-// 要追加的内容
-const contentToAppend = `\nVITE_APP_VERSION=${packDate}`
-// 读取文件原始内容
+const contentToAppend = `\nVITE_APP_VERSION=${appVersion}`
 const envFilePath = '.env'
 let envContent = fs.readFileSync(envFilePath, 'utf-8')
 
 const versionRegex = /^VITE_APP_VERSION=.*$/m
 if (versionRegex.test(envContent)) {
-  // 使用正则表达式查找并替换 VITE_APP_VERSION=* 这一行
   envContent = envContent.replace(versionRegex, contentToAppend)
 }
 else {
-  // 追加内容
   envContent = envContent + contentToAppend
 }
 
-// 将新内容写回 .env 文件
 fs.writeFileSync(envFilePath, envContent)
 
 console.log('update to .env file.', contentToAppend)
