@@ -13,10 +13,14 @@ func InitOpenness(router *gin.RouterGroup) {
 		router.GET("getDisclaimer", api.GetDisclaimer)
 		router.GET("getAboutDescription", api.GetAboutDescription)
 		router.GET("siteInfo", api.GetSiteInfo)
-		widgets := router.Group("v1/widgets", WidgetRateLimit(DefaultWidgetLimiter))
-		{
-			widgets.GET("weather", api.Weather)
-			widgets.GET("trending", api.Trending)
-		}
+	}
+}
+
+func InitWidgets(router *gin.RouterGroup) {
+	api := api_v1.ApiGroupApp.ApiOpen.Openness
+	widgets := router.Group("v1/widgets", WidgetRateLimit(DefaultWidgetLimiter))
+	{
+		widgets.GET("weather", api.Weather)
+		widgets.GET("trending", api.Trending)
 	}
 }

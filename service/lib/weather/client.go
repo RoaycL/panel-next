@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -154,12 +155,42 @@ func (client *Client) fetch(ctx context.Context, city, units, language string) (
 	return Result{Location: location, Current: current, Units: units}, nil
 }
 
+func containsHan(s string) bool {
+	for _, r := range s {
+		if unicode.Is(unicode.Han, r) {
+			return true
+		}
+	}
+	return false
+}
+
 func (client *Client) geocode(ctx context.Context, city, language string) (Location, error) {
+	lang := language
+	if containsHan(city) {
+		lang = "zh"
+	}
+
+	loc, err := client.doGeocode(ctx, city, lang)
+	if err == nil {
+		return loc, nil
+	}
+
+	if lang != "" {
+		if fallbackLoc, fallbackErr := client.doGeocode(ctx, city, ""); fallbackErr == nil {
+			return fallbackLoc, nil
+		}
+	}
+	return Location{}, err
+}
+
+func (client *Client) doGeocode(ctx context.Context, city, language string) (Location, error) {
 	query := url.Values{
-		"name":     {city},
-		"count":    {"1"},
-		"language": {language},
-		"format":   {"json"},
+		"name":   {city},
+		"count":  {"1"},
+		"format": {"json"},
+	}
+	if language != "" {
+		query.Set("language", language)
 	}
 	var response struct {
 		Results []Location `json:"results"`

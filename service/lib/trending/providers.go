@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-const providerUserAgent = "Panel-Next trending widget"
+const providerUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 
 // WeiboProvider 抓取微博热搜实时榜。
 type WeiboProvider struct {
@@ -33,7 +33,10 @@ func (provider *WeiboProvider) Fetch(ctx context.Context, client *http.Client) (
 			} `json:"realtime"`
 		} `json:"data"`
 	}
-	if err := fetchJSON(ctx, client, provider.endpoint, providerUserAgent, &response); err != nil {
+	headers := map[string]string{
+		"Referer": "https://weibo.com/",
+	}
+	if err := fetchJSONWithHeaders(ctx, client, provider.endpoint, providerUserAgent, headers, &response); err != nil {
 		return nil, fmt.Errorf("weibo request: %w", err)
 	}
 	if response.Ok != 1 {
@@ -62,17 +65,26 @@ func NewBaiduProvider(endpoint string) *BaiduProvider {
 
 func (provider *BaiduProvider) Name() string { return "baidu" }
 
+type baiduItem struct {
+	Word     string `json:"word"`
+	Desc     string `json:"desc"`
+	HotScore string `json:"hotScore"`
+	URL      string `json:"url"`
+	AppURL   string `json:"appUrl"`
+}
+
 func (provider *BaiduProvider) Fetch(ctx context.Context, client *http.Client) ([]Item, error) {
 	var response struct {
 		Success bool `json:"success"`
 		Data    struct {
 			Cards []struct {
 				Content []struct {
-					Word     string `json:"word"`
-					Desc     string `json:"desc"`
-					HotScore string `json:"hotScore"`
-					URL      string `json:"url"`
-					AppURL   string `json:"appUrl"`
+					Word     string      `json:"word"`
+					Desc     string      `json:"desc"`
+					HotScore string      `json:"hotScore"`
+					URL      string      `json:"url"`
+					AppURL   string      `json:"appUrl"`
+					Content  []baiduItem `json:"content"`
 				} `json:"content"`
 			} `json:"cards"`
 		} `json:"data"`
@@ -84,24 +96,34 @@ func (provider *BaiduProvider) Fetch(ctx context.Context, client *http.Client) (
 		return nil, fmt.Errorf("baidu upstream reported failure")
 	}
 	items := make([]Item, 0)
+	addItem := func(word, entryURL, appURL, rawScore string) {
+		title := sanitizeTitle(word)
+		if title == "" {
+			return
+		}
+		link := strings.TrimSpace(entryURL)
+		if link == "" {
+			link = strings.TrimSpace(appURL)
+		}
+		if link == "" {
+			link = "https://www.baidu.com/s?wd=" + url.QueryEscape(title)
+		}
+		var score int64
+		if parsed, err := strconv.ParseInt(strings.TrimSpace(rawScore), 10, 64); err == nil {
+			score = parsed
+		}
+		items = append(items, Item{Title: title, URL: link, Score: score})
+	}
+
 	for _, card := range response.Data.Cards {
 		for _, entry := range card.Content {
-			title := sanitizeTitle(entry.Word)
-			if title == "" {
-				continue
+			if len(entry.Content) > 0 {
+				for _, sub := range entry.Content {
+					addItem(sub.Word, sub.URL, sub.AppURL, sub.HotScore)
+				}
+			} else if entry.Word != "" {
+				addItem(entry.Word, entry.URL, entry.AppURL, entry.HotScore)
 			}
-			link := strings.TrimSpace(entry.URL)
-			if link == "" {
-				link = strings.TrimSpace(entry.AppURL)
-			}
-			if link == "" {
-				link = "https://www.baidu.com/s?wd=" + url.QueryEscape(title)
-			}
-			var score int64
-			if parsed, err := strconv.ParseInt(strings.TrimSpace(entry.HotScore), 10, 64); err == nil {
-				score = parsed
-			}
-			items = append(items, Item{Title: title, URL: link, Score: score})
 		}
 	}
 	return items, nil

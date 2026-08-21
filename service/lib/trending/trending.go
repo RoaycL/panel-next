@@ -19,7 +19,7 @@ const (
 	// DefaultBaiduEndpoint 百度实时热搜榜公共接口。
 	DefaultBaiduEndpoint = "https://top.baidu.com/api/board?platform=wise&tab=realtime"
 	// DefaultZhihuEndpoint 知乎热榜公共接口。
-	DefaultZhihuEndpoint = "https://www.zhihu.com/api/v3/feed/topstory/hot-lists/total?limit=50"
+	DefaultZhihuEndpoint = "https://api.zhihu.com/topstory/hot-list"
 	// DefaultHackerNewsEndpoint Hacker News 前页公共搜索接口。
 	DefaultHackerNewsEndpoint = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50"
 
@@ -205,12 +205,19 @@ func sanitizeTitle(title string) string {
 }
 
 func fetchJSON(ctx context.Context, client *http.Client, endpoint, userAgent string, target interface{}) error {
+	return fetchJSONWithHeaders(ctx, client, endpoint, userAgent, nil, target)
+}
+
+func fetchJSONWithHeaders(ctx context.Context, client *http.Client, endpoint, userAgent string, headers map[string]string, target interface{}) error {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return err
 	}
-	request.Header.Set("Accept", "application/json")
+	request.Header.Set("Accept", "application/json, text/plain, */*")
 	request.Header.Set("User-Agent", userAgent)
+	for k, v := range headers {
+		request.Header.Set(k, v)
+	}
 	response, err := client.Do(request)
 	if err != nil {
 		return err
