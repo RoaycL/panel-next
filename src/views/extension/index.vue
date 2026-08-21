@@ -425,15 +425,20 @@ onUnmounted(() => {
 
 <template>
   <div class="extension-tab-container select-none">
-    <!-- 背景层 -->
+    <!-- 用户自定义壁纸层 -->
     <div
+      v-if="panelState.panelConfig.backgroundImageSrc"
       class="bg-cover"
       :style="{
         filter: `blur(${panelState.panelConfig.backgroundBlur ?? 0}px)`,
-        background: panelState.panelConfig.backgroundImageSrc ? `url(${panelState.panelConfig.backgroundImageSrc}) no-repeat center/cover` : undefined,
+        backgroundImage: `url(${panelState.panelConfig.backgroundImageSrc})`,
       }"
     />
-    <div class="bg-overlay" :style="{ backgroundColor: `rgba(0,0,0,${panelState.panelConfig.backgroundMaskNumber ?? 0.35})` }" />
+    <div
+      v-if="panelState.panelConfig.backgroundImageSrc"
+      class="bg-overlay"
+      :style="{ backgroundColor: `rgba(0,0,0,${panelState.panelConfig.backgroundMaskNumber ?? 0.35})` }"
+    />
 
     <!-- 顶栏：极简状态与快捷控制 -->
     <header class="top-nav-bar">
@@ -716,8 +721,16 @@ onUnmounted(() => {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  color: #fff;
+  color: #f8fafc;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background-color: #0b0f19;
+  background-image:
+    radial-gradient(at 10% 10%, rgba(37, 99, 235, 0.35) 0px, transparent 50%),
+    radial-gradient(at 90% 15%, rgba(139, 92, 246, 0.35) 0px, transparent 50%),
+    radial-gradient(at 50% 90%, rgba(16, 185, 129, 0.28) 0px, transparent 50%),
+    linear-gradient(180deg, #090d16 0%, #0f172a 100%);
+  background-size: cover;
+  background-attachment: fixed;
 }
 
 /* 背景层 */
@@ -725,7 +738,9 @@ onUnmounted(() => {
   position: absolute;
   inset: 0;
   z-index: 0;
-  background: radial-gradient(circle at 20% 20%, #1e293b, #0f172a 80%);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 
 .bg-overlay {
@@ -742,7 +757,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 24px;
+  padding: 14px 24px;
   width: 100%;
 }
 
@@ -750,23 +765,27 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(12px);
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(16px);
   cursor: pointer;
-  transition: all 0.2s ease;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .icon-btn:hover {
-  background: rgba(255, 255, 255, 0.25);
-  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.32);
+  border-color: rgba(255, 255, 255, 0.45);
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
 }
 
 .icon-btn:active {
-  transform: translateY(0);
+  transform: translateY(0) scale(0.98);
 }
 
 /* 核心内容区 */
