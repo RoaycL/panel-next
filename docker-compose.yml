@@ -1,14 +1,10 @@
-version: "3.2"
-
 services:
   panel-next:
     build: .
     container_name: panel-next
+    network_mode: host
     volumes:
-    - ./conf:/app/conf
-    - ./uploads:/app/uploads
-    - ./database:/app/database
-    # - ./runtime:/app/runtime
-    ports:
-    - 3002:3002
+    - ./docker-conf:/app/conf
+    - ./service/uploads:/app/uploads
+    - ./service/database:/app/database
     restart: always
