@@ -8,7 +8,7 @@ import (
 
 type ApiGroup struct {
 	ApiSystem system.ApiSystem // 系统功能api
-	ApiOpen   openness.ApiPpenness
+	ApiOpen   openness.ApiOpenness
 	ApiPanel  panel.ApiPanel
 }
 

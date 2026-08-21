@@ -15,15 +15,6 @@ type MonitorApi struct{}
 
 const cacheSecond = 3
 
-// 弃用
-func (a *MonitorApi) GetAll(c *gin.Context) {
-	if value, ok := global.SystemMonitor.Get("value"); ok {
-		apiReturn.SuccessData(c, value)
-		return
-	}
-	apiReturn.Error(c, "failed")
-}
-
 func (a *MonitorApi) GetCpuState(c *gin.Context) {
 	if v, ok := global.SystemMonitor.Get(global.SystemMonitor_CPU_INFO); ok {
 		global.Logger.Debugln("读取缓存的的CPU信息")
@@ -41,7 +32,7 @@ func (a *MonitorApi) GetCpuState(c *gin.Context) {
 	apiReturn.SuccessData(c, cpuInfo)
 }
 
-func (a *MonitorApi) GetMemonyState(c *gin.Context) {
+func (a *MonitorApi) GetMemoryState(c *gin.Context) {
 	if v, ok := global.SystemMonitor.Get(global.SystemMonitor_MEMORY_INFO); ok {
 		global.Logger.Debugln("读取缓存的的RAM信息")
 		apiReturn.SuccessData(c, v)

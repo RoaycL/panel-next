@@ -4,11 +4,9 @@ import (
 	// "calendar-note-gin/assets"
 	"crypto/md5"
 	"encoding/hex"
-	"fmt"
 	"math/rand"
 	"os"
 	"path"
-	"sort"
 	"strconv"
 	"strings"
 	"sun-panel/assets"
@@ -57,11 +55,6 @@ func Md5(str string) string {
 	return hex.EncodeToString(md5Byte[:])
 }
 
-func RandNum(n int) int {
-	rand.Seed(time.Now().Unix())
-	return rand.Intn(n)
-}
-
 // 随机生成编码
 // 随机码字典内容 参考常量 RAND_CODE_MODE*
 func BuildRandCode(count int, secret_content string) (code string) {
@@ -70,24 +63,14 @@ func BuildRandCode(count int, secret_content string) (code string) {
 
 // 随机生成编码 参考常量 RAND_CODE_MODE*
 func BuildRandCodeBySeed(count int, secret_content string, seed int64) (code string) {
-	// 获取纳秒作为随机数种子
-	rand.Seed(seed)
 	if secret_content == "" {
 		secret_content = RAND_CODE_MODE1
 	}
+	rng := rand.New(rand.NewSource(seed))
 	for i := 0; i < count; i++ {
-		code += string(secret_content[rand.Intn(len(secret_content))])
+		code += string(secret_content[rng.Intn(len(secret_content))])
 	}
 	return code
-}
-
-func InSlice(items []string, item string) bool {
-	for _, eachItem := range items {
-		if eachItem == item {
-			return true
-		}
-	}
-	return false
 }
 
 // 字符串转int
@@ -99,13 +82,6 @@ func StrToInt(str string) int {
 // uint 转string
 func UintToStr(c uint) string {
 	return strconv.FormatUint(uint64(c), 10)
-}
-
-// uint 转string
-func StrToUint(s string) uint {
-	// i, _ := strconv.Atoi(s)
-	u, _ := strconv.ParseUint(s, 10, 64)
-	return uint(u)
 }
 
 // 获取系统信息
@@ -133,65 +109,14 @@ func PathExists(path string) (bool, error) {
 	return false, err
 }
 
-// 截取字符串，支持多字节字符
-// start：起始下标，负数从从尾部开始，最后一个为-1
-// length：截取长度，负数表示截取到末尾
-func SubRuneStr(str string, start int, length int) (result string) {
-	s := []rune(str)
-	total := len(s)
-	if total == 0 {
-		return
-	}
-	// 允许从尾部开始计算
-	if start < 0 {
-		start = total + start
-		if start < 0 {
-			return
-		}
-	}
-	if start > total {
-		return
-	}
-	// 到末尾
-	if length < 0 {
-		length = total
-	}
-
-	end := start + length
-	if end > total {
-		result = string(s[start:])
-	} else {
-		result = string(s[start:end])
-	}
-
-	return
-}
-
-// 字符串长度
-func RuneStrLen(str string) int {
-	return len([]rune(str))
-}
-
 // 是否在数组中
-func InStringArray(arr []string, item string) bool {
+func InArray[T uint | int | int8 | int64 | float32 | float64 | string](arr []T, item T) bool {
 	for _, v := range arr {
 		if v == item {
 			return true
 		}
 	}
-	return true
-}
-
-func InArray[T uint | int | int8 | int64 | float32 | float64 | string](arr []T, item T) bool {
-	sort.Slice(arr, func(i, j int) bool {
-		return arr[i] < arr[j]
-	})
-
-	index := sort.Search(len(arr), func(i int) bool {
-		return arr[i] >= item
-	})
-
-	return index < len(arr) && arr[index] == item
+	return false
 }
 
 // 从Assets文件夹中抽取文件保存到路劲
@@ -206,7 +131,6 @@ func AssetsTakeFileToPath(assetsPath, targetPath string) error {
 	}
 	if !exists {
 		if err := os.MkdirAll(targetPathPath, 0777); err != nil {
-			fmt.Println(456)
 			return err
 		}
 	}

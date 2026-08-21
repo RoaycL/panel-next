@@ -2,7 +2,7 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 import GenericProgress from '../components/GenericProgress/index.vue'
 import { correctionNumberByCardStyle } from './common'
-import { getMemonyState } from '@/api/system/systemMonitor'
+import { getMemoryState } from '@/api/system/systemMonitor'
 import type { PanelPanelConfigStyleEnum } from '@/enums'
 import { bytesToSize } from '@/utils/cmn'
 
@@ -24,7 +24,7 @@ function formatMemorySize(v: number): string {
 
 async function getData() {
   try {
-    const { data, code } = await getMemonyState<SystemMonitor.MemoryInfo>()
+    const { data, code } = await getMemoryState<SystemMonitor.MemoryInfo>()
     if (code === 0)
       memoryState.value = data
   }

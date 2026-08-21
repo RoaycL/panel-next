@@ -15,9 +15,8 @@ func InitMonitorRouter(router *gin.RouterGroup) {
 	// 公开模式
 	rPublic := router.Group("", middleware.PublicModeInterceptor)
 	{
-		rPublic.POST("/system/monitor/getAll", api.GetAll)
 		rPublic.POST("/system/monitor/getCpuState", api.GetCpuState)
 		rPublic.POST("/system/monitor/getDiskStateByPath", api.GetDiskStateByPath)
-		rPublic.POST("/system/monitor/getMemonyState", api.GetMemonyState)
+		rPublic.POST("/system/monitor/getMemoryState", api.GetMemoryState)
 	}
 }

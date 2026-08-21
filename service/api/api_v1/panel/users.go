@@ -2,7 +2,6 @@ package panel
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 	"sun-panel/api/api_v1/common/apiReturn"
 	"sun-panel/api/api_v1/common/base"
@@ -96,8 +95,8 @@ func (a UsersApi) Deletes(c *gin.Context) {
 			if err := tx.Delete(&models.ModuleConfig{}, "user_id=?", v).Error; err != nil {
 				return err
 			}
-			// 删除用户配置
-			if err := tx.Delete(&models.ModuleConfig{}, "user_id=?", v).Error; err != nil {
+			// 删除用户配置（面板/搜索引擎）
+			if err := tx.Delete(&models.UserConfig{}, "user_id=?", v).Error; err != nil {
 				return err
 			}
 			// // 删除文件记录（不删除资源文件）
@@ -252,7 +251,7 @@ func (a UsersApi) SetPublicVisitUser(c *gin.Context) {
 	if req.UserId != nil {
 		userInfo := models.User{}
 		if err := global.Db.First(&userInfo, "id=?", req.UserId).Error; err != nil {
-			fmt.Println(err, userInfo)
+			global.Logger.Errorln("failed to find public visit user:", err)
 			apiReturn.ErrorDataNotFound(c)
 			return
 		}

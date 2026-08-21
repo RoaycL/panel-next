@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed } from 'vue'
 import { PanelPanelConfigStyleEnum } from '@/enums'
 
 interface Prop {
@@ -14,7 +14,7 @@ interface Prop {
 const props = withDefaults(defineProps<Prop>(), {})
 
 const defaultBackground = '#2a2a2a6b'
-const propClass = ref(props.class)
+const propClass = computed(() => props.class)
 </script>
 
 <template>

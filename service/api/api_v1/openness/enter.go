@@ -1,5 +1,5 @@
 package openness
 
-type ApiPpenness struct {
+type ApiOpenness struct {
 	Openness Openness
 }

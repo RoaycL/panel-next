@@ -69,34 +69,6 @@ func GetMemoryInfo() (MemoryInfo, error) {
 	return memoryInfo, err
 }
 
-// 获取每个磁盘分区使用情况
-func GetDiskInfo() ([]DiskInfo, error) {
-	disks := []DiskInfo{}
-	// 获取所有磁盘分区的信息
-	partitions, err := disk.Partitions(true)
-	if err != nil {
-		return disks, err
-	}
-
-	for _, partition := range partitions {
-		usage, err := disk.Usage(partition.Mountpoint)
-		if err != nil {
-			// fmt.Printf("Error getting disk usage for %s: %v\n", partition.Mountpoint, err)
-			continue
-		}
-
-		disks = append(disks, DiskInfo{
-			Mountpoint:  partition.Mountpoint,
-			Total:       usage.Total / 1024 / 1024,
-			Used:        usage.Used / 1024 / 1024,
-			Free:        usage.Free / 1024 / 1024,
-			UsedPercent: usage.UsedPercent,
-		})
-	}
-
-	return disks, nil
-}
-
 func GetDiskMountpoints() ([]disk.PartitionStat, error) {
 	return disk.Partitions(true)
 }
@@ -131,19 +103,3 @@ func GetNetIOCountersInfo() ([]NetIOCountersInfo, error) {
 	}
 	return netInfo, err
 }
-
-// func GetCountDiskInfo() {
-// 	// 获取所有磁盘的总使用情况
-// 	allUsage, err := disk.Usage("/")
-// 	if err != nil {
-// 		fmt.Printf("Error getting total disk usage: %v\n", err)
-// 		return
-// 	}
-
-// 	// 打印所有磁盘的总使用情况
-// 	fmt.Println("Total Disk Usage:")
-// 	fmt.Printf("Total: %d MB\n", allUsage.Total/1024/1024)
-// 	fmt.Printf("Used: %d MB\n", allUsage.Used/1024/1024)
-// 	fmt.Printf("Free: %d MB\n", allUsage.Free/1024/1024)
-// 	fmt.Printf("Usage: %.2f%%\n", allUsage.UsedPercent)
-// }

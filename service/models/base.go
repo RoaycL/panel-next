@@ -1,14 +1,10 @@
 package models
 
 import (
-	"fmt"
 	"time"
 
 	_ "gorm.io/driver/mysql"
-	"gorm.io/driver/sqlite"
-	_ "gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"gorm.io/gorm/schema"
 )
 
 // int类型代表是否的常量
@@ -45,43 +41,8 @@ func calcPage(page_size, limit_size int) (offset, limit int) {
 	return
 }
 
+// Db 全局数据库连接
 var Db *gorm.DB
-
-func GetDb() (*gorm.DB, error) {
-	var db *gorm.DB
-	var err error
-
-	dbModels := []interface{}{
-		&User{},
-	}
-	dbDrive := "mysql"
-
-	if dbDrive == "mysql" {
-
-		db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(dbModels...)
-		sqlDb, _ := db.DB()
-		sqlDb.SetMaxIdleConns(10)             // SetMaxIdleConns 设置空闲连接池中连接的最大数量
-		sqlDb.SetMaxOpenConns(100)            // SetMaxOpenConns 设置打开数据库连接的最大数量。
-		sqlDb.SetConnMaxLifetime(time.Minute) // SetConnMaxLifetime 设置了连接可复用的最大时间。
-
-	} else {
-		fmt.Println("数据库驱动:", "SQLite")
-		db, err = gorm.Open(sqlite.Open("database.db"), &gorm.Config{
-			NamingStrategy: schema.NamingStrategy{
-				// TablePrefix:   "blog_",
-				SingularTable: true,
-			},
-			// Logger: GetLogger(),
-			// DisableForeignKeyConstraintWhenMigrating: true,
-		})
-
-		db.AutoMigrate(dbModels...)
-
-	}
-
-	Db = db
-	return Db, err
-}
 
 // // 日志
 // func GetLogger() logger.Interface {
