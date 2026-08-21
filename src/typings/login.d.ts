@@ -22,7 +22,4 @@ declare namespace Login{
         user:User.Info
     }
 
-    interface ResetPasswordByVCodeReqest extends System.Register.SendRegisterVcodeRquest{
-    }
-
 }

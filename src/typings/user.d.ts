@@ -15,10 +15,6 @@ declare namespace User{
 		isAdmin?:number
 	}
 
-	interface GetReferralCodeResponse{
-		referralCode:string
-	}
-
 
 	
 }
