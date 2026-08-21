@@ -39,11 +39,11 @@ onMounted(() => {
       </div>
       <div class="text-xl">
         <NGradientText type="info">
-          <a href="https://github.com/hslr-s/sun-panel/releases" class="font-semibold" :title="$t('apps.about.viewUpdateLog')" target="_blank">v{{ versionName }}</a>
+          <a href="https://github.com/RoaycL/panel-next/releases" class="font-semibold" :title="$t('apps.about.viewUpdateLog')" target="_blank">v{{ versionName }}</a>
         </NGradientText>
       </div>
       <div class="mt-2">
-        <a href="https://github.com/hslr-s/sun-panel/releases" target="_blank" class="link">{{ $t('apps.about.checkUpdate') }}</a>
+        <a href="https://github.com/RoaycL/panel-next/releases" target="_blank" class="link">{{ $t('apps.about.checkUpdate') }}</a>
       </div>
     </div>
 
@@ -55,10 +55,10 @@ onMounted(() => {
         {{ $t('apps.about.author') }}<a href="https://github.com/hslr-s" target="_blank" class="link">红烧猎人</a> | <a href="https://github.com/hslr-s/sun-panel/blob/master/doc/donate.md" target="_blank" class="text-red-600 hover:text-red-900">{{ $t('apps.about.donate') }}</a>
       </div>
       <div>
-        {{ $t('apps.about.issue') }}<a href="https://github.com/hslr-s/sun-panel/issues" target="_blank" class="link">Github Issues</a>
+        {{ $t('apps.about.issue') }}<a href="https://github.com/RoaycL/panel-next/issues" target="_blank" class="link">Github Issues</a>
       </div>
       <div>
-        {{ $t('apps.about.discussions') }}<a href="https://github.com/hslr-s/sun-panel/discussions" target="_blank" class="link">Github Discussions</a>
+        {{ $t('apps.about.discussions') }}<a href="https://github.com/RoaycL/panel-next/discussions" target="_blank" class="link">Github Discussions</a>
       </div>
       <div>
         {{ $t('apps.about.QQGroup') }}<a href="http://qm.qq.com/cgi-bin/qm/qr?_wv=1027&k=K6UII6aEPZUeDRIPOEpOSJZH-Vmr_RPu&authKey=jEXhnVekLbDDx5UkQzKtd3bRmhZggkGBxmvW4NT5LLIAFP7toMmqABwvkANGHbLb&noverify=0&group_code=831615449" target="_blank" class="link">{{ $t("apps.about.addQQGroupUrl") }}</a>
@@ -71,7 +71,7 @@ onMounted(() => {
       <div class="flex mt-[10px] flex-wrap justify-center">
         <div class="flex items-center mx-[10px]">
           <img class="w-[20px] h-[20px] mr-[5px]" :src="srcGithub" alt="">
-          <a href="https://github.com/hslr-s/sun-panel" target="_blank" class="link">Github</a>
+          <a href="https://github.com/RoaycL/panel-next" target="_blank" class="link">Github</a>
         </div>
         <div class="flex items-center mx-[10px]">
           <img class="w-[20px] h-[20px] mr-[5px]" :src="srcGitee" alt="">

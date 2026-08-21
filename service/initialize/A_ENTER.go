@@ -267,7 +267,7 @@ func Logo() {
 
 	versionInfo := cmn.GetSysVersionInfo()
 	fmt.Println("Version:", versionInfo.Version)
-	fmt.Println("Welcome to the Sun-Panel.")
-	fmt.Println("Project address:", "https://github.com/hslr-s/sun-panel")
+	fmt.Println("Welcome to the Panel Next.")
+	fmt.Println("Project address:", "https://github.com/RoaycL/panel-next")
 
 }

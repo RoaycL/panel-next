@@ -18,7 +18,7 @@ async function handleExport() {
     const url = URL.createObjectURL(blob)
     const anchor = document.createElement('a')
     anchor.href = url
-    anchor.download = `sun-panel-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.zip`
+    anchor.download = `panel-next-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.zip`
     document.body.appendChild(anchor)
     anchor.click()
     anchor.remove()
