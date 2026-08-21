@@ -99,13 +99,18 @@ function handleDelete(groupInfo: Panel.ItemIconGroup) {
 function handleSaveGroup() {
   formRef.value?.validate((errors) => {
     if (!errors) {
-      edit(editModalArg.value.model).then(({ code, msg }) => {
-        if (code !== 0)
+      const payload = { ...editModalArg.value.model }
+      delete (payload as any).revision
+      edit(payload).then(({ code, msg }) => {
+        if (code !== 0) {
           ms.error(msg)
-
-        refreshList()
-        editModalArg.value.show = false
-        editModalArg.value.model = { ...defaultMNodal }
+        }
+        else {
+          ms.success(t('common.saveSuccess'))
+          refreshList()
+          editModalArg.value.show = false
+          editModalArg.value.model = { ...defaultMNodal }
+        }
       })
     }
     else { console.log(errors) }

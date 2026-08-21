@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, h, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
+  darkTheme,
   NAvatar,
+  NConfigProvider,
   NDropdown,
   NModal,
+  NSwitch,
   useMessage,
 } from 'naive-ui'
 import { useRouter } from 'vue-router'
@@ -12,7 +15,7 @@ import { useAuthStore, usePanelState, useUserStore } from '@/store'
 import { PanelStateNetworkModeEnum } from '@/enums'
 import { VisitMode } from '@/enums/auth'
 import { getRuntime } from '@/runtime'
-import { readExtensionAppearance, saveExtensionAppearance } from '@/runtime/extensionAppearance'
+import { readExtensionAppearance, readExtensionWidgets, saveExtensionAppearance, saveExtensionWidgets } from '@/runtime/extensionAppearance'
 import { readBootstrapSnapshot, refreshBootstrapSnapshot } from '@/sync/bootstrapCache'
 import { onSyncConflict, setSyncRevision } from '@/sync/revision'
 import { getBootstrap } from '@/api/sync'
@@ -42,6 +45,10 @@ const userStore = useUserStore()
 const runtime = getRuntime()
 
 const showWallpaperModal = ref(false)
+const showWidgetManager = ref(false)
+const widgetPreferences = ref(readExtensionWidgets())
+
+watch(widgetPreferences, value => saveExtensionWidgets(value), { deep: true })
 
 function handleWallpaperSelect(url: string) {
   panelState.panelConfig.backgroundImageSrc = url
@@ -335,8 +342,11 @@ const settingsModalVisible = ref(false)
 const editCardModalVisible = ref(false)
 const editCardData = ref<Panel.ItemInfo | null>(null)
 const editCardGroupId = ref<number | undefined>(undefined)
+const longPressActive = ref<number | null>(null)
 let wheelLocked = false
 let wheelHintTimer: number | null = null
+let longPressTimer: number | null = null
+let suppressNextCardClick = false
 
 const groupTabs = computed(() => {
   return groups.value.map(g => ({
@@ -424,10 +434,42 @@ function handleGroupWheel(event: WheelEvent) {
 
 // 点击卡片在浏览器新标签页打开
 function handleCardClick(card: Panel.ItemInfo) {
+  if (suppressNextCardClick) {
+    suppressNextCardClick = false
+    return
+  }
   const isLan = panelState.networkMode === PanelStateNetworkModeEnum.lan
   const targetUrl = selectItemUrl(card, isLan)
   if (targetUrl)
     runtime.openUrl(targetUrl, 'tab')
+}
+
+function openCardEditor(card: Panel.ItemInfo) {
+  if (authStore.visitMode !== VisitMode.VISIT_MODE_LOGIN)
+    return
+  editCardData.value = { ...card }
+  editCardGroupId.value = card.itemIconGroupId || 0
+  editCardModalVisible.value = true
+}
+
+function startCardLongPress(event: PointerEvent, card: Panel.ItemInfo) {
+  if (event.pointerType === 'mouse' && event.button !== 0)
+    return
+  cancelCardLongPress()
+  longPressActive.value = card.id || null
+  longPressTimer = window.setTimeout(() => {
+    suppressNextCardClick = true
+    longPressActive.value = null
+    longPressTimer = null
+    openCardEditor(card)
+  }, 620)
+}
+
+function cancelCardLongPress() {
+  if (longPressTimer)
+    window.clearTimeout(longPressTimer)
+  longPressTimer = null
+  longPressActive.value = null
 }
 
 // 6. 右键菜单与快捷操作
@@ -478,9 +520,7 @@ function handleRightMenuSelect(key: string) {
     }
   }
   else if (key === 'edit') {
-    editCardData.value = card
-    editCardGroupId.value = card.itemIconGroupId || 0
-    editCardModalVisible.value = true
+    openCardEditor(card)
   }
 }
 
@@ -489,8 +529,14 @@ function openSettings() {
   settingsModalVisible.value = true
 }
 
-function handleEditSuccess() {
+function handleEditSuccess(updated: Panel.Info) {
   editCardModalVisible.value = false
+  const updatedItem = updated as Panel.ItemInfo
+  for (const group of groups.value)
+    group.items = (group.items || []).filter(item => item.id !== updatedItem.id)
+  const targetGroup = groups.value.find(group => group.id === updatedItem.itemIconGroupId)
+  if (targetGroup)
+    targetGroup.items.push(updatedItem)
   void refreshBootstrap()
 }
 
@@ -522,6 +568,7 @@ onUnmounted(() => {
   if (clockTimer) clearInterval(clockTimer)
   if (trendingTimer) clearInterval(trendingTimer)
   if (wheelHintTimer) clearTimeout(wheelHintTimer)
+  if (longPressTimer) clearTimeout(longPressTimer)
   window.removeEventListener('wheel', handleGroupWheel)
 })
 </script>
@@ -555,6 +602,9 @@ onUnmounted(() => {
       </button>
       <button type="button" class="rail-button" title="壁纸设置" @click="showWallpaperModal = true">
         <SvgIcon icon="material-symbols:wallpaper" />
+      </button>
+      <button type="button" class="rail-button" title="添加和管理小组件" @click="showWidgetManager = true">
+        <SvgIcon icon="material-symbols:widgets-outline-rounded" />
       </button>
       <button type="button" class="rail-button" title="刷新同步" @click="refreshBootstrap">
         <SvgIcon icon="material-symbols:sync" :class="{ 'animate-spin': extensionSyncStatus === 'syncing' }" />
@@ -626,6 +676,9 @@ onUnmounted(() => {
         </button>
       </div>
       <div class="quick-actions">
+        <button type="button" class="quick-action-wide" @click="showWidgetManager = true">
+          <SvgIcon icon="material-symbols:add-box-outline-rounded" />添加小组件
+        </button>
         <button type="button" @click="toggleNetworkMode">
           <SvgIcon :icon="panelState.networkMode === PanelStateNetworkModeEnum.lan ? 'material-symbols:lan-outline-rounded' : 'mdi:wan'" />
           {{ panelState.networkMode === PanelStateNetworkModeEnum.lan ? '局域网模式' : '公网模式' }}
@@ -654,7 +707,7 @@ onUnmounted(() => {
       <div class="nav-right flex items-center space-x-2">
         <!-- 实时热搜条 -->
         <div
-          v-if="currentTrending"
+          v-if="widgetPreferences.trending && currentTrending"
           class="trending-pill hidden md:flex items-center space-x-2 px-3 py-1 rounded-full bg-white/10 dark:bg-black/20 backdrop-blur-md border border-white/10 text-white text-xs cursor-pointer hover:bg-white/20 transition-all"
           @click="openTrending(currentTrending)"
         >
@@ -662,7 +715,7 @@ onUnmounted(() => {
           <span class="truncate max-w-[160px]">{{ currentTrending.title }}</span>
         </div>
         <button
-          v-else-if="trendingUnavailable"
+          v-else-if="widgetPreferences.trending && trendingUnavailable"
           type="button"
           class="status-retry-pill hidden md:flex"
           title="热搜暂不可用，点击重试"
@@ -674,7 +727,7 @@ onUnmounted(() => {
 
         <!-- 实时天气微胶囊 -->
         <div
-          v-if="weatherData"
+          v-if="widgetPreferences.weather && weatherData"
           class="weather-pill flex items-center space-x-1.5 px-3 py-1 rounded-full bg-white/10 dark:bg-black/20 backdrop-blur-md border border-white/10 text-white text-xs cursor-pointer hover:bg-white/20 transition-all"
           :title="`${weatherData.location.name} · ${weatherData.current.temperature}°C · 湿度 ${weatherData.current.relativeHumidity}%`"
           @click="fetchWeather"
@@ -684,7 +737,7 @@ onUnmounted(() => {
           <span class="text-white/70 text-[11px] hidden sm:inline-block">{{ weatherData.location.name }}</span>
         </div>
         <button
-          v-else-if="weatherUnavailable"
+          v-else-if="widgetPreferences.weather && weatherUnavailable"
           type="button"
           class="status-retry-pill"
           title="天气暂不可用，点击重试"
@@ -742,20 +795,9 @@ onUnmounted(() => {
           <SvgIcon icon="majesticons-applications" class="text-base text-white" />
         </button>
 
-        <!-- 用户登录/头像 -->
-        <div v-if="authStore.userInfo" class="user-avatar-wrap" @click="openSettings">
-          <NAvatar
-            round
-            size="small"
-            :src="authStore.userInfo.headImage || undefined"
-            fallback-src="/favicon.svg"
-            class="cursor-pointer border border-white/30 hover:scale-105 transition-transform"
-          >
-            {{ (authStore.userInfo.name || authStore.userInfo.username || 'U')[0].toUpperCase() }}
-          </NAvatar>
-        </div>
+        <!-- 登录入口；登录后头像只保留在左侧功能栏 -->
         <button
-          v-else
+          v-if="!authStore.userInfo"
           type="button"
           class="login-btn flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-medium shadow-sm transition-all"
           @click="router.push('/login')"
@@ -769,7 +811,7 @@ onUnmounted(() => {
     <!-- 核心主体区 -->
     <main class="main-content flex flex-col items-center justify-start overflow-y-auto px-4 pb-12 pt-6">
       <!-- 极简大数字时钟与日期 -->
-      <section class="clock-hero flex flex-col items-center mb-6 text-white text-shadow-md">
+      <section v-if="widgetPreferences.clock" class="clock-hero flex flex-col items-center mb-6 text-white text-shadow-md">
         <div class="time-display flex items-baseline font-mono font-bold tracking-tight">
           <span class="text-6xl md:text-8xl select-all font-light">{{ currentTime }}</span>
           <span class="text-xl md:text-2xl opacity-70 ml-2 font-normal">{{ currentSeconds }}</span>
@@ -780,7 +822,7 @@ onUnmounted(() => {
       </section>
 
       <!-- 居中胶囊全能搜索栏 -->
-      <section class="search-section w-full max-w-[640px] mb-8">
+      <section v-if="widgetPreferences.search" class="search-section w-full max-w-[640px] mb-8">
         <div
           class="search-bar-capsule flex items-center bg-white/20 dark:bg-black/35 backdrop-blur-xl border border-white/25 dark:border-white/10 rounded-full px-3 py-2 shadow-lg transition-all duration-300"
           :class="{ 'ring-2 ring-emerald-400/60 shadow-emerald-500/20 bg-white/30 dark:bg-black/50': isSearchFocused }"
@@ -840,9 +882,14 @@ onUnmounted(() => {
             v-for="card in displayedCards"
             :key="card.id"
             class="speed-card group"
+            :class="{ 'is-long-pressing': longPressActive === card.id }"
             :title="card.description || card.title"
             @click="handleCardClick(card)"
             @contextmenu="handleCardContextMenu($event, card)"
+            @pointerdown="startCardLongPress($event, card)"
+            @pointerup="cancelCardLongPress"
+            @pointercancel="cancelCardLongPress"
+            @pointerleave="cancelCardLongPress"
           >
             <!-- 图标容器 -->
             <div class="card-icon-box">
@@ -893,13 +940,45 @@ onUnmounted(() => {
     />
 
     <!-- 编辑卡片弹窗 -->
-    <EditItem
-      v-if="editCardModalVisible"
-      v-model:visible="editCardModalVisible"
-      :item-info="editCardData"
-      :item-group-id="editCardGroupId"
-      @done="handleEditSuccess"
-    />
+    <NConfigProvider :theme="darkTheme">
+      <EditItem
+        v-if="editCardModalVisible"
+        v-model:visible="editCardModalVisible"
+        :item-info="editCardData"
+        :item-group-id="editCardGroupId"
+        @done="handleEditSuccess"
+      />
+    </NConfigProvider>
+
+    <NModal
+      v-model:show="showWidgetManager"
+      preset="card"
+      title="添加和管理小组件"
+      class="widget-manager-modal"
+      style="width: min(520px, 92vw); border-radius: 18px;"
+    >
+      <NConfigProvider :theme="darkTheme">
+        <div class="widget-manager-content">
+          <p>选择要显示在扩展新标签页上的组件，设置只保存在扩展端。</p>
+          <label class="widget-choice">
+            <span><SvgIcon icon="material-symbols:schedule-outline-rounded" /><b>时钟与日期</b><small>页面中央的大号时间</small></span>
+            <NSwitch v-model:value="widgetPreferences.clock" />
+          </label>
+          <label class="widget-choice">
+            <span><SvgIcon icon="material-symbols:search-rounded" /><b>搜索框</b><small>书签与全网搜索</small></span>
+            <NSwitch v-model:value="widgetPreferences.search" />
+          </label>
+          <label class="widget-choice">
+            <span><SvgIcon icon="material-symbols:partly-cloudy-day-outline" /><b>天气</b><small>右上角实时天气</small></span>
+            <NSwitch v-model:value="widgetPreferences.weather" />
+          </label>
+          <label class="widget-choice">
+            <span><SvgIcon icon="material-symbols:local-fire-department-outline-rounded" /><b>热搜</b><small>右上角滚动热榜</small></span>
+            <NSwitch v-model:value="widgetPreferences.trending" />
+          </label>
+        </div>
+      </NConfigProvider>
+    </NModal>
 
     <!-- 壁纸库 / Wallhaven 选择弹窗 -->
     <NModal
@@ -1119,6 +1198,7 @@ onUnmounted(() => {
 .quick-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.09); }
 .quick-actions button { padding: 9px 6px; display: flex; align-items: center; justify-content: center; gap: 5px; color: rgba(255,255,255,.65); border: 1px solid rgba(255,255,255,.08); border-radius: 10px; background: rgba(255,255,255,.04); font-size: 10px; cursor: pointer; }
 .quick-actions button:hover { color: white; background: rgba(255,255,255,.1); }
+.quick-actions .quick-action-wide { grid-column: 1 / -1; color: #a5f3fc; border-color: rgba(103,232,249,.2); background: rgba(34,211,238,.08); }
 
 /* 顶部导航栏 */
 .top-nav-bar {
@@ -1255,6 +1335,20 @@ onUnmounted(() => {
   transform: translateY(-4px) scale(1.02);
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3);
 }
+
+.speed-card.is-long-pressing {
+  transform: scale(.96);
+  border-color: rgba(103, 232, 249, .7);
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, .18);
+}
+
+.widget-manager-content { display: flex; flex-direction: column; gap: 10px; color: #e2e8f0; }
+.widget-manager-content > p { margin: 0 0 4px; color: #94a3b8; font-size: 12px; }
+.widget-choice { padding: 13px 14px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border: 1px solid rgba(255,255,255,.1); border-radius: 14px; background: rgba(15,23,42,.72); cursor: pointer; }
+.widget-choice > span { min-width: 0; display: grid; grid-template-columns: 24px 1fr; align-items: center; column-gap: 8px; }
+.widget-choice svg { grid-row: 1 / 3; color: #67e8f9; font-size: 18px; }
+.widget-choice b { font-size: 13px; }
+.widget-choice small { color: #64748b; font-size: 10px; }
 
 .card-icon-box {
   width: 58px;
