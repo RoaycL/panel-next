@@ -25,7 +25,7 @@ export async function mutationPost<T>(url: string, data: unknown): Promise<Respo
     }
   }
 
-  let response = await post<MutationEnvelope<T>>({
+  const response = await post<MutationEnvelope<T>>({
     url,
     data: {
       expectedRevision,
@@ -33,21 +33,11 @@ export async function mutationPost<T>(url: string, data: unknown): Promise<Respo
     },
   })
 
-  // 1502 冲突时自动从服务端刷新最新 revision 并重试一次
+  // Never replay a stale write automatically: doing so with a fresh revision
+  // would silently overwrite a concurrent edit made on another device.
   if (response.code === 1502) {
-    const bootstrap = await getBootstrap()
-    if (bootstrap.code === 0 && bootstrap.data) {
-      setSyncRevision(bootstrap.data.revision)
-      response = await post<MutationEnvelope<T>>({
-        url,
-        data: {
-          expectedRevision: bootstrap.data.revision,
-          data,
-        },
-      })
-    }
-    if (response.code === 1502)
-      notifySyncConflict()
+    notifySyncConflict()
+    return response as unknown as Response<T>
   }
 
   if (response.code !== 0)

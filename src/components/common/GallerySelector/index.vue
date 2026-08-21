@@ -15,7 +15,8 @@ import {
 } from 'naive-ui'
 import { getList as getPrivateList } from '@/api/system/file'
 import { getList as getPublicList } from '@/api/system/publicFile'
-import { getWallhavenWallpapers, type WallhavenItem, type WallhavenSearchParams } from '@/api/wallhaven'
+import { getWallhavenWallpapers   } from '@/api/wallhaven'
+import type {WallhavenItem, WallhavenSearchParams} from '@/api/wallhaven';
 import { SvgIcon } from '@/components/common'
 import { t } from '@/locales'
 
@@ -119,7 +120,7 @@ async function fetchWallhaven() {
       ms.error(res.msg || '获取 Wallhaven 壁纸失败')
     }
   }
-  catch (error) {
+  catch {
     ms.error('请求 Wallhaven 服务失败')
   }
   finally {

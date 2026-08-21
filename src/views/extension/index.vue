@@ -24,6 +24,7 @@ import { getWeather } from '@/api/weather'
 import type { WeatherResponse } from '@/api/weather'
 import { getTrending } from '@/api/trending'
 import type { TrendingItem, TrendingSource } from '@/api/trending'
+import defaultBackground from '@/assets/defaultBackground.webp'
 
 import SvgSrcBaidu from '@/assets/search_engine_svg/baidu.svg'
 import SvgSrcBing from '@/assets/search_engine_svg/bing.svg'
@@ -136,15 +137,21 @@ function handleSearchSubmit() {
 // 3. 天气与热搜
 const weatherData = ref<WeatherResponse | null>(null)
 const weatherCity = ref('北京')
+const weatherUnavailable = ref(false)
 
 async function fetchWeather() {
   try {
     const res = await getWeather(weatherCity.value, 'metric')
-    if (res.code === 0)
+    if (res.code === 0) {
       weatherData.value = res.data
+      weatherUnavailable.value = false
+    }
+    else {
+      weatherUnavailable.value = true
+    }
   }
   catch {
-    // ignore
+    weatherUnavailable.value = true
   }
 }
 
@@ -166,16 +173,22 @@ const weatherEmoji = computed(() => {
 const trendingItems = ref<TrendingItem[]>([])
 const trendingIndex = ref(0)
 const trendingSource = ref<TrendingSource>('weibo')
+const trendingUnavailable = ref(false)
 let trendingTimer: number | null = null
 
 async function fetchTrending() {
   try {
     const res = await getTrending(trendingSource.value, 15)
-    if (res.code === 0 && res.data?.items?.length)
+    if (res.code === 0 && res.data?.items?.length) {
       trendingItems.value = res.data.items
+      trendingUnavailable.value = false
+    }
+    else {
+      trendingUnavailable.value = true
+    }
   }
   catch {
-    // ignore
+    trendingUnavailable.value = true
   }
 }
 
@@ -261,8 +274,14 @@ async function refreshBootstrap() {
       return
     }
     // 降级使用普通 API 获取
-    await loadDirectFromApi()
-    extensionSyncStatus.value = 'online'
+    if (!authStore.token) {
+      await router.push('/login')
+      return
+    }
+    if (await loadDirectFromApi())
+      extensionSyncStatus.value = 'online'
+    else
+      loadCachedSnapshot()
   }
   catch {
     loadCachedSnapshot()
@@ -286,22 +305,26 @@ function loadCachedSnapshot() {
 
 async function loadDirectFromApi() {
   const groupRes = await getGroupList<Panel.ItemIconGroup[]>()
-  if (groupRes.code === 0 && Array.isArray(groupRes.data)) {
-    const groupList = groupRes.data
-    const loadedGroups: DashboardGroup[] = []
-    for (const g of groupList) {
-      const itemsRes = await getListByGroupId<Panel.ItemInfo[]>(g.id)
-      loadedGroups.push({
+  if (groupRes.code !== 0 || !Array.isArray(groupRes.data))
+    return false
+
+  const results = await Promise.all(groupRes.data.map(async (g) => {
+    const itemsRes = await getListByGroupId<Panel.ItemInfo[]>(g.id)
+    if (itemsRes.code !== 0 || !Array.isArray(itemsRes.data))
+      return null
+    return {
         id: g.id ?? 0,
         title: g.title ?? '',
         icon: g.icon,
         sort: g.sort ?? 0,
         hoverStatus: false,
-        items: itemsRes.code === 0 && Array.isArray(itemsRes.data) ? itemsRes.data : [],
-      })
-    }
-    groups.value = loadedGroups
-  }
+        items: itemsRes.data,
+      } satisfies DashboardGroup
+  }))
+  if (results.some(group => group === null))
+    return false
+  groups.value = results as DashboardGroup[]
+  return true
 }
 
 // 5. 分组 Tab 切换与卡片过滤（告别堆叠）
@@ -378,6 +401,14 @@ function handleGroupWheel(event: WheelEvent) {
     return
   if (Math.abs(event.deltaY) < 18 || wheelLocked || groupTabs.value.length < 2)
     return
+
+  const scrollContainer = target?.closest('.main-content') as HTMLElement | null
+  if (scrollContainer && scrollContainer.scrollHeight > scrollContainer.clientHeight) {
+    const atTop = scrollContainer.scrollTop <= 1
+    const atBottom = scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight - 1
+    if ((event.deltaY < 0 && !atTop) || (event.deltaY > 0 && !atBottom))
+      return
+  }
 
   event.preventDefault()
   const currentIndex = Math.max(0, groupTabs.value.findIndex(group => group.id === activeTabId.value))
@@ -549,6 +580,24 @@ onUnmounted(() => {
           <SvgIcon icon="material-symbols:chevron-left-rounded" />
         </button>
       </div>
+
+      <!-- 功能区精美封面图 Banner -->
+      <div class="function-banner relative h-20 rounded-2xl overflow-hidden mb-3 shadow-md border border-white/10 group cursor-pointer shrink-0" @click="openSettings">
+        <img
+          :src="defaultBackground"
+          alt="Banner"
+          class="w-full h-full object-cover brightness-90 group-hover:scale-105 transition-transform duration-300"
+        >
+        <div class="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-900/30 to-transparent flex items-end p-2.5">
+          <div class="flex items-center justify-between w-full">
+            <span class="text-xs font-bold text-white tracking-wide flex items-center space-x-1">
+              <SvgIcon icon="material-symbols:space-dashboard-outline" class="text-emerald-400" />
+              <span>新标签页工作台</span>
+            </span>
+            <span class="text-[10px] text-white/80 bg-white/10 px-2 py-0.5 rounded-full backdrop-blur-sm">快捷控制</span>
+          </div>
+        </div>
+      </div>
       <button type="button" class="profile-card" @click="openSettings">
         <NAvatar round :size="42" :src="authStore.userInfo?.headImage || undefined" fallback-src="/favicon.svg" />
         <span class="profile-copy">
@@ -614,6 +663,16 @@ onUnmounted(() => {
           <span class="text-amber-400 font-bold">🔥 热搜</span>
           <span class="truncate max-w-[160px]">{{ currentTrending.title }}</span>
         </div>
+        <button
+          v-else-if="trendingUnavailable"
+          type="button"
+          class="status-retry-pill hidden md:flex"
+          title="热搜暂不可用，点击重试"
+          @click="fetchTrending"
+        >
+          <SvgIcon icon="material-symbols:refresh-rounded" />
+          <span>热搜重试</span>
+        </button>
 
         <!-- 实时天气微胶囊 -->
         <div
@@ -626,6 +685,16 @@ onUnmounted(() => {
           <span class="font-semibold">{{ Math.round(weatherData.current.temperature) }}°C</span>
           <span class="text-white/70 text-[11px] hidden sm:inline-block">{{ weatherData.location.name }}</span>
         </div>
+        <button
+          v-else-if="weatherUnavailable"
+          type="button"
+          class="status-retry-pill"
+          title="天气暂不可用，点击重试"
+          @click="fetchWeather"
+        >
+          <SvgIcon icon="material-symbols:cloud-off-outline-rounded" />
+          <span>天气重试</span>
+        </button>
 
         <!-- 网络模式切换 -->
         <button
@@ -1079,6 +1148,24 @@ onUnmounted(() => {
   color: #ffffff;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.status-retry-pill {
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  color: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(14px);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.status-retry-pill:hover {
+  color: white;
+  background: rgba(255, 255, 255, 0.16);
 }
 
 .icon-btn:hover {

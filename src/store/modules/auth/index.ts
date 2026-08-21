@@ -89,14 +89,21 @@ export const useAuthStore = defineStore('auth-store', {
           )
           const data = response.data
           if (data.code !== 0 || !data.data) {
-            this.clearSession()
+            if ([1000, 1001, 1008, 1009].includes(data.code))
+              this.clearSession()
             return false
           }
           this.updateDeviceSession(data.data)
           return true
         }
-        catch {
-          this.clearSession()
+        catch (error) {
+          // A transport outage is not proof that the refresh token is invalid.
+          // Keep the session so online recovery can retry without forcing login.
+          if (axios.isAxiosError(error)) {
+            const code = error.response?.data?.code
+            if ([1000, 1001, 1008, 1009].includes(code))
+              this.clearSession()
+          }
           return false
         }
       }

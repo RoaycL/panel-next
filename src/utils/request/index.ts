@@ -40,6 +40,10 @@ function http<T = any>(options: HttpOption, sessionRetry = false): Promise<Respo
     if (res.data.code === 1008 && !sessionRetry) {
       if (await authStore.refreshSession())
         return http<T>(options, true)
+      // Preserve a device refresh token after a temporary refresh transport
+      // failure. A later online event/request can recover the same session.
+      if (authStore.authMode === 'device' && authStore.refreshToken)
+        return res.data
     }
 
     if (res.data.code === 1001 || res.data.code === 1008 || res.data.code === 1009) {

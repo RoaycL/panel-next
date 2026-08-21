@@ -6,10 +6,11 @@ export function getAuthInfo<T>() {
   })
 }
 
-export function updateInfo<T>(name: string) {
+export function updateInfo<T>(dataOrName: string | { name: string; headImage?: string }) {
+  const data = typeof dataOrName === 'string' ? { name: dataOrName } : dataOrName
   return post<T>({
     url: '/user/updateInfo',
-    data: { name },
+    data,
   })
 }
 

@@ -9,6 +9,7 @@ import (
 	"panel-next/api/api_v1/common/apiReturn"
 	"panel-next/api/api_v1/common/base"
 	"panel-next/global"
+	sessionlib "panel-next/lib/session"
 	"panel-next/models"
 
 	"github.com/gin-gonic/gin"
@@ -21,6 +22,10 @@ var syncBootstrapNow = time.Now
 
 func (a *SyncBootstrapApi) Get(c *gin.Context) {
 	if _, ok := applyAPIVersionNegotiation(c); !ok {
+		return
+	}
+	if mode, _ := c.Get(sessionlib.GinAuthModeKey); mode != sessionlib.AuthModeDevice {
+		apiReturn.ErrorByCode(c, 1001)
 		return
 	}
 	user, exists := base.GetCurrentUserInfo(c)

@@ -667,82 +667,82 @@ function handleAddItem(itemIconGroupId?: number) {
             : { marginLeft: `${panelState.panelConfig.marginX}px`, marginRight: `${panelState.panelConfig.marginX}px` }"
         >
           <div v-if="canEdit" class="widget-toolbar">
-              <button v-if="!widgetEditMode" type="button" class="widget-tool-button" @click="enterWidgetLayoutEdit">
-                {{ t('widgetLayout.edit') }}
+            <button v-if="!widgetEditMode" type="button" class="widget-tool-button" @click="enterWidgetLayoutEdit">
+              {{ t('widgetLayout.edit') }}
+            </button>
+            <template v-else>
+              <NDropdown trigger="click" :options="widgetAddOptions" @select="handleWidgetAdd">
+                <button type="button" class="widget-tool-button">
+                  {{ t('widgetLayout.add') }}
+                </button>
+              </NDropdown>
+              <button type="button" class="widget-tool-button" :disabled="widgetLayoutSaving" @click="saveWidgetLayout">
+                {{ t('widgetLayout.save') }}
               </button>
-              <template v-else>
-                <NDropdown trigger="click" :options="widgetAddOptions" @select="handleWidgetAdd">
-                  <button type="button" class="widget-tool-button">
-                    {{ t('widgetLayout.add') }}
-                  </button>
-                </NDropdown>
-                <button type="button" class="widget-tool-button" :disabled="widgetLayoutSaving" @click="saveWidgetLayout">
-                  {{ t('widgetLayout.save') }}
-                </button>
-                <button type="button" class="widget-tool-button" @click="cancelWidgetLayoutEdit">
-                  {{ t('widgetLayout.cancel') }}
-                </button>
-              </template>
-            </div>
+              <button type="button" class="widget-tool-button" @click="cancelWidgetLayoutEdit">
+                {{ t('widgetLayout.cancel') }}
+              </button>
+            </template>
+          </div>
 
-            <!-- 浏览模式 -->
-            <div v-if="!widgetEditMode" class="widget-grid">
-              <div
-                v-for="instance in visibleWidgetInstances" :key="instance.id"
-                class="widget-cell" :style="widgetCellStyle(instance)"
-              >
-                <WidgetHost :instance="instance" @item-search="itemFrontEndSearch" />
-              </div>
-            </div>
-
-            <!-- 编辑模式：拖放排序、缩放、隐藏与删除 -->
-            <VueDraggable
-              v-else
-              v-model="widgetInstances" item-key="id" :animation="200"
-              handle=".widget-edit-handle"
-              class="widget-grid widget-grid-editing"
+          <!-- 浏览模式 -->
+          <div v-if="!widgetEditMode" class="widget-grid">
+            <div
+              v-for="instance in visibleWidgetInstances" :key="instance.id"
+              class="widget-cell" :style="widgetCellStyle(instance)"
             >
-              <div
-                v-for="(instance, index) in widgetInstances" :key="instance.id"
-                class="widget-cell" :style="widgetCellStyle(instance)"
-              >
-                <div v-if="instance.hidden" class="widget-hidden-card">
+              <WidgetHost :instance="instance" @item-search="itemFrontEndSearch" />
+            </div>
+          </div>
+
+          <!-- 编辑模式：拖放排序、缩放、隐藏与删除 -->
+          <VueDraggable
+            v-else
+            v-model="widgetInstances" item-key="id" :animation="200"
+            handle=".widget-edit-handle"
+            class="widget-grid widget-grid-editing"
+          >
+            <div
+              v-for="(instance, index) in widgetInstances" :key="instance.id"
+              class="widget-cell" :style="widgetCellStyle(instance)"
+            >
+              <div v-if="instance.hidden" class="widget-hidden-card">
+                <span class="widget-edit-handle" :title="t('widgetLayout.drag')">{{ '⠿' }}</span>
+                <span class="widget-hidden-name">{{ widgetTypeLabel(instance.type) }}</span>
+                <button type="button" class="widget-edit-action" :title="t('widgetLayout.show')" @click="toggleWidgetHidden(instance)">
+                  {{ '👁' }}
+                </button>
+                <button type="button" class="widget-edit-action" :title="t('widgetLayout.remove')" @click="removeWidgetInstance(index)">
+                  {{ '✕' }}
+                </button>
+              </div>
+              <div v-else class="widget-edit-card">
+                <div class="widget-edit-bar">
                   <span class="widget-edit-handle" :title="t('widgetLayout.drag')">{{ '⠿' }}</span>
-                  <span class="widget-hidden-name">{{ widgetTypeLabel(instance.type) }}</span>
-                  <button type="button" class="widget-edit-action" :title="t('widgetLayout.show')" @click="toggleWidgetHidden(instance)">
-                    {{ '👁' }}
+                  <button type="button" class="widget-edit-action" :title="t('widgetLayout.narrow')" :disabled="!canResizeWidget(instance, 'columns', -1)" @click="resizeWidget(instance, 'columns', -1)">
+                    {{ '−' }}
+                  </button>
+                  <button type="button" class="widget-edit-action" :title="t('widgetLayout.widen')" :disabled="!canResizeWidget(instance, 'columns', 1)" @click="resizeWidget(instance, 'columns', 1)">
+                    {{ '＋' }}
+                  </button>
+                  <button type="button" class="widget-edit-action" :title="t('widgetLayout.shrink')" :disabled="!canResizeWidget(instance, 'rows', -1)" @click="resizeWidget(instance, 'rows', -1)">
+                    {{ '⌃' }}
+                  </button>
+                  <button type="button" class="widget-edit-action" :title="t('widgetLayout.stretch')" :disabled="!canResizeWidget(instance, 'rows', 1)" @click="resizeWidget(instance, 'rows', 1)">
+                    {{ '⌄' }}
+                  </button>
+                  <button type="button" class="widget-edit-action" :title="t('widgetLayout.hide')" @click="toggleWidgetHidden(instance)">
+                    {{ '🚫' }}
                   </button>
                   <button type="button" class="widget-edit-action" :title="t('widgetLayout.remove')" @click="removeWidgetInstance(index)">
                     {{ '✕' }}
                   </button>
                 </div>
-                <div v-else class="widget-edit-card">
-                  <div class="widget-edit-bar">
-                    <span class="widget-edit-handle" :title="t('widgetLayout.drag')">{{ '⠿' }}</span>
-                    <button type="button" class="widget-edit-action" :title="t('widgetLayout.narrow')" :disabled="!canResizeWidget(instance, 'columns', -1)" @click="resizeWidget(instance, 'columns', -1)">
-                      {{ '−' }}
-                    </button>
-                    <button type="button" class="widget-edit-action" :title="t('widgetLayout.widen')" :disabled="!canResizeWidget(instance, 'columns', 1)" @click="resizeWidget(instance, 'columns', 1)">
-                      {{ '＋' }}
-                    </button>
-                    <button type="button" class="widget-edit-action" :title="t('widgetLayout.shrink')" :disabled="!canResizeWidget(instance, 'rows', -1)" @click="resizeWidget(instance, 'rows', -1)">
-                      {{ '⌃' }}
-                    </button>
-                    <button type="button" class="widget-edit-action" :title="t('widgetLayout.stretch')" :disabled="!canResizeWidget(instance, 'rows', 1)" @click="resizeWidget(instance, 'rows', 1)">
-                      {{ '⌄' }}
-                    </button>
-                    <button type="button" class="widget-edit-action" :title="t('widgetLayout.hide')" @click="toggleWidgetHidden(instance)">
-                      {{ '🚫' }}
-                    </button>
-                    <button type="button" class="widget-edit-action" :title="t('widgetLayout.remove')" @click="removeWidgetInstance(index)">
-                      {{ '✕' }}
-                    </button>
-                  </div>
-                  <WidgetHost :instance="instance" @item-search="itemFrontEndSearch" />
-                </div>
+                <WidgetHost :instance="instance" @item-search="itemFrontEndSearch" />
               </div>
-            </VueDraggable>
-          </div>
+            </div>
+          </VueDraggable>
+        </div>
 
         <!-- 应用盒子 -->
         <div
