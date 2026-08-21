@@ -26,7 +26,7 @@ import SvgSrcBaidu from '@/assets/search_engine_svg/baidu.svg'
 import SvgSrcBing from '@/assets/search_engine_svg/bing.svg'
 import SvgSrcGoogle from '@/assets/search_engine_svg/google.svg'
 
-const AppStarter = defineAsyncComponent(() => import('@/views/home/components/AppStarter/index.vue'))
+const UserHubModal = defineAsyncComponent(() => import('./components/UserHubModal.vue'))
 const EditItem = defineAsyncComponent(() => import('@/views/home/components/EditItem/index.vue'))
 const GallerySelector = defineAsyncComponent(() => import('@/components/common/GallerySelector/index.vue'))
 
@@ -701,10 +701,10 @@ onUnmounted(() => {
       @select="handleRightMenuSelect"
     />
 
-    <!-- 内置系统与扩展设置模态框（直接在扩展内完成设置，无需跳出） -->
-    <AppStarter
-      v-if="settingsModalVisible"
-      v-model:visible="settingsModalVisible"
+    <!-- 现代化专属个人中心与系统控制台 -->
+    <UserHubModal
+      v-model:show="settingsModalVisible"
+      @refresh="refreshBootstrap"
     />
 
     <!-- 编辑卡片弹窗 -->

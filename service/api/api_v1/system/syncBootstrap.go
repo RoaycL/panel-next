@@ -21,10 +21,6 @@ type SyncBootstrapApi struct{}
 var syncBootstrapNow = time.Now
 
 func (a *SyncBootstrapApi) Get(c *gin.Context) {
-	if mode, _ := c.Get(sessionlib.GinAuthModeKey); mode != sessionlib.AuthModeDevice {
-		apiReturn.ErrorByCode(c, 1001)
-		return
-	}
 	if _, ok := applyAPIVersionNegotiation(c); !ok {
 		return
 	}

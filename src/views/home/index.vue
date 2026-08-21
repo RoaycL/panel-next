@@ -657,8 +657,16 @@ function handleAddItem(itemIconGroupId?: number) {
           <div v-if="panelState.panelConfig.searchBoxShow" class="home-search flex mt-[20px] mx-auto sm:w-full lg:w-[80%]">
             <WidgetHost :instance="headerSearchWidget" @item-search="itemFrontEndSearch" />
           </div>
-          <div class="home-widgets mx-auto mt-[24px] w-full">
-            <div v-if="canEdit" class="widget-toolbar">
+        </div>
+
+        <!-- 小组件区域（宽度与下方收藏区完全保持一致） -->
+        <div
+          class="home-widgets w-full mx-auto mt-[24px]"
+          :style="layout === 'extension'
+            ? undefined
+            : { marginLeft: `${panelState.panelConfig.marginX}px`, marginRight: `${panelState.panelConfig.marginX}px` }"
+        >
+          <div v-if="canEdit" class="widget-toolbar">
               <button v-if="!widgetEditMode" type="button" class="widget-tool-button" @click="enterWidgetLayoutEdit">
                 {{ t('widgetLayout.edit') }}
               </button>
@@ -735,7 +743,6 @@ function handleAddItem(itemIconGroupId?: number) {
               </div>
             </VueDraggable>
           </div>
-        </div>
 
         <!-- 应用盒子 -->
         <div
@@ -1106,7 +1113,8 @@ html {
 }
 
 .home-widgets {
-  max-width: min(100%, 940px);
+  width: 100%;
+  max-width: 100%;
 }
 
 .widget-toolbar {
