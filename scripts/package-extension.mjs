@@ -12,6 +12,13 @@ if (!/^\d+\.\d+\.\d+(?:\.\d+)?$/.test(version))
 const archiveName = `panel-next-extension-v${version}.zip`
 const archivePath = path.join(artifactRoot, archiveName)
 
+const builtManifestPath = path.join(sourceRoot, 'manifest.json')
+if (!fs.existsSync(builtManifestPath))
+  throw new Error('Extension build is missing; run the extension build first.')
+const builtManifest = JSON.parse(fs.readFileSync(builtManifestPath, 'utf8'))
+if (builtManifest.version !== version)
+  throw new Error(`Refusing to package stale build ${builtManifest.version}; expected ${version}.`)
+
 function collectFiles(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const absolute = path.join(directory, entry.name)
@@ -85,8 +92,6 @@ function buildZip(files) {
   return Buffer.concat([...localParts, central, end])
 }
 
-if (!fs.existsSync(sourceRoot))
-  throw new Error('Extension build is missing; run pnpm build:extension first.')
 const files = collectFiles(sourceRoot).sort()
 if (files.length > 0xFFFF)
   throw new Error('Extension package contains too many files for ZIP32.')

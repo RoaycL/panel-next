@@ -92,7 +92,7 @@ P1 验收门槛：不得修改生产数据库结构；不得发布到 Chrome 商
 
 - [x] `RELEASE-01` 固定扩展 ID 或公钥策略，并配置生产扩展 Origin。实现：生成 RSA 2048 密钥对，公钥写入 `extension/manifest.json` 的 `key` 字段，扩展 ID 固定为 `gkmjlokenmbecapgnddickgkgfaflolb`（重装不变化）；私钥存 `.secrets/extension-key.pem`（gitignore，不入库）；manifest 设置 `minimum_chrome_version: 88`；服务端 CORS 白名单收敛为精确 ID。生产 Origin `https://next.roayc.com` 已验证跨源登录成功。
 - [x] `RELEASE-02` 完成最小权限审计、CSP、依赖和打包内容检查。实现：权限仅保留 `storage`（host 权限按需申请 `optional_host_permissions`）；显式声明 CSP `script-src 'self'; object-src 'self'`；`validate-extension.mjs` 校验无 `.map`/`.pem`/`.env` 打包、无远程脚本、manifest 版本与 `service/assets/version` 一致。同时增强 CORS：自动放行所有格式合法的 `chrome-extension://<32位ID>` Origin（普通网页无法伪造扩展 Origin，无需逐 ID 配置），Web Origin 仍需精确白名单；`extension_ids` 列表与 `*` 通配符保留向后兼容；修复 `DockerApi` 含 `sync.Once` 被按值复制导致的 vet 报错（改用包级 client 单例）。
-- [ ] `RELEASE-03` 编写隐私政策、数据用途、账号删除和支持文档。
+- [x] `RELEASE-03` 编写隐私政策、数据用途、账号删除和支持文档。实现：`doc/privacy.md`（数据收集/用途/存储安全/账号删除/导出/免责声明，自托管不向第三方上报数据）、`doc/support.md`（Docker/二进制部署、Chrome 扩展安装、扩展 ID 说明、默认账号、FAQ、账号删除指引）；README 增加文档链接并更新 CORS 描述。
 - [ ] `RELEASE-04` 建立 Web 镜像与扩展 ZIP 的自动构建和校验和。
 - [ ] `RELEASE-05` 建立 Chrome Web Store 手工发布清单，密钥不得进入仓库或 CI 日志。
 - [ ] `RELEASE-06` 建立升级、回滚、API 兼容矩阵和最低后端版本提示。

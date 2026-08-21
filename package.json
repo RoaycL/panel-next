@@ -1,6 +1,6 @@
 {
   "name": "panel-next",
-  "version": "1.0.0",
+  "version": "1.3.0",
   "packageManager": "pnpm@11.20.0",
   "engines": {
     "node": ">=22.13"
@@ -20,7 +20,8 @@
     "preview": "vite preview",
     "build-only": "pnpm run build:web",
     "build:web": "vite build",
-    "build:extension": "vite build --mode extension && node ./scripts/validate-extension.mjs",
+    "bump:extension-version": "node ./scripts/bump-extension-version.mjs",
+    "build:extension": "node ./scripts/bump-extension-version.mjs && vite build --mode extension && node ./scripts/validate-extension.mjs",
     "package:extension": "pnpm run build:extension && node ./scripts/package-extension.mjs",
     "validate:extension": "node ./scripts/validate-extension.mjs",
     "validate:architecture": "node ./scripts/validate-architecture.mjs",
