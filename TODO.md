@@ -4,12 +4,13 @@
 
 ## 当前状态
 
-- 状态更新时间：`2026-08-20`。
+- 状态更新时间：`2026-08-21`。
 - 当前开发分支：`main`（多人协作通过功能分支和 Pull Request 合入）。
-- 已完成：前端工具链升级、SQLite 完整备份恢复、MySQL/PostgreSQL 逻辑备份迁移、Web/Chrome 双端基础、全部 53 个官方公开功能能力包。
-- 双端布局：Web 保持原导航布局；Extension 已建立专用新标签页路由与响应式玻璃分组布局，底层数据和卡片交互继续共享。
-- 最近验证：后端 `go test ./...`、`go vet ./...` 全部通过；前端 ESLint 零错误、TypeScript 类型检查零错误、8 项前端架构校验全部通过、Web/Extension 生产构建和扩展包校验通过。
-- 已知环境缺口：PostgreSQL 17.10 已完成真实迁移及备份恢复演练；MySQL 真实恢复演练和 Chrome 手工加载仍待具备相应环境时执行。
+- 已完成：前端工具链升级、SQLite 完整备份恢复、MySQL/PostgreSQL 逻辑备份迁移、Web/Chrome 双端基础、全部 53 个官方公开功能能力包、`RELEASE-01/02`（固定扩展 ID、CORS 自动放行、最小权限/CSP/打包审计）。
+- 双端布局：Web 保持原导航布局；Extension 已建立专用新标签页路由与响应式玻璃分组布局，底层数据和卡片交互继续共享；两端共用一套账号数据，展现方式各自独立。
+- 部署：已切换为 Docker（`docker-compose.yml` + `network_mode: host`），生产地址 `https://next.roayc.com`（端口 3003，反向代理经 Cloudflare/Caddy）；Chrome 扩展在 `chrome://extensions` 开发者模式加载验证。
+- 最近验证：后端 `go test ./...`、`go vet ./...` 全部通过；前端 ESLint 零错误、TypeScript 零错误、8 项前端架构校验通过、Web/Extension 生产构建与扩展包校验通过；登录接口、bootstrap、CORS 跨源实测通过。
+- 已知环境缺口：PostgreSQL 17.10 已完成真实迁移及备份恢复演练；MySQL 真实恢复演练仍待具备相应环境时执行。
 
 ## P0：架构与仓库准备
 
@@ -89,8 +90,8 @@ P1 验收门槛：不得修改生产数据库结构；不得发布到 Chrome 商
 
 ## P7：发布与运维
 
-- [ ] `RELEASE-01` 固定扩展 ID 或公钥策略，并配置生产扩展 Origin。
-- [ ] `RELEASE-02` 完成最小权限审计、CSP、依赖和打包内容检查。
+- [x] `RELEASE-01` 固定扩展 ID 或公钥策略，并配置生产扩展 Origin。实现：生成 RSA 2048 密钥对，公钥写入 `extension/manifest.json` 的 `key` 字段，扩展 ID 固定为 `gkmjlokenmbecapgnddickgkgfaflolb`（重装不变化）；私钥存 `.secrets/extension-key.pem`（gitignore，不入库）；manifest 设置 `minimum_chrome_version: 88`；服务端 CORS 白名单收敛为精确 ID。生产 Origin `https://next.roayc.com` 已验证跨源登录成功。
+- [x] `RELEASE-02` 完成最小权限审计、CSP、依赖和打包内容检查。实现：权限仅保留 `storage`（host 权限按需申请 `optional_host_permissions`）；显式声明 CSP `script-src 'self'; object-src 'self'`；`validate-extension.mjs` 校验无 `.map`/`.pem`/`.env` 打包、无远程脚本、manifest 版本与 `service/assets/version` 一致。同时增强 CORS：自动放行所有格式合法的 `chrome-extension://<32位ID>` Origin（普通网页无法伪造扩展 Origin，无需逐 ID 配置），Web Origin 仍需精确白名单；`extension_ids` 列表与 `*` 通配符保留向后兼容；修复 `DockerApi` 含 `sync.Once` 被按值复制导致的 vet 报错（改用包级 client 单例）。
 - [ ] `RELEASE-03` 编写隐私政策、数据用途、账号删除和支持文档。
 - [ ] `RELEASE-04` 建立 Web 镜像与扩展 ZIP 的自动构建和校验和。
 - [ ] `RELEASE-05` 建立 Chrome Web Store 手工发布清单，密钥不得进入仓库或 CI 日志。
@@ -142,9 +143,9 @@ pnpm run build-only
 
 ## 当前下一步
 
-`OPEN_FEATURE_PARITY.md` 中 53 个能力包已全部完成。双端基础架构（P0–P5）除 `EXT-08`（Chrome 手工验收待环境）和 P6（离线编辑增强阶段）外均已完成。后续工作重点：
+`OPEN_FEATURE_PARITY.md` 中 53 个能力包已全部完成。双端基础架构（P0–P5）除 `EXT-08`（Chrome 手工验收，当前已在 Chrome 中加载验证，待补完整验收记录）和 P6（离线编辑增强阶段）外均已完成；`RELEASE-01/02` 已完成。后续工作重点：
 
-1. `EXT-08`：具备桌面 Chrome 环境后手工验收扩展安装、新标签页覆盖、登录、卡片交互和重启恢复。
+1. `EXT-08`：完整手工验收扩展安装、新标签页覆盖、登录、卡片交互、重启浏览器后恢复。
 2. `OFFLINE-01` 至 `OFFLINE-04`：离线编辑与冲突处理（增强阶段，非阻塞）。
-3. `RELEASE-01` 至 `RELEASE-06`：发布与运维（扩展 ID/CSP/隐私政策/自动构建/Chrome 商店发布/升级回滚兼容矩阵）。
+3. `RELEASE-03` 至 `RELEASE-06`：隐私政策/数据用途/账号删除文档、Web 镜像与扩展 ZIP 自动构建校验和、Chrome Web Store 手工发布清单、升级/回滚/API 兼容矩阵与最低后端版本提示。
 4. 环境缺口：MySQL 真实恢复演练。
