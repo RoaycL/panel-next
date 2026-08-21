@@ -113,7 +113,7 @@ user_session
 - CORS 仅允许配置过的 Web Origin 和扩展 ID，并允许认证头、语言头及预检请求。
 - 新增无认证的服务器信息接口，返回 API 版本、实例标识和认证能力，禁止泄漏部署详情。
 
-默认 CORS 配置为空，只自动允许由请求 Host、协议（含反向代理 `X-Forwarded-Proto`）确认的同源 Web 请求。额外 Web Origin 必须是无路径、查询和凭据的完整 HTTP(S) Origin；扩展必须配置精确 32 位 Chrome ID。策略拒绝通配符、`null` Origin、未声明方法和额外请求头，不开启 `Access-Control-Allow-Credentials`。
+默认 CORS 配置为空，只自动允许由请求 Host、协议（含反向代理 `X-Forwarded-Proto`）确认的同源 Web 请求。额外 Web Origin 必须是无路径、查询和凭据的完整 HTTP(S) Origin；扩展必须配置精确 32 位 Chrome ID。策略拒绝通配符、`null` Origin、未声明方法和额外请求头，不开启 `Access-Control-Allow-Credentials`。任何格式合法的 `chrome-extension://<32位ID>` Origin 会被自动放行——普通网页无法伪造扩展 Origin，因此无需逐 ID 配置；`extension_ids` 列表与 `*` 通配符仅保留向后兼容。
 
 ### 5.3 同步接口
 

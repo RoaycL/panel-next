@@ -45,3 +45,4 @@ service/web
 service/uploads
 service/plugins
 docker-conf
+.secrets

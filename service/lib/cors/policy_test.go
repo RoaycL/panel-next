@@ -30,9 +30,16 @@ func TestPolicyAllowsOnlyConfiguredOrigins(t *testing.T) {
 		}
 	}
 
-	response := corsRequest(router, http.MethodGet, "https://evil.example", "", "")
+	// 即使未在配置中列出，格式合法的扩展 Origin 也应被自动放行
+	unlistedExtension := "chrome-extension://pppppppppppppppppppppppppppppppp"
+	response := corsRequest(router, http.MethodGet, unlistedExtension, "", "")
+	if response.Code != http.StatusOK || response.Header().Get("Access-Control-Allow-Origin") != unlistedExtension {
+		t.Fatalf("unlisted extension origin was rejected: status=%d headers=%v", response.Code, response.Header())
+	}
+
+	response = corsRequest(router, http.MethodGet, "https://evil.example", "", "")
 	if response.Code != http.StatusForbidden || response.Header().Get("Access-Control-Allow-Origin") != "" {
-		t.Fatalf("unlisted origin was allowed: status=%d headers=%v", response.Code, response.Header())
+		t.Fatalf("unlisted web origin was allowed: status=%d headers=%v", response.Code, response.Header())
 	}
 	response = corsRequest(router, http.MethodGet, "", "", "")
 	if response.Code != http.StatusOK {
@@ -102,6 +109,7 @@ func TestPolicyRejectsUnsafeConfiguration(t *testing.T) {
 		t.Fatal("invalid extension ID was accepted")
 	}
 
+	// 配置 * 仍被接受（向后兼容），但即使不配置，合法扩展 Origin 也会被放行
 	wildcardPolicy, err := NewPolicy("", "*")
 	if err != nil {
 		t.Fatal(err)
@@ -114,6 +122,13 @@ func TestPolicyRejectsUnsafeConfiguration(t *testing.T) {
 	response := corsRequest(router, http.MethodGet, validOrigin, "", "")
 	if response.Code != http.StatusOK || response.Header().Get("Access-Control-Allow-Origin") != validOrigin {
 		t.Fatalf("wildcard extension origin failed: status=%d headers=%v", response.Code, response.Header())
+	}
+
+	// 格式不合法的 chrome-extension origin 应被拒绝
+	malformed := "chrome-extension://not-an-extension"
+	response = corsRequest(router, http.MethodGet, malformed, "", "")
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("malformed extension origin was allowed: %d", response.Code)
 	}
 }
 

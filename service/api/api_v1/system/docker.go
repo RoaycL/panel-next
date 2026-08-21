@@ -2,7 +2,6 @@ package system
 
 import (
 	"context"
-	"sync"
 	"panel-next/api/api_v1/common/apiReturn"
 	"panel-next/api/api_v1/common/base"
 	"panel-next/lib/docker"
@@ -11,21 +10,14 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type DockerApi struct {
-	clientOnce sync.Once
-	client     *docker.Client
-}
+// dockerClient 是包级单例，避免在按值复制的 API 结构体中携带可变状态。
+var dockerClient = docker.DefaultClient()
 
-func (a *DockerApi) getClient() *docker.Client {
-	a.clientOnce.Do(func() {
-		a.client = docker.DefaultClient()
-	})
-	return a.client
-}
+type DockerApi struct{}
 
 // GetStatus 检测 Docker 是否可用（所有登录用户）
 func (a *DockerApi) GetStatus(c *gin.Context) {
-	client := a.getClient()
+	client := dockerClient
 	if !client.IsAvailable() {
 		apiReturn.SuccessData(c, gin.H{"available": false})
 		return
@@ -43,7 +35,7 @@ func (a *DockerApi) GetStatus(c *gin.Context) {
 
 // GetList 列出容器（所有登录用户可读）
 func (a *DockerApi) GetList(c *gin.Context) {
-	client := a.getClient()
+	client := dockerClient
 	if !client.IsAvailable() {
 		apiReturn.Error(c, "docker daemon unreachable")
 		return
@@ -81,7 +73,7 @@ func (a *DockerApi) StartContainer(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), defaultDockerTimeout())
 	defer cancel()
 
-	if err := a.getClient().StartContainer(ctx, containerID); err != nil {
+	if err := dockerClient.StartContainer(ctx, containerID); err != nil {
 		apiReturn.Error(c, err.Error())
 		return
 	}
@@ -105,7 +97,7 @@ func (a *DockerApi) StopContainer(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), defaultDockerTimeout())
 	defer cancel()
 
-	if err := a.getClient().StopContainer(ctx, containerID); err != nil {
+	if err := dockerClient.StopContainer(ctx, containerID); err != nil {
 		apiReturn.Error(c, err.Error())
 		return
 	}
@@ -129,7 +121,7 @@ func (a *DockerApi) RestartContainer(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), defaultDockerTimeout())
 	defer cancel()
 
-	if err := a.getClient().RestartContainer(ctx, containerID); err != nil {
+	if err := dockerClient.RestartContainer(ctx, containerID); err != nil {
 		apiReturn.Error(c, err.Error())
 		return
 	}

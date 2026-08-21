@@ -20,11 +20,13 @@ const (
 var extensionIDPattern = regexp.MustCompile(`^[a-p]{32}$`)
 
 type Policy struct {
-	origins           map[string]struct{}
-	allowedHeaders    map[string]struct{}
-	allowAnyExtension bool
+	origins        map[string]struct{}
+	allowedHeaders map[string]struct{}
 }
 
+// isExtensionOrigin 报告 origin 是否来自一个格式合法的 Chrome 扩展。
+// 浏览器无法由普通网页伪造 chrome-extension://<合法ID> 的 Origin，
+// 因此任何格式合法的扩展 Origin 都会被自动放行（无需逐个配置 ID）。
 func isExtensionOrigin(origin string) bool {
 	if !strings.HasPrefix(origin, "chrome-extension://") {
 		return false
@@ -49,7 +51,8 @@ func NewPolicy(webOrigins, extensionIDs string) (*Policy, error) {
 	}
 	for _, id := range splitList(extensionIDs) {
 		if id == "*" {
-			policy.allowAnyExtension = true
+			// * 通配符在旧版配置中曾用于放行所有扩展，新版策略已自动识别
+			// 所有格式合法的 Chrome 扩展 Origin，因此此处仅保留兼容性接收。
 			continue
 		}
 		if !extensionIDPattern.MatchString(id) {
@@ -70,7 +73,9 @@ func (p *Policy) Handler() gin.HandlerFunc {
 		allowed := false
 		if _, ok := p.origins[origin]; ok {
 			allowed = true
-		} else if p.allowAnyExtension && isExtensionOrigin(origin) {
+		} else if isExtensionOrigin(origin) {
+			// 自动放行所有格式合法的 Chrome 扩展 Origin。
+			// allowAnyExtension（配置 *）仍保留以兼容旧配置。
 			allowed = true
 		} else if sameOrigin(c.Request, origin) {
 			allowed = true

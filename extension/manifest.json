@@ -15,5 +15,10 @@
   },
   "icons": {
     "128": "logo.png"
-  }
+  },
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAs1+VOGFNS1x9E0a0lS3NZIm1gWmR0R2twk1oWjzzNBfNXO65S2++BUk028vjWK2bqzvR2W/NZP68o4EDZ2aplOsgBwLvvzt0cpyGdIF4klcYUf7dRmTrFTtUDIqGuQJXwcXurN6ndndCkeXsuUb10CCSYZirsKpMfFOF8yxw+YFp92/VQLNdbk5Xs3SwT66MQqPFFlfPCKmqzoCSztaTfycz00BI5kXiVR/Gv/Wkpwvz8ciPCD7HEZMiPwef/7y8Z4ZnEznyfYawTVJs6EqFSZay7li4X2grT3r7ZITu8Oed1ZOUjvwmHMo5t46O8cEpABP4koK52s1NuUeYmn+VuwIDAQAB",
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self';"
+  },
+  "minimum_chrome_version": "88"
 }
