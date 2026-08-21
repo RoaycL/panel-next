@@ -3,8 +3,8 @@ package systemSetting
 import (
 	"encoding/json"
 	"errors"
-	"sun-panel/lib/cache"
-	"sun-panel/models"
+	"panel-next/lib/cache"
+	"panel-next/models"
 
 	"gorm.io/gorm"
 )

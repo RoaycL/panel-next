@@ -1,4 +1,4 @@
-# Sun-Panel 开放功能对齐路线图
+# Panel Next 开放功能对齐路线图
 
 > 项目新增 Web/Chrome 扩展双端方向。跨设备执行入口见 `TODO.md`，架构与安全决策见 `doc/web_extension_architecture.md`。双端基础不会取消本文件中的公开功能对齐任务；实现顺序调整为先完成最小扩展原型，再继续品牌和后续能力包。
 

@@ -3,10 +3,10 @@ package base
 import (
 	"reflect"
 	"strings"
-	"sun-panel/api/api_v1/common/apiReturn"
-	"sun-panel/lib/captcha"
-	"sun-panel/lib/cmn"
-	"sun-panel/models"
+	"panel-next/api/api_v1/common/apiReturn"
+	"panel-next/lib/captcha"
+	"panel-next/lib/cmn"
+	"panel-next/models"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/locales/zh"

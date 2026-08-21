@@ -3,12 +3,12 @@ package panel
 import (
 	"errors"
 	"strings"
-	"sun-panel/api/api_v1/common/apiReturn"
-	"sun-panel/api/api_v1/common/base"
-	"sun-panel/global"
-	"sun-panel/lib/cmn"
-	"sun-panel/lib/cmn/systemSetting"
-	"sun-panel/models"
+	"panel-next/api/api_v1/common/apiReturn"
+	"panel-next/api/api_v1/common/base"
+	"panel-next/global"
+	"panel-next/lib/cmn"
+	"panel-next/lib/cmn/systemSetting"
+	"panel-next/models"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"

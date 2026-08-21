@@ -7,8 +7,8 @@ import (
 	"regexp"
 	"strings"
 
-	"sun-panel/global"
-	"sun-panel/lib/cmn/systemSetting"
+	"panel-next/global"
+	"panel-next/lib/cmn/systemSetting"
 
 	"github.com/gin-gonic/gin"
 )

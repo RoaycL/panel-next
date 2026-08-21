@@ -1,9 +1,9 @@
 package api_v1
 
 import (
-	"sun-panel/api/api_v1/openness"
-	"sun-panel/api/api_v1/panel"
-	"sun-panel/api/api_v1/system"
+	"panel-next/api/api_v1/openness"
+	"panel-next/api/api_v1/panel"
+	"panel-next/api/api_v1/system"
 )
 
 type ApiGroup struct {

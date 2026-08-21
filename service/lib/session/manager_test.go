@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"sun-panel/models"
+	"panel-next/models"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"

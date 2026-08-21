@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"sun-panel/lib/ratelimit"
+	"panel-next/lib/ratelimit"
 
 	"github.com/gin-gonic/gin"
 )

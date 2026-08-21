@@ -23,7 +23,7 @@ func TestCreateValidateExtractRoundTrip(t *testing.T) {
 	var output bytes.Buffer
 	createdAt := time.Date(2026, 8, 9, 10, 0, 0, 0, time.FixedZone("CST", 8*60*60))
 	manifest, err := Create(context.Background(), &output, CreateOptions{
-		Application: "sun-panel",
+		Application: "panel-next",
 		CreatedAt:   createdAt,
 		Database:    Database{Driver: "sqlite", Mode: "snapshot"},
 		Sources: []Source{
@@ -65,7 +65,7 @@ func TestValidateRejectsTraversal(t *testing.T) {
 	}
 	_, _ = entry.Write([]byte("bad"))
 	manifest, _ := writer.Create(ManifestPath)
-	_, _ = manifest.Write([]byte(`{"formatVersion":1,"application":"sun-panel","createdAt":"2026-08-09T00:00:00Z","database":{"driver":"sqlite","mode":"snapshot"},"entries":[]}`))
+	_, _ = manifest.Write([]byte(`{"formatVersion":1,"application":"panel-next","createdAt":"2026-08-09T00:00:00Z","database":{"driver":"sqlite","mode":"snapshot"},"entries":[]}`))
 	if err := writer.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func TestValidateRejectsTraversal(t *testing.T) {
 }
 
 func TestValidateRejectsFutureFormat(t *testing.T) {
-	archive := archiveWithManifest(t, `{"formatVersion":2,"application":"sun-panel","createdAt":"2026-08-09T00:00:00Z","database":{"driver":"sqlite","mode":"snapshot"},"entries":[]}`)
+	archive := archiveWithManifest(t, `{"formatVersion":2,"application":"panel-next","createdAt":"2026-08-09T00:00:00Z","database":{"driver":"sqlite","mode":"snapshot"},"entries":[]}`)
 	_, err := Validate(bytes.NewReader(archive), int64(len(archive)), DefaultLimits())
 	if !errors.Is(err, ErrFutureFormat) {
 		t.Fatalf("expected future format error, got %v", err)
@@ -84,7 +84,7 @@ func TestValidateRejectsFutureFormat(t *testing.T) {
 }
 
 func TestValidateRejectsChecksumMismatch(t *testing.T) {
-	manifest := `{"formatVersion":1,"application":"sun-panel","createdAt":"2026-08-09T00:00:00Z","database":{"driver":"sqlite","mode":"snapshot"},"entries":[{"path":"uploads/a.txt","size":3,"sha256":"` + strings.Repeat("0", 64) + `"}]}`
+	manifest := `{"formatVersion":1,"application":"panel-next","createdAt":"2026-08-09T00:00:00Z","database":{"driver":"sqlite","mode":"snapshot"},"entries":[{"path":"uploads/a.txt","size":3,"sha256":"` + strings.Repeat("0", 64) + `"}]}`
 	var output bytes.Buffer
 	writer := zip.NewWriter(&output)
 	entry, _ := writer.Create("uploads/a.txt")

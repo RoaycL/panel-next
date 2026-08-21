@@ -2,7 +2,7 @@ package apiReturn
 
 import (
 	"strconv"
-	"sun-panel/global"
+	"panel-next/global"
 
 	"github.com/gin-gonic/gin"
 )

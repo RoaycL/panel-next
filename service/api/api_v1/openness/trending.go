@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"sun-panel/api/api_v1/common/apiReturn"
-	"sun-panel/lib/trending"
+	"panel-next/api/api_v1/common/apiReturn"
+	"panel-next/lib/trending"
 
 	"github.com/gin-gonic/gin"
 )

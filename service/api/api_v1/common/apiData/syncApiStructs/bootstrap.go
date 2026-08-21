@@ -3,7 +3,7 @@ package syncApiStructs
 import (
 	"time"
 
-	"sun-panel/models/datatype"
+	"panel-next/models/datatype"
 )
 
 const BootstrapSchemaVersion = 1

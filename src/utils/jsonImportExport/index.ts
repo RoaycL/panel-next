@@ -3,7 +3,7 @@ import moment from 'moment'
 
 const VERSION = 1 // 当前配置文件版本
 const ALLOW_LOW_VERSION = 1 // 最小支持的配置文件版本号
-const APPNAME = 'Sun-Panel-Config'
+const APPNAME = 'Panel-Next-Config'
 
 export class FormatError extends Error {
   constructor(message: string) {
@@ -21,7 +21,7 @@ export class ConfigVersionLowError extends Error {
 
 export interface JsonStructure {
   version: number
-  appName: 'Sun-Panel-Config'
+  appName: 'Panel-Next-Config'
   exportTime: string
   appVersion: string
   icons?: any

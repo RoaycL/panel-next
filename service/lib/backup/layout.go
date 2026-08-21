@@ -30,7 +30,7 @@ func ValidateSunPanelLayout(manifest Manifest) error {
 		case strings.HasPrefix(entry.Path, UploadsPrefix):
 		case strings.HasPrefix(entry.Path, CustomPrefix):
 		default:
-			return fmt.Errorf("%w: unsupported Sun-Panel path %q", ErrInvalidArchive, entry.Path)
+			return fmt.Errorf("%w: unsupported Panel Next path %q", ErrInvalidArchive, entry.Path)
 		}
 	}
 	if !foundDatabase {

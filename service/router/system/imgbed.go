@@ -1,8 +1,8 @@
 package system
 
 import (
-	"sun-panel/api/api_v1/imgbed"
-	"sun-panel/api/api_v1/middleware"
+	"panel-next/api/api_v1/imgbed"
+	"panel-next/api/api_v1/middleware"
 
 	"github.com/gin-gonic/gin"
 )

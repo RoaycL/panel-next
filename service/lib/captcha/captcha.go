@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"sun-panel/global"
+	"panel-next/global"
 
 	"github.com/gin-gonic/gin"
 	"github.com/mojocn/base64Captcha"

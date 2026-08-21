@@ -1,10 +1,10 @@
 package global
 
 import (
-	"sun-panel/lib/queue"
-	"sun-panel/lib/queue/queueMemory"
-	"sun-panel/lib/queue/queueRedis"
-	"sun-panel/structs"
+	"panel-next/lib/queue"
+	"panel-next/lib/queue/queueMemory"
+	"panel-next/lib/queue/queueRedis"
+	"panel-next/structs"
 )
 
 // 创建一个队列

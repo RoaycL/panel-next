@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"sun-panel/global"
-	sessionlib "sun-panel/lib/session"
-	"sun-panel/models"
+	"panel-next/global"
+	sessionlib "panel-next/lib/session"
+	"panel-next/models"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/sqlite"

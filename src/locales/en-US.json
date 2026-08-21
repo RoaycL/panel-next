@@ -67,6 +67,7 @@
       "donate": "☕Donate",
       "frontVersionText": "Front-end version number",
       "issue": "Feedback:",
+      "origin": "This project is based on ",
       "viewUpdateLog": "Click here to view update log"
     },
     "baseSettings": {
@@ -230,7 +231,7 @@
     "action": "Action",
     "add": "Add",
     "addSuccess": "Added successfully",
-    "appName": "Sun-Panel",
+    "appName": "Panel Next",
     "backgroundColor": "Background color",
     "cancel": "Cancel",
     "confirm": "Confirm",

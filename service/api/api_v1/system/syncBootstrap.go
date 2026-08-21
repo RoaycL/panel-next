@@ -5,12 +5,12 @@ import (
 	"strconv"
 	"time"
 
-	"sun-panel/api/api_v1/common/apiData/syncApiStructs"
-	"sun-panel/api/api_v1/common/apiReturn"
-	"sun-panel/api/api_v1/common/base"
-	"sun-panel/global"
-	sessionlib "sun-panel/lib/session"
-	"sun-panel/models"
+	"panel-next/api/api_v1/common/apiData/syncApiStructs"
+	"panel-next/api/api_v1/common/apiReturn"
+	"panel-next/api/api_v1/common/base"
+	"panel-next/global"
+	sessionlib "panel-next/lib/session"
+	"panel-next/models"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"

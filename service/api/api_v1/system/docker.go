@@ -2,9 +2,9 @@ package system
 
 import (
 	"context"
-	"sun-panel/api/api_v1/common/apiReturn"
-	"sun-panel/api/api_v1/common/base"
-	"sun-panel/lib/docker"
+	"panel-next/api/api_v1/common/apiReturn"
+	"panel-next/api/api_v1/common/base"
+	"panel-next/lib/docker"
 	"time"
 
 	"github.com/gin-gonic/gin"

@@ -9,11 +9,11 @@ import (
 	"sync"
 	"time"
 
-	"sun-panel/api/api_v1/common/apiReturn"
-	"sun-panel/api/api_v1/common/base"
-	"sun-panel/global"
-	backuplib "sun-panel/lib/backup"
-	"sun-panel/lib/cmn"
+	"panel-next/api/api_v1/common/apiReturn"
+	"panel-next/api/api_v1/common/base"
+	"panel-next/global"
+	backuplib "panel-next/lib/backup"
+	"panel-next/lib/cmn"
 
 	"github.com/gin-gonic/gin"
 )
@@ -39,7 +39,7 @@ func (a *BackupApi) Export(c *gin.Context) {
 	}
 	defer cleanup()
 
-	filename := "sun-panel-backup-" + time.Now().UTC().Format("20060102-150405") + ".zip"
+	filename := "panel-next-backup-" + time.Now().UTC().Format("20060102-150405") + ".zip"
 	c.Header("Cache-Control", "no-store")
 	auditBackupOperation(c, "export", "completed", nil)
 	c.FileAttachment(archivePath, filename)
@@ -195,7 +195,7 @@ func createCurrentBackup(c *gin.Context) (archivePath string, cleanup func(), er
 	}
 	version := cmn.GetSysVersionInfo().Version
 	_, createErr := backuplib.Create(c.Request.Context(), archive, backuplib.CreateOptions{
-		Application:        "sun-panel",
+		Application:        "panel-next",
 		ApplicationVersion: version,
 		Database:           databaseInfo,
 		Sources:            sources,

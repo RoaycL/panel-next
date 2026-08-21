@@ -1,4 +1,4 @@
-module sun-panel
+module panel-next
 
 go 1.20
 

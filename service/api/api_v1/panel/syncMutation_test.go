@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"sun-panel/global"
-	"sun-panel/lib/language"
-	"sun-panel/models"
+	"panel-next/global"
+	"panel-next/lib/language"
+	"panel-next/models"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/sqlite"

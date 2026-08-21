@@ -6,11 +6,11 @@ import (
 	"strings"
 	"time"
 
-	"sun-panel/api/api_v1/common/apiReturn"
-	"sun-panel/global"
-	"sun-panel/lib/cmn"
-	sessionlib "sun-panel/lib/session"
-	"sun-panel/models"
+	"panel-next/api/api_v1/common/apiReturn"
+	"panel-next/global"
+	"panel-next/lib/cmn"
+	sessionlib "panel-next/lib/session"
+	"panel-next/models"
 
 	"github.com/gin-gonic/gin"
 )

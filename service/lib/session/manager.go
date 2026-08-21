@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"time"
 
-	"sun-panel/models"
+	"panel-next/models"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"

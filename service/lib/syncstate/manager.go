@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"sun-panel/models"
+	"panel-next/models"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"

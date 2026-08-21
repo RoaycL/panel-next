@@ -5,10 +5,10 @@ import (
 	"strings"
 	"time"
 
-	"sun-panel/api/api_v1/common/apiReturn"
-	"sun-panel/global"
-	sessionlib "sun-panel/lib/session"
-	"sun-panel/models"
+	"panel-next/api/api_v1/common/apiReturn"
+	"panel-next/global"
+	sessionlib "panel-next/lib/session"
+	"panel-next/models"
 
 	"github.com/gin-gonic/gin"
 )

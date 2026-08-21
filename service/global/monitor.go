@@ -1,7 +1,7 @@
 package global
 
 import (
-	"sun-panel/lib/monitor"
+	"panel-next/lib/monitor"
 )
 
 const (

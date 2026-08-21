@@ -1,8 +1,8 @@
 package system
 
 import (
-	"sun-panel/api/api_v1/common/apiReturn"
-	"sun-panel/lib/cmn"
+	"panel-next/api/api_v1/common/apiReturn"
+	"panel-next/lib/cmn"
 
 	"github.com/gin-gonic/gin"
 )

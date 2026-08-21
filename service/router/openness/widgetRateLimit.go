@@ -3,8 +3,8 @@ package openness
 import (
 	"time"
 
-	"sun-panel/api/api_v1/common/apiReturn"
-	"sun-panel/lib/ratelimit"
+	"panel-next/api/api_v1/common/apiReturn"
+	"panel-next/lib/ratelimit"
 
 	"github.com/gin-gonic/gin"
 )

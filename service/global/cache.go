@@ -1,8 +1,8 @@
 package global
 
 import (
-	"sun-panel/lib/cache"
-	"sun-panel/structs"
+	"panel-next/lib/cache"
+	"panel-next/structs"
 	"time"
 )
 

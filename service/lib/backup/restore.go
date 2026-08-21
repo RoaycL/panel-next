@@ -146,7 +146,7 @@ func prepareTargets(extractRoot string, targets []RestoreTarget) ([]preparedTarg
 		if err := os.MkdirAll(parent, 0700); err != nil {
 			return prepared, err
 		}
-		stageRoot, err := os.MkdirTemp(parent, ".sun-panel-restore-stage-*")
+		stageRoot, err := os.MkdirTemp(parent, ".panel-next-restore-stage-*")
 		if err != nil {
 			return prepared, err
 		}
@@ -173,7 +173,7 @@ func commitTarget(target *preparedTarget) error {
 	} else if !os.IsNotExist(err) {
 		return err
 	}
-	rollbackRoot, err := os.MkdirTemp(filepath.Dir(target.target.Destination), ".sun-panel-restore-rollback-*")
+	rollbackRoot, err := os.MkdirTemp(filepath.Dir(target.target.Destination), ".panel-next-restore-rollback-*")
 	if err != nil {
 		return err
 	}

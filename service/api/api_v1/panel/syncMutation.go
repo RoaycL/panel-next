@@ -4,8 +4,8 @@ import (
 	"errors"
 	"strconv"
 
-	"sun-panel/api/api_v1/common/apiReturn"
-	"sun-panel/lib/syncstate"
+	"panel-next/api/api_v1/common/apiReturn"
+	"panel-next/lib/syncstate"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"

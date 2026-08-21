@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"sun-panel/global"
-	"sun-panel/lib/cache"
-	"sun-panel/lib/cmn/systemSetting"
-	"sun-panel/lib/language"
-	"sun-panel/models"
+	"panel-next/global"
+	"panel-next/lib/cache"
+	"panel-next/lib/cmn/systemSetting"
+	"panel-next/lib/language"
+	"panel-next/models"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/sqlite"

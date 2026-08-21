@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"sun-panel/global"
-	"sun-panel/lib/cache"
-	"sun-panel/lib/cmn"
-	sessionlib "sun-panel/lib/session"
-	"sun-panel/models"
+	"panel-next/global"
+	"panel-next/lib/cache"
+	"panel-next/lib/cmn"
+	sessionlib "panel-next/lib/session"
+	"panel-next/models"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"

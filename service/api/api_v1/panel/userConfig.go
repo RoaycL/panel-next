@@ -3,11 +3,11 @@ package panel
 import (
 	"encoding/json"
 	"strconv"
-	"sun-panel/api/api_v1/common/apiReturn"
-	"sun-panel/api/api_v1/common/base"
-	"sun-panel/global"
-	"sun-panel/lib/syncstate"
-	"sun-panel/models"
+	"panel-next/api/api_v1/common/apiReturn"
+	"panel-next/api/api_v1/common/base"
+	"panel-next/global"
+	"panel-next/lib/syncstate"
+	"panel-next/models"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"

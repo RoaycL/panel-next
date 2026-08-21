@@ -91,7 +91,7 @@ func Create(ctx context.Context, output io.Writer, options CreateOptions) (Manif
 		Database:           options.Database,
 	}
 	if manifest.Application == "" {
-		manifest.Application = "sun-panel"
+		manifest.Application = "panel-next"
 	}
 	if manifest.CreatedAt.IsZero() {
 		manifest.CreatedAt = time.Now().UTC()
@@ -278,7 +278,7 @@ func Validate(reader io.ReaderAt, size int64, limits Limits) (Manifest, error) {
 	if manifest.FormatVersion > FormatVersion {
 		return Manifest{}, ErrFutureFormat
 	}
-	if manifest.FormatVersion != FormatVersion || manifest.Application != "sun-panel" {
+	if manifest.FormatVersion != FormatVersion || (manifest.Application != "panel-next" && manifest.Application != "sun-panel") {
 		return Manifest{}, fmt.Errorf("%w: unsupported manifest", ErrInvalidArchive)
 	}
 	if len(manifest.Entries) != len(files)-1 {

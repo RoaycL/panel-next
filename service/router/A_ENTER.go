@@ -3,13 +3,13 @@ package router
 import (
 	"net/http"
 	"os"
-	"sun-panel/api/api_v1/common/apiReturn"
-	"sun-panel/global"
-	"sun-panel/lib/cmn"
-	corslib "sun-panel/lib/cors"
-	"sun-panel/router/openness"
-	"sun-panel/router/panel"
-	"sun-panel/router/system"
+	"panel-next/api/api_v1/common/apiReturn"
+	"panel-next/global"
+	"panel-next/lib/cmn"
+	corslib "panel-next/lib/cors"
+	"panel-next/router/openness"
+	"panel-next/router/panel"
+	"panel-next/router/system"
 
 	"github.com/gin-gonic/gin"
 )
@@ -95,7 +95,7 @@ func InitRouters(addr string) error {
 		}
 	}
 
-	global.Logger.Info("Sun-Panel is Started.  Listening and serving HTTP on ", addr)
+	global.Logger.Info("Panel Next is Started.  Listening and serving HTTP on ", addr)
 	return router.Run(addr)
 }
 

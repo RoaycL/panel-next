@@ -8,8 +8,8 @@ import (
 	"os"
 	"path"
 	"strconv"
-	"sun-panel/lib/cmn"
-	"sun-panel/models"
+	"panel-next/lib/cmn"
+	"panel-next/models"
 	"time"
 
 	"github.com/google/uuid"

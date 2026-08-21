@@ -1,13 +1,13 @@
 package system
 
 import (
-	"sun-panel/api/api_v1/common/apiData/systemApiStructs"
-	"sun-panel/api/api_v1/common/apiReturn"
-	"sun-panel/api/api_v1/common/base"
-	"sun-panel/global"
-	"sun-panel/lib/cmn"
-	sessionlib "sun-panel/lib/session"
-	"sun-panel/models"
+	"panel-next/api/api_v1/common/apiData/systemApiStructs"
+	"panel-next/api/api_v1/common/apiReturn"
+	"panel-next/api/api_v1/common/base"
+	"panel-next/global"
+	"panel-next/lib/cmn"
+	sessionlib "panel-next/lib/session"
+	"panel-next/models"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"

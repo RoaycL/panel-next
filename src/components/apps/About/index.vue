@@ -4,9 +4,7 @@ import { onMounted, ref } from 'vue'
 import { get } from '@/api/system/about'
 import { useAppStore } from '@/store'
 import srcSvglogo from '@/assets/logo.svg'
-import srcGitee from '@/assets/about_image/gitee.png'
 import srcGithub from '@/assets/about_image/github.png'
-import srcDocker from '@/assets/about_image/docker.png'
 import srcBilibili from '@/assets/about_image/bilibili.png'
 import srcYoutube from '@/assets/about_image/youtube.png'
 import srcQQGroupQR from '@/assets/about_image/qq_group_qr2.png'
@@ -52,7 +50,7 @@ onMounted(() => {
     </NDivider>
     <div class="flex flex-col items-center justify-center text-base">
       <div>
-        {{ $t('apps.about.author') }}<a href="https://github.com/hslr-s" target="_blank" class="link">红烧猎人</a> | <a href="https://github.com/hslr-s/sun-panel/blob/master/doc/donate.md" target="_blank" class="text-red-600 hover:text-red-900">{{ $t('apps.about.donate') }}</a>
+        {{ $t('apps.about.origin') }}<a href="https://github.com/hslr-s/sun-panel" target="_blank" class="link">Sun-Panel</a>
       </div>
       <div>
         {{ $t('apps.about.issue') }}<a href="https://github.com/RoaycL/panel-next/issues" target="_blank" class="link">Github Issues</a>
@@ -74,16 +72,7 @@ onMounted(() => {
           <a href="https://github.com/RoaycL/panel-next" target="_blank" class="link">Github</a>
         </div>
         <div class="flex items-center mx-[10px]">
-          <img class="w-[20px] h-[20px] mr-[5px]" :src="srcGitee" alt="">
-          <a href="https://gitee.com/hslr/sun-panel" target="_blank" class="link">Gitee</a>
-        </div>
-        <div class="flex items-center mx-[10px]">
-          <img class="w-[20px] h-[20px] mr-[5px]" :src="srcDocker" alt="">
-          <a href="https://hub.docker.com/r/hslr/sun-panel" target="_blank" class="link">Docker</a>
-        </div>
-        <div class="flex items-center mx-[10px]">
           <img class="w-[20px] h-[20px] mr-[5px]" :src="srcBilibili" alt="">
-          <!-- <a href="https://space.bilibili.com/27407696/channel/collectiondetail?sid=2023810" target="_blank" class="link">Bilibili</a> -->
           <a href="https://space.bilibili.com/27407696/channel/collectiondetail?sid=2023810" target="_blank" class="link">Bilibili</a>
         </div>
         <div v-if="appStore.language !== 'zh-CN'" class="flex items-center mx-[10px]">

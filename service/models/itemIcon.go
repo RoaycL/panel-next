@@ -1,7 +1,7 @@
 package models
 
 import (
-	"sun-panel/models/datatype"
+	"panel-next/models/datatype"
 
 	"gorm.io/gorm"
 )

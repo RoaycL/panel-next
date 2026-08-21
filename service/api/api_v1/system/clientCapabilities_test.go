@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"sun-panel/global"
-	"sun-panel/models"
+	"panel-next/global"
+	"panel-next/models"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/sqlite"

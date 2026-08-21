@@ -2,9 +2,9 @@ package main
 
 import (
 	"log"
-	"sun-panel/global"
-	"sun-panel/initialize"
-	"sun-panel/router"
+	"panel-next/global"
+	"panel-next/initialize"
+	"panel-next/router"
 )
 
 func main() {

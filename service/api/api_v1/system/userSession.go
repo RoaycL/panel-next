@@ -3,10 +3,10 @@ package system
 import (
 	"errors"
 
-	"sun-panel/api/api_v1/common/apiReturn"
-	"sun-panel/api/api_v1/common/base"
-	"sun-panel/global"
-	sessionlib "sun-panel/lib/session"
+	"panel-next/api/api_v1/common/apiReturn"
+	"panel-next/api/api_v1/common/base"
+	"panel-next/global"
+	sessionlib "panel-next/lib/session"
 
 	"github.com/gin-gonic/gin"
 )

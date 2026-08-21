@@ -4,8 +4,8 @@ import (
 	"errors"
 	"strings"
 
-	"sun-panel/api/api_v1/common/apiReturn"
-	"sun-panel/lib/weather"
+	"panel-next/api/api_v1/common/apiReturn"
+	"panel-next/lib/weather"
 
 	"github.com/gin-gonic/gin"
 )

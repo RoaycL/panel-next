@@ -4,9 +4,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"sun-panel/api/api_v1/common/apiReturn"
-	"sun-panel/global"
-	"sun-panel/lib/cmn/systemSetting"
+	"panel-next/api/api_v1/common/apiReturn"
+	"panel-next/global"
+	"panel-next/lib/cmn/systemSetting"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"

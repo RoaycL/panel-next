@@ -1,9 +1,9 @@
 version: "3.2"
 
 services:
-  sun-panel:
+  panel-next:
     build: .
-    container_name: sun-panel
+    container_name: panel-next
     volumes:
     - ./conf:/app/conf
     - ./uploads:/app/uploads

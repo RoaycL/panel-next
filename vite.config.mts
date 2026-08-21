@@ -30,8 +30,8 @@ function setupPlugins(env: ImportMetaEnv, extension: boolean): PluginOption[] {
     !extension && env.VITE_GLOB_APP_PWA === 'true' && VitePWA({
       injectRegister: 'auto',
       manifest: {
-        name: 'Sun-Panel',
-        short_name: 'Sun-Panel',
+        name: 'Panel Next',
+        short_name: 'Panel Next',
         icons: [
           { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
           { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },

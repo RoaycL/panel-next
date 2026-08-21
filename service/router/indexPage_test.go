@@ -11,7 +11,7 @@ const sampleIndexHTML = `<!DOCTYPE html>
 	<meta charset="UTF-8">
 	<link rel="icon" type="image/svg+xml" href="/favicon.svg">
 	<link rel="stylesheet"  href="/custom/index.css">
-	<title>Sun-Panel</title>
+	<title>Panel Next</title>
 </head>
 <body>
 	<script src="/custom/index.js"></script>
@@ -46,7 +46,7 @@ func TestInjectSiteBrandingEscapesValues(t *testing.T) {
 
 func TestInjectSiteBrandingKeepsDefaultsWhenUnset(t *testing.T) {
 	result := injectSiteBranding(sampleIndexHTML, "", "", "", "")
-	if !strings.Contains(result, "<title>Sun-Panel</title>") {
+	if !strings.Contains(result, "<title>Panel Next</title>") {
 		t.Fatalf("default title was modified: %s", result)
 	}
 	if !strings.Contains(result, "/favicon.svg") {
@@ -61,7 +61,7 @@ func TestInjectSiteBrandingKeepsDefaultsWhenUnset(t *testing.T) {
 }
 
 func TestInjectSiteBrandingAddsFaviconWhenTemplateHasNone(t *testing.T) {
-	noFavicon := `<!DOCTYPE html><html><head><title>Sun-Panel</title></head></html>`
+	noFavicon := `<!DOCTYPE html><html><head><title>Panel Next</title></head></html>`
 	result := injectSiteBranding(noFavicon, "T", "/f.ico", "", "")
 	if !strings.Contains(result, `<link rel="icon" href="/f.ico"><title>`) {
 		t.Fatalf("favicon was not prepended: %s", result)

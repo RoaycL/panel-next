@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sun-panel/global"
-	backuplib "sun-panel/lib/backup"
-	"sun-panel/models"
+	"panel-next/global"
+	backuplib "panel-next/lib/backup"
+	"panel-next/models"
 
 	"gorm.io/gorm"
 )

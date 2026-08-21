@@ -1,8 +1,8 @@
 package middleware
 
 import (
-	"sun-panel/api/api_v1/common/apiReturn"
-	"sun-panel/api/api_v1/common/base"
+	"panel-next/api/api_v1/common/apiReturn"
+	"panel-next/api/api_v1/common/base"
 
 	"github.com/gin-gonic/gin"
 )
