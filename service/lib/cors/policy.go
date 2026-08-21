@@ -20,15 +20,24 @@ const (
 var extensionIDPattern = regexp.MustCompile(`^[a-p]{32}$`)
 
 type Policy struct {
-	origins        map[string]struct{}
-	allowedHeaders map[string]struct{}
+	origins           map[string]struct{}
+	allowedHeaders    map[string]struct{}
+	allowAnyExtension bool
+}
+
+func isExtensionOrigin(origin string) bool {
+	if !strings.HasPrefix(origin, "chrome-extension://") {
+		return false
+	}
+	id := strings.TrimPrefix(origin, "chrome-extension://")
+	return extensionIDPattern.MatchString(id)
 }
 
 func NewPolicy(webOrigins, extensionIDs string) (*Policy, error) {
 	policy := &Policy{
 		origins: make(map[string]struct{}),
 		allowedHeaders: headerSet(
-			"accept", "accept-language", "authorization", "content-type", "lang", "token", "x-panel-api-version",
+			"accept", "accept-language", "authorization", "content-type", "lang", "token", "x-panel-api-version", "x-requested-with",
 		),
 	}
 	for _, configured := range splitList(webOrigins) {
@@ -39,6 +48,10 @@ func NewPolicy(webOrigins, extensionIDs string) (*Policy, error) {
 		policy.origins[origin] = struct{}{}
 	}
 	for _, id := range splitList(extensionIDs) {
+		if id == "*" {
+			policy.allowAnyExtension = true
+			continue
+		}
 		if !extensionIDPattern.MatchString(id) {
 			return nil, fmt.Errorf("invalid Chrome extension ID %q", id)
 		}
@@ -54,8 +67,15 @@ func (p *Policy) Handler() gin.HandlerFunc {
 			c.Next()
 			return
 		}
-		_, explicitlyAllowed := p.origins[origin]
-		if !explicitlyAllowed && !sameOrigin(c.Request, origin) {
+		allowed := false
+		if _, ok := p.origins[origin]; ok {
+			allowed = true
+		} else if p.allowAnyExtension && isExtensionOrigin(origin) {
+			allowed = true
+		} else if sameOrigin(c.Request, origin) {
+			allowed = true
+		}
+		if !allowed {
 			abortForbidden(c, "origin is not allowed")
 			return
 		}

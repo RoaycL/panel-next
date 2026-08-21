@@ -101,6 +101,20 @@ func TestPolicyRejectsUnsafeConfiguration(t *testing.T) {
 	if _, err := NewPolicy("", "not-an-extension-id"); err == nil {
 		t.Fatal("invalid extension ID was accepted")
 	}
+
+	wildcardPolicy, err := NewPolicy("", "*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := gin.New()
+	router.Use(wildcardPolicy.Handler())
+	router.GET("/probe", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
+
+	validOrigin := "chrome-extension://lbfmeokncehgfolikagjljfmmibocmep"
+	response := corsRequest(router, http.MethodGet, validOrigin, "", "")
+	if response.Code != http.StatusOK || response.Header().Get("Access-Control-Allow-Origin") != validOrigin {
+		t.Fatalf("wildcard extension origin failed: status=%d headers=%v", response.Code, response.Header())
+	}
 }
 
 func corsRequest(handler http.Handler, method, origin, requestedMethod, requestedHeaders string) *httptest.ResponseRecorder {
