@@ -127,7 +127,15 @@ go vet ./...
 
 ### Web/Extension 跨源配置
 
-Web 同源访问默认可用，不需要开放 CORS。Chrome 扩展或额外 Web 前端必须在 `service/conf/conf.ini` 的 `[cors]` 中配置精确 `extension_ids` 或 `web_origins`；不支持通配符。完整示例和反向代理要求见 [Chrome 扩展开发说明](./doc/chrome_extension_development.md#服务端-cors-配置)。
+Web 同源访问默认可用，不需要开放 CORS。Chrome 扩展的 `chrome-extension://` Origin 会被自动放行（格式合法即可），无需配置。额外 Web 前端必须在 `conf/conf.ini` 的 `[cors] web_origins` 中配置精确 Origin。完整示例和反向代理要求见 [Chrome 扩展开发说明](./doc/chrome_extension_development.md#服务端-cors-配置)。
+
+### 部署与文档
+
+- [部署与支持文档](./doc/support.md)
+- [隐私政策](./doc/privacy.md)
+- [备份与恢复说明](./doc/backup_restore_fork.md)
+- [设备会话安全设计](./doc/device_session_security.md)
+- [Web/Chrome 双端架构](./doc/web_extension_architecture.md)
 
 ## 开发约定
 
