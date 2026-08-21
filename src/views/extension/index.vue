@@ -3,8 +3,10 @@ import { computed, defineAsyncComponent, h, onMounted, onUnmounted, ref } from '
 import {
   NAvatar,
   NDropdown,
+  NModal,
   useMessage,
 } from 'naive-ui'
+import { useRouter } from 'vue-router'
 import { SvgIcon, ItemIcon } from '@/components/common'
 import { useAuthStore, usePanelState, useUserStore } from '@/store'
 import { PanelStateNetworkModeEnum } from '@/enums'
@@ -26,12 +28,22 @@ import SvgSrcGoogle from '@/assets/search_engine_svg/google.svg'
 
 const AppStarter = defineAsyncComponent(() => import('@/views/home/components/AppStarter/index.vue'))
 const EditItem = defineAsyncComponent(() => import('@/views/home/components/EditItem/index.vue'))
+const GallerySelector = defineAsyncComponent(() => import('@/components/common/GallerySelector/index.vue'))
 
+const router = useRouter()
 const ms = useMessage()
 const panelState = usePanelState()
 const authStore = useAuthStore()
 const userStore = useUserStore()
 const runtime = getRuntime()
+
+const showWallpaperModal = ref(false)
+
+function handleWallpaperSelect(url: string) {
+  panelState.panelConfig.backgroundImageSrc = url
+  showWallpaperModal.value = false
+  ms.success('已切换背景壁纸')
+}
 
 // 1. 时钟与日期
 const currentTime = ref('')
@@ -486,6 +498,16 @@ onUnmounted(() => {
           />
         </button>
 
+        <!-- 壁纸库/Wallhaven -->
+        <button
+          type="button"
+          class="icon-btn"
+          title="壁纸库 (Wallhaven 4K / 个人图库)"
+          @click="showWallpaperModal = true"
+        >
+          <SvgIcon icon="material-symbols:wallpaper" class="text-base text-white" />
+        </button>
+
         <!-- 扩展内置设置按钮 -->
         <button
           type="button"
@@ -508,6 +530,15 @@ onUnmounted(() => {
             {{ (authStore.userInfo.name || authStore.userInfo.username || 'U')[0].toUpperCase() }}
           </NAvatar>
         </div>
+        <button
+          v-else
+          type="button"
+          class="login-btn flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-medium shadow-sm transition-all"
+          @click="router.push('/login')"
+        >
+          <SvgIcon icon="material-symbols:account-circle" class="text-sm" />
+          <span>登录</span>
+        </button>
       </div>
     </header>
 
@@ -661,6 +692,19 @@ onUnmounted(() => {
       :item-group-id="editCardGroupId"
       @done="handleEditSuccess"
     />
+
+    <!-- 壁纸库 / Wallhaven 选择弹窗 -->
+    <NModal
+      v-model:show="showWallpaperModal"
+      preset="card"
+      title="高清壁纸库 (Wallhaven 4K / 图库)"
+      style="max-width: 960px; height: 680px; border-radius: 16px;"
+      size="small"
+      role="dialog"
+      aria-modal="true"
+    >
+      <GallerySelector type="wallpaper" @select="handleWallpaperSelect" />
+    </NModal>
   </div>
 </template>
 
