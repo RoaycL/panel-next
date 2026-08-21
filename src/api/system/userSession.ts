@@ -1,13 +1,13 @@
 import { post } from '@/utils/request'
 
 export interface SessionInfo {
-  id: number
+  id: string
   deviceName: string
   clientType: 'web' | 'chrome_extension'
   createdAt: string
   lastActiveAt: string
-  accessExpiresAt: string
-  isActive: boolean
+  refreshExpiresAt: string
+  current: boolean
 }
 
 export function getSessionList<T>() {
@@ -16,10 +16,10 @@ export function getSessionList<T>() {
   })
 }
 
-export function revokeSession<T>(sessionId: number) {
+export function revokeSession<T>(sessionId: string) {
   return post<T>({
     url: '/user/session/revoke',
-    data: { id: sessionId },
+    data: { sessionId },
   })
 }
 

@@ -26,7 +26,7 @@
     "clientExtension": "Chrome Extension",
     "createdAt": "Created At",
     "lastActiveAt": "Last Active",
-    "accessExpiresAt": "Access Expires At",
+    "refreshExpiresAt": "Refresh Expires At",
     "revoke": "Revoke",
     "cannotRevokeCurrent": "Cannot Revoke Current",
     "revokeConfirm": "Are you sure to revoke this session? You will need to login again.",

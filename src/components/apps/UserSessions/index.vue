@@ -18,7 +18,7 @@ const columns: DataTableColumns<SessionInfo> = [
     key: 'deviceName',
     render(row) {
       const elements: any[] = [h('span', row.deviceName || t('adminSettingUsers.unknownDevice'))]
-      if (row.isActive) {
+      if (row.current) {
         elements.push(h(NTag, {
           size: 'small',
           type: 'success',
@@ -54,17 +54,17 @@ const columns: DataTableColumns<SessionInfo> = [
     },
   },
   {
-    title: t('adminSettingUsers.accessExpiresAt'),
-    key: 'accessExpiresAt',
+    title: t('adminSettingUsers.refreshExpiresAt'),
+    key: 'refreshExpiresAt',
     render(row) {
-      return timeFormat(row.accessExpiresAt)
+      return timeFormat(row.refreshExpiresAt)
     },
   },
   {
     title: t('common.action'),
     key: 'action',
     render(row) {
-      if (row.isActive)
+      if (row.current)
         return h('span', { class: 'text-slate-400 text-xs' }, t('adminSettingUsers.cannotRevokeCurrent'))
       return h(NButton, {
         size: 'small',
@@ -88,7 +88,7 @@ async function fetchSessions() {
   }
 }
 
-async function handleRevoke(id: number) {
+async function handleRevoke(id: string) {
   dialog.warning({
     title: t('common.warning'),
     content: t('adminSettingUsers.revokeConfirm'),

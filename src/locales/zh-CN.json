@@ -26,7 +26,7 @@
     "clientExtension": "Chrome 扩展",
     "createdAt": "创建时间",
     "lastActiveAt": "最后活跃",
-    "accessExpiresAt": "Access Token 过期",
+    "refreshExpiresAt": "Refresh Token 过期",
     "revoke": "撤销",
     "cannotRevokeCurrent": "无法撤销当前会话",
     "revokeConfirm": "确定要撤销该设备会话吗？撤销后需要重新登录。",
