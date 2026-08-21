@@ -1,6 +1,7 @@
 package system
 
 import (
+	"strings"
 	"panel-next/api/api_v1/common/apiData/systemApiStructs"
 	"panel-next/api/api_v1/common/apiReturn"
 	"panel-next/global"
@@ -58,7 +59,14 @@ func (a *MonitorApi) GetDiskStateByPath(c *gin.Context) {
 		return
 	}
 
-	cacheDiskName := global.SystemMonitor_DISK_INFO + req.Path
+	// 仅允许绝对路径，拒绝相对路径、路径穿越与过长路径
+	path := strings.TrimSpace(req.Path)
+	if path == "" || !strings.HasPrefix(path, "/") || strings.Contains(path, "..") || len(path) > 512 {
+		apiReturn.ErrorParamFomat(c, "path")
+		return
+	}
+
+	cacheDiskName := global.SystemMonitor_DISK_INFO + path
 
 	if v, ok := global.SystemMonitor.Get(cacheDiskName); ok {
 		global.Logger.Debugln("读取缓存的的DISK信息")
@@ -66,7 +74,7 @@ func (a *MonitorApi) GetDiskStateByPath(c *gin.Context) {
 		return
 	}
 
-	diskState, err := monitor.GetDiskInfoByPath(req.Path)
+	diskState, err := monitor.GetDiskInfoByPath(path)
 	if err != nil {
 		apiReturn.Error(c, "failed")
 		return

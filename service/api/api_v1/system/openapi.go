@@ -2,8 +2,11 @@ package system
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"panel-next/api/api_v1/common/apiReturn"
@@ -230,16 +233,32 @@ func (a *OpenAPIApi) GetGroupDetail(c *gin.Context) {
 	})
 }
 
-// downloadRemoteIcon 下载远程图标到本地（API-03）
-func downloadRemoteIcon(url, savePath string) (string, error) {
-	fileName := cmn.Md5(url+time.Now().String()) + ".png"
-	filepath := savePath + fileName
+// downloadRemoteIcon 下载远程图标到本地（API-03），含 SSRF 防护。
+func downloadRemoteIcon(iconURL, savePath string) (string, error) {
+	parsed, err := url.Parse(iconURL)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return "", fmt.Errorf("invalid icon URL")
+	}
+	// 拒绝内网地址
+	host := parsed.Hostname()
+	if ip := net.ParseIP(host); ip != nil {
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() {
+			return "", fmt.Errorf("icon URL not allowed")
+		}
+	}
 
-	resp, err := http.Get(url)
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(iconURL)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("icon download returned %d", resp.StatusCode)
+	}
+
+	fileName := cmn.Md5(iconURL+time.Now().String()) + ".png"
+	filepath := savePath + fileName
 
 	out, err := os.Create(filepath)
 	if err != nil {
@@ -247,8 +266,14 @@ func downloadRemoteIcon(url, savePath string) (string, error) {
 	}
 	defer out.Close()
 
-	if _, err := io.Copy(out, resp.Body); err != nil {
+	written, err := io.Copy(out, io.LimitReader(resp.Body, 2<<20)) // 2MB limit
+	if err != nil {
+		os.Remove(filepath)
 		return "", err
+	}
+	if written == 0 {
+		os.Remove(filepath)
+		return "", fmt.Errorf("empty icon response")
 	}
 	return filepath, nil
 }

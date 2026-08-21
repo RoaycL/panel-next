@@ -67,7 +67,7 @@ func (s *SystemSettingCache) GetValueString(configName string) (result string, e
 	mSetting := models.SystemSetting{}
 	result, err = mSetting.Get(configName)
 	if err == gorm.ErrRecordNotFound {
-		err = ErrorNoExists
+		return "", ErrorNoExists
 	}
 	// 查询出来，缓存起来
 	s.Cache.SetDefault(configName, result)

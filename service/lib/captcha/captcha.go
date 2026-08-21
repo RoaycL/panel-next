@@ -71,9 +71,21 @@ func checkFailRecord(captchaId string) error {
 func recordFail(captchaId string) {
 	failMu.Lock()
 	defer failMu.Unlock()
+	// 定期清理过期记录，防止无限增长
+	if len(failRecords) >= 4096 {
+		now := time.Now()
+		for key, record := range failRecords {
+			if !now.Before(record.LockedUntil) && record.LockedUntil.IsZero() == false && now.After(record.LockedUntil) {
+				delete(failRecords, key)
+			} else if record.LockedUntil.IsZero() && time.Since(now) > 0 {
+				// 无锁定时间但长时间未成功的记录，按创建时间清理
+				delete(failRecords, key)
+			}
+		}
+	}
 	record, exists := failRecords[captchaId]
 	if !exists {
-		failRecords[captchaId] = &FailRecord{Count: 1}
+		failRecords[captchaId] = &FailRecord{Count: 1, LockedAt: time.Now()}
 		return
 	}
 	record.Count++

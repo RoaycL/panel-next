@@ -57,7 +57,10 @@ func (a *FileApi) UploadImg(c *gin.Context) {
 			os.MkdirAll(fildDir, os.ModePerm)
 		}
 		filepath := fmt.Sprintf("%s%s%s", fildDir, fileName, fileExt)
-		c.SaveUploadedFile(f, filepath)
+		if err := c.SaveUploadedFile(f, filepath); err != nil {
+			apiReturn.Error(c, "failed to save uploaded file")
+			return
+		}
 
 		// 获取图片类型分类
 		fileType := c.PostForm("fileType")

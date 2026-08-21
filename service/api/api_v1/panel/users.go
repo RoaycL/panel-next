@@ -8,6 +8,7 @@ import (
 	"panel-next/global"
 	"panel-next/lib/cmn"
 	"panel-next/lib/cmn/systemSetting"
+	sessionlib "panel-next/lib/session"
 	"panel-next/models"
 
 	"github.com/gin-gonic/gin"
@@ -99,10 +100,20 @@ func (a UsersApi) Deletes(c *gin.Context) {
 			if err := tx.Delete(&models.UserConfig{}, "user_id=?", v).Error; err != nil {
 				return err
 			}
-			// // 删除文件记录（不删除资源文件）
-			// if err := tx.Delete(&models.File{}, "user_id=?", v).Error; err != nil {
-			// 	return err
-			// }
+			// 删除设备会话与刷新令牌
+			if err := tx.Where("user_id = ?", v).Delete(&models.UserSession{}).Error; err != nil {
+				return err
+			}
+			if err := tx.Where("user_id = ?", v).Delete(&models.UserSessionRefreshToken{}).Error; err != nil {
+				return err
+			}
+			// 删除同步状态与变更日志
+			if err := tx.Where("user_id = ?", v).Delete(&models.UserSyncState{}).Error; err != nil {
+				return err
+			}
+			if err := tx.Where("user_id = ?", v).Delete(&models.UserSyncChange{}).Error; err != nil {
+				return err
+			}
 		}
 
 		if err := tx.Delete(&models.User{}, &param.UserIds).Error; err != nil {
@@ -184,6 +195,10 @@ func (a UsersApi) Update(c *gin.Context) {
 		apiReturn.ErrorDatabase(c, err.Error())
 		return
 	}
+	// 修改密码时撤销所有设备会话（H6）
+	if param.Password != "-" {
+		_, _ = sessionlib.NewManager(global.Db).RevokeAll(c.Request.Context(), param.ID)
+	}
 	// global.Logger.Debug("修改资料清空token", userInfo.Token)
 	global.UserToken.Delete(userInfo.Token) // 更新用户信息
 	// 返回token等基本信息
@@ -204,6 +219,17 @@ func (a UsersApi) GetList(c *gin.Context) {
 		apiReturn.ErrorParamFomat(c, err.Error())
 		c.Abort()
 		return
+	}
+
+	// 分页参数校验
+	if param.Page < 1 {
+		param.Page = 1
+	}
+	if param.Limit < 1 {
+		param.Limit = 10
+	}
+	if param.Limit > 500 {
+		param.Limit = 500
 	}
 
 	var (
@@ -269,7 +295,15 @@ func (a UsersApi) GetPublicVisitUser(c *gin.Context) {
 	if err := global.SystemSetting.GetValueByInterface(systemSetting.PANEL_PUBLIC_USER_ID, &userId); err == nil && userId != nil {
 		userInfo := models.User{}
 		if err := global.Db.First(&userInfo, "id=?", userId).Error; err == nil {
-			apiReturn.SuccessData(c, userInfo)
+			apiReturn.SuccessData(c, gin.H{
+				"id":         userInfo.ID,
+				"username":   userInfo.Username,
+				"name":       userInfo.Name,
+				"headImage":  userInfo.HeadImage,
+				"status":     userInfo.Status,
+				"role":       userInfo.Role,
+				"createTime": userInfo.CreatedAt,
+			})
 			return
 		}
 	}

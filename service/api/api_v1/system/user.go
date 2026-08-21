@@ -140,7 +140,7 @@ func (a *UserApi) GetReferralCode(c *gin.Context) {
 
 			// 查询是否有重复的
 			if row := global.Db.Find(&userInfo, "referral_code=?", referralCode).RowsAffected; row != 0 {
-				apiReturn.ErrorDatabase(c, err.Error())
+				apiReturn.Error(c, "referral code collision, please retry")
 				continue
 			}
 

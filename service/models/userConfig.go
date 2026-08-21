@@ -3,7 +3,7 @@ package models
 import "time"
 
 type UserConfig struct {
-	UserId    uint      `gorm:"index" json:"userId"`
+	UserId    uint      `gorm:"primaryKey" json:"userId"`
 	Revision  int64     `gorm:"not null;default:0;index" json:"revision"`
 	UpdatedAt time.Time `json:"updateTime"`
 

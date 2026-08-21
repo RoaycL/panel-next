@@ -2,6 +2,7 @@ package system
 
 import (
 	"context"
+	"sync"
 	"panel-next/api/api_v1/common/apiReturn"
 	"panel-next/api/api_v1/common/base"
 	"panel-next/lib/docker"
@@ -11,13 +12,14 @@ import (
 )
 
 type DockerApi struct {
-	client *docker.Client
+	clientOnce sync.Once
+	client     *docker.Client
 }
 
 func (a *DockerApi) getClient() *docker.Client {
-	if a.client == nil {
+	a.clientOnce.Do(func() {
 		a.client = docker.DefaultClient()
-	}
+	})
 	return a.client
 }
 

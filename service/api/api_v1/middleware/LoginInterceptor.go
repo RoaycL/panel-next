@@ -54,13 +54,16 @@ func authenticateLegacyToken(c *gin.Context, cToken string) bool {
 		return false
 	}
 	if userInfo, success := global.UserToken.Get(token); success {
+		if userInfo.Status != 1 {
+			return false
+		}
 		c.Set("userInfo", userInfo)
 		c.Set(sessionlib.GinAuthModeKey, sessionlib.AuthModeLegacy)
 		return true
 	}
 	mUser := models.User{}
 	info, err := mUser.GetUserInfoByToken(token)
-	if err != nil || info.Token == "" || info.ID == 0 {
+	if err != nil || info.Token == "" || info.ID == 0 || info.Status != 1 {
 		return false
 	}
 	global.UserToken.SetDefault(info.Token, info)

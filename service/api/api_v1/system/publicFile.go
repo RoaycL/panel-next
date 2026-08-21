@@ -49,7 +49,10 @@ func (a *PublicFileApi) Upload(c *gin.Context) {
 		os.MkdirAll(fildDir, os.ModePerm)
 	}
 	filepath := fmt.Sprintf("%s%s%s", fildDir, fileName, fileExt)
-	c.SaveUploadedFile(f, filepath)
+	if err := c.SaveUploadedFile(f, filepath); err != nil {
+		apiReturn.Error(c, "failed to save uploaded file")
+		return
+	}
 
 	mFile := models.PublicFile{}
 	mFile.FileName = f.Filename

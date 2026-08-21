@@ -65,19 +65,9 @@ func GetRemoteFileSize(url string) (int64, error) {
 
 // 下载图片
 func DownloadImage(url, savePath string, maxSize int64) (*os.File, error) {
-	// 获取远程文件大小
-	fileSize, err := GetRemoteFileSize(url)
-	if err != nil {
-		return nil, err
-	}
-
-	// 判断文件大小是否在阈值内
-	if fileSize > maxSize {
-		return nil, fmt.Errorf("文件太大，不下载。大小：%d字节", fileSize)
-	}
-
 	// 发送HTTP GET请求获取图片数据
-	response, err := http.Get(url)
+	client := &http.Client{Timeout: 10 * time.Second}
+	response, err := client.Get(url)
 	if err != nil {
 		return nil, err
 	}
@@ -101,10 +91,20 @@ func DownloadImage(url, savePath string, maxSize int64) (*os.File, error) {
 	}
 	defer file.Close()
 
-	// 将图片数据写入本地文件
-	_, err = io.Copy(file, response.Body)
+	// 限制下载大小，避免无界下载
+	limited := io.LimitReader(response.Body, maxSize+1)
+	written, err := io.Copy(file, limited)
 	if err != nil {
+		os.Remove(destination)
 		return nil, err
+	}
+	if written > maxSize {
+		os.Remove(destination)
+		return nil, fmt.Errorf("icon too large: %d bytes", written)
+	}
+	if written == 0 {
+		os.Remove(destination)
+		return nil, fmt.Errorf("empty icon response")
 	}
 	return file, nil
 }
@@ -155,7 +155,7 @@ func normalizeIconURL(iconURL, scheme string) string {
 func getFaviconURL(url string) ([]string, error) {
 	var icons []string
 	icons = make([]string, 0)
-	client := &http.Client{}
+	client := &http.Client{Timeout: 10 * time.Second}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return icons, err

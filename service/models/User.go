@@ -58,7 +58,7 @@ func (m *User) GetUserInfoByToken(userToken string) (User, error) {
 }
 
 // 更新用户基于id
-// 支持：name,autograph,header_image,status,role,mail,token,password,username,gender
+// 支持：name,autograph,header_image,status,role,mail,token,password,username
 func (m *User) UpdateUserInfoByUserId(user_id uint, updateInfo map[string]interface{}) error {
 	mUser := User{}
 
@@ -74,9 +74,6 @@ func (m *User) UpdateUserInfoByUserId(user_id uint, updateInfo map[string]interf
 	}
 	if v, ok := updateInfo["role"]; ok {
 		data["role"] = v
-	}
-	if v, ok := updateInfo["gender"]; ok {
-		data["gender"] = v
 	}
 
 	if v, ok := updateInfo["mail"]; ok {
