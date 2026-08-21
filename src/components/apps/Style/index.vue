@@ -7,6 +7,7 @@ import { set as setUserConfig } from '@/api/panel/userConfig'
 import { PanelPanelConfigStyleEnum } from '@/enums/panel'
 import { t } from '@/locales'
 import { getRuntime } from '@/runtime'
+import { saveExtensionAppearance } from '@/runtime/extensionAppearance'
 import GallerySelector from '@/components/common/GallerySelector/index.vue'
 
 const showWallpaperGallery = ref(false)
@@ -21,6 +22,7 @@ function handleWallpaperGallerySelect(url: string) {
 const ms = useMessage()
 const showWallpaperInput = ref(false)
 const uploadAction = getRuntime().resolveUrl('/api/file/uploadImg')
+const isExtension = getRuntime().kind === 'extension'
 
 const isSaveing = ref(false)
 
@@ -71,6 +73,11 @@ function handleUploadBackgroundFinish({
 }
 
 function uploadCloud() {
+  if (isExtension) {
+    saveExtensionAppearance(panelState.panelConfig)
+    ms.success('扩展外观已独立保存')
+    return
+  }
   setUserConfig({ panel: panelState.panelConfig }).then((res) => {
     if (res.code === 0)
       ms.success(t('apps.baseSettings.configSaved'))

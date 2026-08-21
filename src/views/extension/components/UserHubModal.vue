@@ -474,6 +474,77 @@ async function handleLogout() {
   animation: fadeIn 0.25s ease-out;
 }
 
+.content-body {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
+}
+
+@media (max-width: 820px) {
+  .user-hub-container {
+    flex-direction: column;
+  }
+
+  .hub-sidebar {
+    width: 100%;
+    max-height: 240px;
+    padding: 14px;
+    overflow-y: auto;
+    border-right: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .profile-hero {
+    margin-bottom: 10px;
+  }
+
+  .hub-nav-menu {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .hub-nav-menu > div:first-child,
+  .sidebar-bottom,
+  .nav-item-btn :deep(.n-tag) {
+    display: none;
+  }
+
+  .nav-item-btn {
+    padding: 8px;
+  }
+
+  .nav-item-btn .nav-icon-wrap {
+    width: 28px;
+    height: 28px;
+  }
+
+  .content-header {
+    padding: 12px 14px;
+  }
+
+  .content-header span {
+    display: none;
+  }
+
+  .content-body {
+    padding: 14px;
+  }
+}
+
+@media (max-width: 520px) {
+  .hub-sidebar {
+    max-height: 210px;
+  }
+
+  .profile-hero .mt-3\.5 {
+    display: none;
+  }
+
+  .nav-item-btn .flex-col span:last-child {
+    display: none;
+  }
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;

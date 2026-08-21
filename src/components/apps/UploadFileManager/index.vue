@@ -9,6 +9,7 @@ import { copyToClipboard, timeFormat } from '@/utils/cmn'
 import { t } from '@/locales'
 import { usePanelState } from '@/store'
 import { getRuntime } from '@/runtime'
+import { saveExtensionAppearance } from '@/runtime/extensionAppearance'
 
 interface InfoModalState {
   title: string
@@ -96,6 +97,11 @@ function handleInfoClick(fileInfo: File.Info) {
 
 function handleSetWallpaper(imgSrc: string) {
   panelStore.panelConfig.backgroundImageSrc = imgSrc
+  if (getRuntime().kind === 'extension') {
+    saveExtensionAppearance(panelStore.panelConfig)
+    ms.success('扩展壁纸已独立保存')
+    return
+  }
   savePanelConfig({ panel: panelStore.panelConfig })
 }
 

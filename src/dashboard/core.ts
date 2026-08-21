@@ -64,7 +64,12 @@ export function createItemSortRequest(group: DashboardGroup): Panel.ItemIconSort
   }
 }
 
-export function selectItemUrl(item: Panel.ItemInfo, preferLan: boolean) {
+export function selectItemUrl(
+  item: Panel.ItemInfo,
+  preferLanOrMode: boolean | number | null | undefined,
+): string {
+  // PanelStateNetworkModeEnum.lan 是 0，PanelStateNetworkModeEnum.wan 是 1
+  const preferLan = preferLanOrMode === true || preferLanOrMode === 0
   return preferLan && item.lanUrl ? item.lanUrl : item.url
 }
 

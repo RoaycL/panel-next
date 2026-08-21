@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, h, onMounted, onUnmounted, ref } from 'vue'
+import { computed, defineAsyncComponent, h, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   NAvatar,
   NDropdown,
@@ -12,6 +12,7 @@ import { useAuthStore, usePanelState, useUserStore } from '@/store'
 import { PanelStateNetworkModeEnum } from '@/enums'
 import { VisitMode } from '@/enums/auth'
 import { getRuntime } from '@/runtime'
+import { readExtensionAppearance, saveExtensionAppearance } from '@/runtime/extensionAppearance'
 import { readBootstrapSnapshot, refreshBootstrapSnapshot } from '@/sync/bootstrapCache'
 import { onSyncConflict, setSyncRevision } from '@/sync/revision'
 import { getBootstrap } from '@/api/sync'
@@ -19,8 +20,10 @@ import { getList as getGroupList } from '@/api/panel/itemIconGroup'
 import { getListByGroupId } from '@/api/panel/itemIcon'
 import type { DashboardGroup } from '@/dashboard/core'
 import { createDashboardState, selectItemUrl } from '@/dashboard/core'
-import { getWeather, type WeatherResponse } from '@/api/weather'
-import { getTrending, type TrendingItem, type TrendingSource } from '@/api/trending'
+import { getWeather } from '@/api/weather'
+import type { WeatherResponse } from '@/api/weather'
+import { getTrending } from '@/api/trending'
+import type { TrendingItem, TrendingSource } from '@/api/trending'
 
 import SvgSrcBaidu from '@/assets/search_engine_svg/baidu.svg'
 import SvgSrcBing from '@/assets/search_engine_svg/bing.svg'
@@ -41,6 +44,7 @@ const showWallpaperModal = ref(false)
 
 function handleWallpaperSelect(url: string) {
   panelState.panelConfig.backgroundImageSrc = url
+  saveExtensionAppearance(panelState.panelConfig)
   showWallpaperModal.value = false
   ms.success('已切换背景壁纸')
 }
@@ -219,7 +223,16 @@ let isRefreshing = false
 function applyBootstrapData(data: Sync.BootstrapResponseV1) {
   const dashboard = createDashboardState(data)
   setSyncRevision(dashboard.revision)
-  panelState.applyPanelConfig(dashboard.panelConfig)
+  const localAppearance = readExtensionAppearance()
+  if (localAppearance) {
+    panelState.applyPanelConfig(localAppearance)
+  }
+  else {
+    // Use the cloud appearance only as a first-run starting point, then fork it
+    // locally so later extension changes cannot overwrite the web appearance.
+    panelState.applyPanelConfig(dashboard.panelConfig)
+    saveExtensionAppearance(panelState.panelConfig)
+  }
   authStore.setUserInfo(dashboard.account)
   authStore.setVisitMode(VisitMode.VISIT_MODE_LOGIN)
   userStore.updateUserInfo(dashboard.account)
@@ -292,7 +305,15 @@ async function loadDirectFromApi() {
 }
 
 // 5. 分组 Tab 切换与卡片过滤（告别堆叠）
-const activeTabId = ref<number | 'all'>('all')
+const activeTabId = ref<number | null>(null)
+const sidePanelOpen = ref(false)
+const wheelHintVisible = ref(false)
+const settingsModalVisible = ref(false)
+const editCardModalVisible = ref(false)
+const editCardData = ref<Panel.ItemInfo | null>(null)
+const editCardGroupId = ref<number | undefined>(undefined)
+let wheelLocked = false
+let wheelHintTimer: number | null = null
 
 const groupTabs = computed(() => {
   return groups.value.map(g => ({
@@ -303,17 +324,13 @@ const groupTabs = computed(() => {
   }))
 })
 
-const totalCardsCount = computed(() => {
-  return groups.value.reduce((acc, g) => acc + (g.items?.length || 0), 0)
-})
-
 const displayedCards = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
   const allGroups = groups.value
 
-  let filteredGroups = allGroups
-  if (activeTabId.value !== 'all')
-    filteredGroups = allGroups.filter(g => g.id === activeTabId.value)
+  const filteredGroups = activeTabId.value === null
+    ? allGroups.slice(0, 1)
+    : allGroups.filter(g => g.id === activeTabId.value)
 
   const cards: Array<Panel.ItemInfo & { groupTitle: string; groupId: number }> = []
 
@@ -337,9 +354,47 @@ const displayedCards = computed(() => {
   return cards
 })
 
+const activeGroup = computed(() => groupTabs.value.find(group => group.id === activeTabId.value) || groupTabs.value[0])
+
+watch(groupTabs, (tabs) => {
+  if (!tabs.length) {
+    activeTabId.value = null
+    return
+  }
+  if (!tabs.some(tab => tab.id === activeTabId.value))
+    activeTabId.value = tabs[0].id
+}, { immediate: true })
+
+function selectGroup(id: number) {
+  activeTabId.value = id
+  sidePanelOpen.value = false
+}
+
+function handleGroupWheel(event: WheelEvent) {
+  if (settingsModalVisible.value || showWallpaperModal.value || editCardModalVisible.value)
+    return
+  const target = event.target as HTMLElement | null
+  if (target?.closest('input, textarea, [role="dialog"], .side-panel-scroll'))
+    return
+  if (Math.abs(event.deltaY) < 18 || wheelLocked || groupTabs.value.length < 2)
+    return
+
+  event.preventDefault()
+  const currentIndex = Math.max(0, groupTabs.value.findIndex(group => group.id === activeTabId.value))
+  const direction = event.deltaY > 0 ? 1 : -1
+  const nextIndex = (currentIndex + direction + groupTabs.value.length) % groupTabs.value.length
+  activeTabId.value = groupTabs.value[nextIndex].id
+  wheelHintVisible.value = true
+  wheelLocked = true
+  window.setTimeout(() => { wheelLocked = false }, 420)
+  if (wheelHintTimer) window.clearTimeout(wheelHintTimer)
+  wheelHintTimer = window.setTimeout(() => { wheelHintVisible.value = false }, 1100)
+}
+
 // 点击卡片在浏览器新标签页打开
 function handleCardClick(card: Panel.ItemInfo) {
-  const targetUrl = selectItemUrl(card, panelState.networkMode)
+  const isLan = panelState.networkMode === PanelStateNetworkModeEnum.lan
+  const targetUrl = selectItemUrl(card, isLan)
   if (targetUrl)
     runtime.openUrl(targetUrl, 'tab')
 }
@@ -384,7 +439,8 @@ function handleRightMenuSelect(key: string) {
     runtime.openUrl(card.lanUrl, 'tab')
   }
   else if (key === 'copy_link') {
-    const url = selectItemUrl(card, panelState.networkMode)
+    const isLan = panelState.networkMode === PanelStateNetworkModeEnum.lan
+    const url = selectItemUrl(card, isLan)
     if (url) {
       navigator.clipboard.writeText(url)
       ms.success('已复制链接到剪贴板')
@@ -398,11 +454,6 @@ function handleRightMenuSelect(key: string) {
 }
 
 // 7. 内置系统与扩展设置模态框（In-Extension Settings Modal，无需跳出）
-const settingsModalVisible = ref(false)
-const editCardModalVisible = ref(false)
-const editCardData = ref<Panel.ItemInfo | null>(null)
-const editCardGroupId = ref<number | undefined>(undefined)
-
 function openSettings() {
   settingsModalVisible.value = true
 }
@@ -433,11 +484,14 @@ onMounted(async () => {
   await refreshBootstrap()
   await Promise.all([fetchWeather(), fetchTrending()])
   startTrendingRoll()
+  window.addEventListener('wheel', handleGroupWheel, { passive: false })
 })
 
 onUnmounted(() => {
   if (clockTimer) clearInterval(clockTimer)
   if (trendingTimer) clearInterval(trendingTimer)
+  if (wheelHintTimer) clearTimeout(wheelHintTimer)
+  window.removeEventListener('wheel', handleGroupWheel)
 })
 </script>
 
@@ -452,6 +506,86 @@ onUnmounted(() => {
         backgroundImage: `url(${panelState.panelConfig.backgroundImageSrc})`,
       }"
     />
+
+    <!-- 最左侧热区：鼠标靠近屏幕边缘时展开功能区 -->
+    <div class="edge-trigger" @mouseenter="sidePanelOpen = true" />
+    <div class="side-rail" @mouseenter="sidePanelOpen = true">
+      <button type="button" class="rail-avatar" title="个人中心" @click="openSettings">
+        <NAvatar round :size="30" :src="authStore.userInfo?.headImage || undefined" fallback-src="/favicon.svg">
+          {{ (authStore.userInfo?.name || authStore.userInfo?.username || 'U')[0].toUpperCase() }}
+        </NAvatar>
+      </button>
+      <div class="rail-divider" />
+      <button type="button" class="rail-button active" title="分组导航" @click="sidePanelOpen = !sidePanelOpen">
+        <SvgIcon icon="material-symbols:folder-outline-rounded" />
+      </button>
+      <button type="button" class="rail-button" title="个人中心" @click="openSettings">
+        <SvgIcon icon="material-symbols:account-circle" />
+      </button>
+      <button type="button" class="rail-button" title="壁纸设置" @click="showWallpaperModal = true">
+        <SvgIcon icon="material-symbols:wallpaper" />
+      </button>
+      <button type="button" class="rail-button" title="刷新同步" @click="refreshBootstrap">
+        <SvgIcon icon="material-symbols:sync" :class="{ 'animate-spin': extensionSyncStatus === 'syncing' }" />
+      </button>
+      <div class="rail-spacer" />
+      <button type="button" class="rail-button" title="系统设置" @click="openSettings">
+        <SvgIcon icon="material-symbols:settings-outline-rounded" />
+      </button>
+    </div>
+
+    <aside
+      class="function-panel"
+      :class="{ open: sidePanelOpen }"
+      @mouseenter="sidePanelOpen = true"
+      @mouseleave="sidePanelOpen = false"
+    >
+      <div class="function-panel-head">
+        <div>
+          <p class="function-eyebrow">PANEL NEXT</p>
+          <h2>功能区</h2>
+        </div>
+        <button type="button" class="panel-close" aria-label="收起功能区" @click="sidePanelOpen = false">
+          <SvgIcon icon="material-symbols:chevron-left-rounded" />
+        </button>
+      </div>
+      <button type="button" class="profile-card" @click="openSettings">
+        <NAvatar round :size="42" :src="authStore.userInfo?.headImage || undefined" fallback-src="/favicon.svg" />
+        <span class="profile-copy">
+          <strong>{{ authStore.userInfo?.name || authStore.userInfo?.username || '访客模式' }}</strong>
+          <small>{{ authStore.token ? '配置已连接并同步' : '登录后同步个人配置' }}</small>
+        </span>
+        <SvgIcon icon="material-symbols:chevron-right-rounded" />
+      </button>
+      <div class="panel-section-title">
+        <span>我的分组</span>
+        <small>滚轮可切换</small>
+      </div>
+      <div class="side-panel-scroll">
+        <button
+          v-for="(group, index) in groupTabs"
+          :key="group.id"
+          type="button"
+          class="group-nav-item"
+          :class="{ active: activeTabId === group.id }"
+          @click="selectGroup(group.id)"
+        >
+          <span class="group-number">{{ String(index + 1).padStart(2, '0') }}</span>
+          <span class="group-nav-copy">
+            <strong>{{ group.title }}</strong>
+            <small>{{ group.count }} 个快捷方式</small>
+          </span>
+          <span class="group-dot" />
+        </button>
+      </div>
+      <div class="quick-actions">
+        <button type="button" @click="toggleNetworkMode">
+          <SvgIcon :icon="panelState.networkMode === PanelStateNetworkModeEnum.lan ? 'material-symbols:lan-outline-rounded' : 'mdi:wan'" />
+          {{ panelState.networkMode === PanelStateNetworkModeEnum.lan ? '局域网模式' : '公网模式' }}
+        </button>
+        <button type="button" @click="openSettings"><SvgIcon icon="material-symbols:tune-rounded" />偏好设置</button>
+      </div>
+    </aside>
     <div
       v-if="panelState.panelConfig.backgroundImageSrc"
       class="bg-overlay"
@@ -460,7 +594,7 @@ onUnmounted(() => {
 
     <!-- 顶栏：极简状态与快捷控制 -->
     <header class="top-nav-bar">
-      <div class="nav-left flex items-center space-x-3">
+      <div class="nav-left flex items-center space-x-3 pl-10">
         <div class="brand-pill flex items-center space-x-2 px-3 py-1.5 rounded-full bg-white/10 dark:bg-black/20 backdrop-blur-md border border-white/10 text-white shadow-sm">
           <img src="/favicon.svg" class="w-4 h-4 object-contain" alt="Logo">
           <span class="font-bold text-xs tracking-wider uppercase">Panel Next</span>
@@ -629,35 +763,12 @@ onUnmounted(() => {
         </div>
       </section>
 
-      <!-- 分类 Tab 选项卡导航栏 —— 解决堆叠的核心！ -->
-      <section class="tab-filter-bar flex items-center justify-center space-x-2 mb-6 flex-wrap gap-y-2">
-        <button
-          type="button"
-          class="tab-pill"
-          :class="{ active: activeTabId === 'all' }"
-          @click="activeTabId = 'all'"
-        >
-          <span class="tab-icon">🌟</span>
-          <span class="tab-label">全部</span>
-          <span class="tab-badge">{{ totalCardsCount }}</span>
-        </button>
-
-        <button
-          v-for="group in groupTabs"
-          :key="group.id"
-          type="button"
-          class="tab-pill"
-          :class="{ active: activeTabId === group.id }"
-          @click="activeTabId = group.id"
-        >
-          <span v-if="group.icon" class="tab-icon">{{ group.icon }}</span>
-          <span class="tab-label">{{ group.title }}</span>
-          <span class="tab-badge">{{ group.count }}</span>
-        </button>
-      </section>
-
       <!-- 现代应用网格 (Speed Dial Grid) -->
       <section class="cards-grid-section w-full max-w-[1280px]">
+        <div class="active-group-meta">
+          <span>{{ activeGroup?.title }}</span>
+          <small>{{ activeGroup?.count || 0 }} 个快捷方式 · 滚动鼠标滚轮切换分组</small>
+        </div>
         <div v-if="displayedCards.length > 0" class="cards-grid">
           <div
             v-for="card in displayedCards"
@@ -688,6 +799,14 @@ onUnmounted(() => {
         </div>
       </section>
     </main>
+
+    <Transition name="wheel-hint">
+      <div v-if="wheelHintVisible" class="wheel-switch-hint">
+        <SvgIcon icon="material-symbols:mouse-outline-rounded" />
+        <span>{{ activeGroup?.title }}</span>
+        <small>{{ activeGroup?.count || 0 }} 项</small>
+      </div>
+    </Transition>
 
     <!-- 右键卡片菜单 -->
     <NDropdown
@@ -768,6 +887,173 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
+.edge-trigger {
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 42;
+  width: 12px;
+}
+
+.side-rail {
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 40;
+  width: 54px;
+  padding: 20px 9px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  background: rgba(8, 13, 24, 0.56);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(22px) saturate(135%);
+  box-shadow: 8px 0 30px rgba(0, 0, 0, 0.12);
+}
+
+.rail-avatar,
+.rail-button,
+.panel-close {
+  display: grid;
+  place-items: center;
+  border: 0;
+  color: rgba(255, 255, 255, 0.68);
+  cursor: pointer;
+}
+
+.rail-avatar {
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.rail-divider {
+  width: 24px;
+  height: 1px;
+  margin: 3px 0 7px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.rail-button {
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  background: transparent;
+  font-size: 18px;
+  transition: 180ms ease;
+}
+
+.rail-button:hover,
+.rail-button.active {
+  color: white;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.rail-button.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  width: 3px;
+  height: 20px;
+  border-radius: 0 3px 3px 0;
+  background: #67e8f9;
+}
+
+.rail-spacer { flex: 1; }
+
+.function-panel {
+  position: fixed;
+  inset: 0 auto 0 54px;
+  z-index: 39;
+  width: min(330px, calc(100vw - 54px));
+  padding: 26px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  color: white;
+  background: linear-gradient(145deg, rgba(10, 17, 31, 0.95), rgba(15, 23, 42, 0.82));
+  border-right: 1px solid rgba(255, 255, 255, 0.13);
+  backdrop-filter: blur(34px) saturate(140%);
+  box-shadow: 20px 0 60px rgba(0, 0, 0, 0.34);
+  transform: translateX(calc(-100% - 18px));
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 260ms cubic-bezier(.2,.8,.2,1), opacity 200ms ease;
+}
+
+.function-panel.open {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.function-panel-head,
+.panel-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.function-eyebrow {
+  margin: 0 0 2px;
+  color: #67e8f9;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .2em;
+}
+
+.function-panel h2 { margin: 0; font-size: 24px; font-weight: 720; }
+.panel-close { width: 34px; height: 34px; border-radius: 10px; background: rgba(255,255,255,.08); font-size: 20px; }
+
+.profile-card {
+  width: 100%;
+  margin: 24px 0 26px;
+  padding: 13px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  text-align: left;
+  color: white;
+  border: 1px solid rgba(255,255,255,.11);
+  border-radius: 17px;
+  background: linear-gradient(135deg, rgba(255,255,255,.11), rgba(255,255,255,.04));
+  cursor: pointer;
+}
+
+.profile-copy,
+.group-nav-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.profile-copy strong { font-size: 13px; }
+.profile-copy small { margin-top: 2px; color: rgba(255,255,255,.5); font-size: 10px; }
+.panel-section-title { padding: 0 4px 9px; font-size: 12px; font-weight: 700; }
+.panel-section-title small { color: rgba(255,255,255,.38); font-size: 10px; font-weight: 500; }
+.side-panel-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 3px 3px 12px; scrollbar-width: none; }
+.side-panel-scroll::-webkit-scrollbar { display: none; }
+
+.group-nav-item {
+  width: 100%;
+  padding: 11px 10px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  color: rgba(255,255,255,.7);
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: 13px;
+  background: transparent;
+  cursor: pointer;
+  transition: 180ms ease;
+}
+
+.group-nav-item:hover { color: white; background: rgba(255,255,255,.07); }
+.group-nav-item.active { color: white; border-color: rgba(103,232,249,.22); background: rgba(103,232,249,.1); }
+.group-number { color: rgba(255,255,255,.32); font: 10px/1 ui-monospace, monospace; }
+.group-nav-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.group-nav-copy small { margin-top: 2px; color: rgba(255,255,255,.4); font-size: 9px; }
+.group-dot { width: 5px; height: 5px; border-radius: 50%; background: transparent; }
+.group-nav-item.active .group-dot { background: #67e8f9; box-shadow: 0 0 10px #22d3ee; }
+
+.quick-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.09); }
+.quick-actions button { padding: 9px 6px; display: flex; align-items: center; justify-content: center; gap: 5px; color: rgba(255,255,255,.65); border: 1px solid rgba(255,255,255,.08); border-radius: 10px; background: rgba(255,255,255,.04); font-size: 10px; cursor: pointer; }
+.quick-actions button:hover { color: white; background: rgba(255,255,255,.1); }
+
 /* 顶部导航栏 */
 .top-nav-bar {
   position: relative;
@@ -822,46 +1108,31 @@ onUnmounted(() => {
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.25);
 }
 
-/* Tab 药丸栏 */
-.tab-pill {
-  display: inline-flex;
+.active-group-meta { margin: 0 10px 12px; display: flex; align-items: baseline; gap: 10px; color: rgba(255,255,255,.9); }
+.active-group-meta > span { font-size: 13px; font-weight: 650; }
+.active-group-meta small { color: rgba(255,255,255,.48); font-size: 10px; }
+
+.wheel-switch-hint {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  z-index: 45;
+  transform: translateX(-50%);
+  padding: 9px 13px;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 16px;
-  border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(16px);
-  color: rgba(255, 255, 255, 0.85);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.tab-pill:hover {
-  background: rgba(255, 255, 255, 0.22);
-  color: #fff;
-  transform: translateY(-1px);
-}
-
-.tab-pill.active {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.85), rgba(5, 150, 105, 0.95));
-  border-color: rgba(52, 211, 153, 0.4);
-  color: #fff;
-  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
-}
-
-.tab-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1px 6px;
-  border-radius: 9999px;
-  background: rgba(0, 0, 0, 0.2);
+  gap: 7px;
+  color: white;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 999px;
+  background: rgba(8,13,24,.72);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 10px 35px rgba(0,0,0,.28);
   font-size: 11px;
-  opacity: 0.85;
 }
+.wheel-switch-hint small { color: rgba(255,255,255,.45); }
+.wheel-hint-enter-active,.wheel-hint-leave-active { transition: 180ms ease; }
+.wheel-hint-enter-from,.wheel-hint-leave-to { opacity: 0; transform: translate(-50%, 8px); }
 
 /* 卡片栅格 */
 .cards-grid {
@@ -943,5 +1214,19 @@ onUnmounted(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
   margin-top: 2px;
+}
+
+@media (max-width: 700px) {
+  .side-rail { width: 46px; padding-inline: 5px; }
+  .function-panel { left: 46px; width: calc(100vw - 46px); }
+  .top-nav-bar { padding: 10px 12px; }
+  .nav-left { display: none; }
+  .nav-right { width: 100%; justify-content: flex-end; }
+  .main-content { padding-left: 54px; }
+  .clock-hero { margin-top: 20px; }
+  .active-group-meta small { display: none; }
+  .cards-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .speed-card { padding: 10px 5px; }
+  .card-desc { display: none; }
 }
 </style>
