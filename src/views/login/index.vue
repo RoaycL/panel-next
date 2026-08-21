@@ -82,6 +82,7 @@ async function loginPost() {
     }
     else {
       loading.value = false
+      ms.error(t(`apiErrorCode.${res.code}`, {}, res.msg))
       if (showCaptcha.value) {
         captchaId.value = `${Date.now()}`
         captchaRef.value?.refresh()
@@ -90,6 +91,7 @@ async function loginPost() {
   }
   catch (error) {
     loading.value = false
+    ms.error(t('common.networkError'))
     console.log(error)
   }
 }
