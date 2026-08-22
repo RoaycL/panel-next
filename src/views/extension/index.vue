@@ -1,25 +1,25 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, h, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
-  darkTheme,
   NAvatar,
-  NConfigProvider,
   NDropdown,
   NModal,
   NSwitch,
   useMessage,
 } from 'naive-ui'
 import { useRouter } from 'vue-router'
-import { SvgIcon, ItemIcon, ConflictResolverModal } from '@/components/common'
+import { SvgIcon, ItemIcon, ConflictResolverModal, OfflineQueueManager } from '@/components/common'
 import { useAuthStore, usePanelState, useUserStore } from '@/store'
+import { getLocalState as getLocalPanelState } from '@/store/modules/panel/helper'
 import { PanelStateNetworkModeEnum } from '@/enums'
 import { VisitMode } from '@/enums/auth'
 import { getRuntime } from '@/runtime'
-import { readExtensionAppearance, readExtensionWidgets, saveExtensionAppearance, saveExtensionWidgets } from '@/runtime/extensionAppearance'
-import { readBootstrapSnapshot, refreshBootstrapSnapshot } from '@/sync/bootstrapCache'
+import type { StorageChangeEvent } from '@/runtime/types'
+import { EXTENSION_APPEARANCE_KEY, EXTENSION_WIDGETS_KEY, readExtensionAppearance, readExtensionWidgets, saveExtensionAppearance, saveExtensionWidgets } from '@/runtime/extensionAppearance'
+import { BOOTSTRAP_SNAPSHOT_KEY_PREFIX, readBootstrapSnapshot, refreshBootstrapSnapshot } from '@/sync/bootstrapCache'
 import { onSyncConflict, setSyncRevision } from '@/sync/revision'
 import { replayOfflineQueue } from '@/sync/offlineReplay'
-import { getPendingMutationCount } from '@/sync/offlineQueue'
+import { getPendingMutationCount, OFFLINE_QUEUE_KEY_PREFIX, onOfflineQueueChanged } from '@/sync/offlineQueue'
 import type { ConflictDescriptor, ConflictResolutionChoice } from '@/sync/conflictResolver'
 import { getBootstrap } from '@/api/sync'
 import { getList as getGroupList } from '@/api/panel/itemIconGroup'
@@ -49,13 +49,21 @@ const runtime = getRuntime()
 
 // 离线队列与冲突解决
 const conflictModalVisible = ref(false)
+const queueManagerVisible = ref(false)
 const currentConflict = ref<ConflictDescriptor | null>(null)
 let conflictResolverPromiseResolve: ((choice: ConflictResolutionChoice) => void) | null = null
+let removeSyncConflictListener: (() => void) | null = null
+let removeStorageListener: (() => void) | null = null
+let removeOfflineQueueListener: (() => void) | null = null
+let externalStorageTimer: number | null = null
+let isDisposed = false
+const externalStorageKeys = new Set<string>()
+const pendingMutationsCount = ref(0)
 
-const pendingMutationsCount = computed(() => {
+function refreshPendingMutationsCount() {
   const accountId = authStore.userInfo?.id
-  return accountId ? getPendingMutationCount(accountId) : 0
-})
+  pendingMutationsCount.value = accountId ? getPendingMutationCount(accountId) : 0
+}
 
 function onResolveConflict(choice: ConflictResolutionChoice) {
   if (conflictResolverPromiseResolve) {
@@ -74,10 +82,13 @@ async function triggerOfflineReplay() {
       conflictResolverPromiseResolve = resolve
     })
   })
+  refreshPendingMutationsCount()
   if (result.succeeded > 0) {
     ms.success(`已成功同步 ${result.succeeded} 项离线修改`)
     void refreshBootstrap()
   }
+  if (result.interrupted && result.error && navigator.onLine)
+    ms.warning(`同步已暂停：${result.error}`)
 }
 
 const showWallpaperModal = ref(false)
@@ -273,12 +284,14 @@ const defaultPresetGroups: DashboardGroup[] = [
 
 type ExtensionSyncStatus = 'idle' | 'syncing' | 'online' | 'cached' | 'offline' | 'error'
 const extensionSyncStatus = ref<ExtensionSyncStatus>('syncing')
+const syncRevision = ref<Sync.Revision>('0')
 const groups = ref<DashboardGroup[]>(defaultPresetGroups)
 let isRefreshing = false
 
 function applyBootstrapData(data: Sync.BootstrapResponseV1) {
   const dashboard = createDashboardState(data)
   setSyncRevision(dashboard.revision)
+  syncRevision.value = dashboard.revision
   const localAppearance = readExtensionAppearance()
   if (localAppearance) {
     panelState.applyPanelConfig(localAppearance)
@@ -292,8 +305,8 @@ function applyBootstrapData(data: Sync.BootstrapResponseV1) {
   authStore.setUserInfo(dashboard.account)
   authStore.setVisitMode(VisitMode.VISIT_MODE_LOGIN)
   userStore.updateUserInfo(dashboard.account)
-  if (dashboard.groups && dashboard.groups.length > 0)
-    groups.value = dashboard.groups
+  refreshPendingMutationsCount()
+  groups.value = dashboard.groups || []
 }
 
 async function refreshBootstrap() {
@@ -440,7 +453,7 @@ function selectGroup(id: number) {
 }
 
 function handleGroupWheel(event: WheelEvent) {
-  if (settingsModalVisible.value || showWallpaperModal.value || editCardModalVisible.value)
+  if (settingsModalVisible.value || showWallpaperModal.value || showWidgetManager.value || editCardModalVisible.value || conflictModalVisible.value)
     return
   const target = event.target as HTMLElement | null
   if (target?.closest('input, textarea, [role="dialog"], .side-panel-scroll'))
@@ -489,6 +502,8 @@ function openCardEditor(card: Panel.ItemInfo) {
 }
 
 function startCardLongPress(event: PointerEvent, card: Panel.ItemInfo) {
+  if (authStore.visitMode !== VisitMode.VISIT_MODE_LOGIN)
+    return
   if (event.pointerType === 'mouse' && event.button !== 0)
     return
   cancelCardLongPress()
@@ -536,7 +551,7 @@ function handleCardContextMenu(event: MouseEvent, card: Panel.ItemInfo) {
   rightMenuShow.value = true
 }
 
-function handleRightMenuSelect(key: string) {
+async function handleRightMenuSelect(key: string) {
   rightMenuShow.value = false
   const card = activeRightCard.value
   if (!card) return
@@ -551,8 +566,13 @@ function handleRightMenuSelect(key: string) {
     const isLan = panelState.networkMode === PanelStateNetworkModeEnum.lan
     const url = selectItemUrl(card, isLan)
     if (url) {
-      navigator.clipboard.writeText(url)
-      ms.success('已复制链接到剪贴板')
+      try {
+        await navigator.clipboard.writeText(url)
+        ms.success('已复制链接到剪贴板')
+      }
+      catch {
+        ms.error('复制失败，请检查浏览器剪贴板权限')
+      }
     }
   }
   else if (key === 'edit') {
@@ -565,7 +585,7 @@ function openSettings() {
   settingsModalVisible.value = true
 }
 
-function handleEditSuccess(updated: Panel.Info) {
+function handleEditSuccess(updated: Panel.Info, meta: { queued: boolean } = { queued: false }) {
   editCardModalVisible.value = false
   const updatedItem = updated as Panel.ItemInfo
   for (const group of groups.value)
@@ -573,7 +593,10 @@ function handleEditSuccess(updated: Panel.Info) {
   const targetGroup = groups.value.find(group => group.id === updatedItem.itemIconGroupId)
   if (targetGroup)
     targetGroup.items.push(updatedItem)
-  void refreshBootstrap()
+  // Keep the optimistic local edit visible while it waits in the durable
+  // queue. A replay or remote storage update will refresh the snapshot later.
+  if (!meta.queued)
+    void refreshBootstrap()
 }
 
 // 切换网络模式
@@ -585,30 +608,100 @@ function toggleNetworkMode() {
   ms.info(nextMode === PanelStateNetworkModeEnum.lan ? '已切换至局域网 (LAN) 优先模式' : '已切换至公网 (WAN) 模式')
 }
 
+function handleBrowserOffline() {
+  extensionSyncStatus.value = 'offline'
+}
+
+async function handleBrowserOnline() {
+  await triggerOfflineReplay()
+  await refreshBootstrap()
+}
+
+function applyExternalStorageChanges() {
+  externalStorageTimer = null
+  const keys = [...externalStorageKeys]
+  externalStorageKeys.clear()
+
+  if (keys.includes(EXTENSION_APPEARANCE_KEY)) {
+    const appearance = readExtensionAppearance()
+    if (appearance)
+      panelState.applyPanelConfig(appearance)
+  }
+  if (keys.includes(EXTENSION_WIDGETS_KEY))
+    widgetPreferences.value = readExtensionWidgets()
+  if (keys.includes('panelStorage')) {
+    const localPanelState = getLocalPanelState()
+    panelState.$patch({
+      leftSiderCollapsed: localPanelState.leftSiderCollapsed,
+      rightSiderCollapsed: localPanelState.rightSiderCollapsed,
+      networkMode: localPanelState.networkMode,
+    })
+  }
+  if (keys.some(key => key.startsWith(BOOTSTRAP_SNAPSHOT_KEY_PREFIX)))
+    loadCachedSnapshot()
+  refreshPendingMutationsCount()
+}
+
+function handleExternalStorageChange(change: StorageChangeEvent) {
+  // A server, account or store switch changes the scope of every cached key;
+  // a clean reload is safer than mixing two scopes in one running tab.
+  if (change.scope === 'runtime'
+    || ['AUTH_TOKEN', 'userStorage'].includes(change.key)) {
+    window.location.reload()
+    return
+  }
+
+  const isLiveDataKey = change.key === EXTENSION_APPEARANCE_KEY
+    || change.key === EXTENSION_WIDGETS_KEY
+    || change.key === 'panelStorage'
+    || change.key.startsWith(BOOTSTRAP_SNAPSHOT_KEY_PREFIX)
+    || change.key.startsWith(OFFLINE_QUEUE_KEY_PREFIX)
+  if (!isLiveDataKey)
+    return
+
+  externalStorageKeys.add(change.key)
+  if (externalStorageTimer)
+    window.clearTimeout(externalStorageTimer)
+  externalStorageTimer = window.setTimeout(applyExternalStorageChanges, 80)
+}
+
 // 8. 周期与初始化
 onMounted(async () => {
+  isDisposed = false
   updateClock()
   clockTimer = window.setInterval(updateClock, 1000)
 
-  onSyncConflict(() => {
-    void refreshBootstrap()
+  removeSyncConflictListener = onSyncConflict(() => {
+    void triggerOfflineReplay().then(refreshBootstrap, refreshBootstrap)
   })
+  removeStorageListener = runtime.storage.subscribe?.(handleExternalStorageChange) ?? null
+  removeOfflineQueueListener = onOfflineQueueChanged(refreshPendingMutationsCount)
+  window.addEventListener('wheel', handleGroupWheel, { passive: false })
+  window.addEventListener('online', handleBrowserOnline)
+  window.addEventListener('offline', handleBrowserOffline)
 
   await refreshBootstrap()
+  if (isDisposed) return
   await triggerOfflineReplay()
+  if (isDisposed) return
   await Promise.all([fetchWeather(), fetchTrending()])
+  if (isDisposed) return
   startTrendingRoll()
-  window.addEventListener('wheel', handleGroupWheel, { passive: false })
-  window.addEventListener('online', triggerOfflineReplay)
 })
 
 onUnmounted(() => {
+  isDisposed = true
   if (clockTimer) clearInterval(clockTimer)
   if (trendingTimer) clearInterval(trendingTimer)
   if (wheelHintTimer) clearTimeout(wheelHintTimer)
   if (longPressTimer) clearTimeout(longPressTimer)
+  if (externalStorageTimer) clearTimeout(externalStorageTimer)
+  removeSyncConflictListener?.()
+  removeStorageListener?.()
+  removeOfflineQueueListener?.()
   window.removeEventListener('wheel', handleGroupWheel)
-  window.removeEventListener('online', triggerOfflineReplay)
+  window.removeEventListener('online', handleBrowserOnline)
+  window.removeEventListener('offline', handleBrowserOffline)
 })
 </script>
 
@@ -627,7 +720,7 @@ onUnmounted(() => {
     <!-- 最左侧热区：鼠标靠近屏幕边缘时展开功能区 -->
     <div class="edge-trigger" @mouseenter="sidePanelOpen = true" />
     <div class="side-rail" @mouseenter="sidePanelOpen = true">
-      <button type="button" class="rail-avatar" title="个人中心" @click="openSettings">
+      <button v-if="!sidePanelOpen" type="button" class="rail-avatar" title="个人中心" @click="openSettings">
         <NAvatar round :size="30" :src="authStore.userInfo?.headImage || undefined" fallback-src="/favicon.svg">
           {{ (authStore.userInfo?.name || authStore.userInfo?.username || 'U')[0].toUpperCase() }}
         </NAvatar>
@@ -648,8 +741,8 @@ onUnmounted(() => {
       <button
         type="button"
         class="rail-button relative"
-        :title="pendingMutationsCount > 0 ? `有 ${pendingMutationsCount} 条离线修改待同步，点击立即重放` : '刷新同步'"
-        @click="pendingMutationsCount > 0 ? triggerOfflineReplay() : refreshBootstrap()"
+        :title="pendingMutationsCount > 0 ? `有 ${pendingMutationsCount} 条离线修改待同步，点击管理队列` : '刷新同步'"
+        @click="pendingMutationsCount > 0 ? (queueManagerVisible = true) : refreshBootstrap()"
       >
         <SvgIcon icon="material-symbols:sync" :class="{ 'animate-spin': extensionSyncStatus === 'syncing' }" />
         <span
@@ -673,7 +766,9 @@ onUnmounted(() => {
     >
       <div class="function-panel-head">
         <div>
-          <p class="function-eyebrow">PANEL NEXT</p>
+          <p class="function-eyebrow">
+            PANEL NEXT
+          </p>
           <h2>功能区</h2>
         </div>
         <button type="button" class="panel-close" aria-label="收起功能区" @click="sidePanelOpen = false">
@@ -733,7 +828,9 @@ onUnmounted(() => {
           <SvgIcon :icon="panelState.networkMode === PanelStateNetworkModeEnum.lan ? 'material-symbols:lan-outline-rounded' : 'mdi:wan'" />
           {{ panelState.networkMode === PanelStateNetworkModeEnum.lan ? '局域网模式' : '公网模式' }}
         </button>
-        <button type="button" @click="openSettings"><SvgIcon icon="material-symbols:tune-rounded" />偏好设置</button>
+        <button type="button" @click="openSettings">
+          <SvgIcon icon="material-symbols:tune-rounded" />偏好设置
+        </button>
       </div>
     </aside>
     <div
@@ -957,8 +1054,12 @@ onUnmounted(() => {
         <!-- 无匹配结果空状态 -->
         <div v-else class="empty-state flex flex-col items-center justify-center py-16 text-white/70">
           <SvgIcon icon="material-symbols:search-off-rounded" class="w-12 h-12 text-white/40 mb-3" />
-          <p class="text-sm font-medium">没有找到匹配的书签或服务</p>
-          <p v-if="searchQuery" class="text-xs text-white/50 mt-1">按回车直接全网搜索 "{{ searchQuery }}"</p>
+          <p class="text-sm font-medium">
+            没有找到匹配的书签或服务
+          </p>
+          <p v-if="searchQuery" class="text-xs text-white/50 mt-1">
+            按回车直接全网搜索 "{{ searchQuery }}"
+          </p>
         </div>
       </section>
     </main>
@@ -986,48 +1087,49 @@ onUnmounted(() => {
     <!-- 现代化专属个人中心与系统控制台 -->
     <UserHubModal
       v-model:show="settingsModalVisible"
+      :sync-status="extensionSyncStatus"
+      :sync-revision="syncRevision"
       @refresh="refreshBootstrap"
     />
 
     <!-- 编辑卡片弹窗 -->
-    <NConfigProvider :theme="darkTheme">
-      <EditItem
-        v-if="editCardModalVisible"
-        v-model:visible="editCardModalVisible"
-        :item-info="editCardData"
-        :item-group-id="editCardGroupId"
-        @done="handleEditSuccess"
-      />
-    </NConfigProvider>
+    <EditItem
+      v-if="editCardModalVisible"
+      v-model:visible="editCardModalVisible"
+      :item-info="editCardData"
+      :item-group-id="editCardGroupId"
+      @done="handleEditSuccess"
+    />
 
     <NModal
       v-model:show="showWidgetManager"
       preset="card"
       title="添加和管理小组件"
-      class="widget-manager-modal"
-      style="width: min(520px, 92vw); border-radius: 18px;"
+      class="widget-manager-modal extension-surface-modal"
+      style="width: min(520px, calc(100vw - 24px)); border-radius: 20px; background: rgba(15, 23, 42, 0.98); border: 1px solid rgba(148, 163, 184, 0.18); box-shadow: 0 24px 80px rgba(2, 6, 23, 0.58);"
     >
-      <NConfigProvider :theme="darkTheme">
-        <div class="widget-manager-content">
-          <p>选择要显示在扩展新标签页上的组件，设置只保存在扩展端。</p>
-          <label class="widget-choice">
-            <span><SvgIcon icon="material-symbols:schedule-outline-rounded" /><b>时钟与日期</b><small>页面中央的大号时间</small></span>
-            <NSwitch v-model:value="widgetPreferences.clock" />
-          </label>
-          <label class="widget-choice">
-            <span><SvgIcon icon="material-symbols:search-rounded" /><b>搜索框</b><small>书签与全网搜索</small></span>
-            <NSwitch v-model:value="widgetPreferences.search" />
-          </label>
-          <label class="widget-choice">
-            <span><SvgIcon icon="material-symbols:partly-cloudy-day-outline" /><b>天气</b><small>右上角实时天气</small></span>
-            <NSwitch v-model:value="widgetPreferences.weather" />
-          </label>
-          <label class="widget-choice">
-            <span><SvgIcon icon="material-symbols:local-fire-department-outline-rounded" /><b>热搜</b><small>右上角滚动热榜</small></span>
-            <NSwitch v-model:value="widgetPreferences.trending" />
-          </label>
-        </div>
-      </NConfigProvider>
+      <div class="widget-manager-content">
+        <p>选择要显示在扩展新标签页上的组件，设置只保存在扩展端。</p>
+        <label class="widget-choice">
+          <span><SvgIcon icon="material-symbols:schedule-outline-rounded" /><b>时钟与日期</b><small>页面中央的大号时间</small></span>
+          <NSwitch v-model:value="widgetPreferences.clock" />
+        </label>
+        <label class="widget-choice">
+          <span><SvgIcon icon="material-symbols:search-rounded" /><b>搜索框</b><small>书签与全网搜索</small></span>
+          <NSwitch v-model:value="widgetPreferences.search" />
+        </label>
+        <label class="widget-choice">
+          <span><SvgIcon icon="material-symbols:partly-cloudy-day-outline" /><b>天气</b><small>右上角实时天气</small></span>
+          <NSwitch v-model:value="widgetPreferences.weather" />
+        </label>
+        <label class="widget-choice">
+          <span><SvgIcon icon="material-symbols:local-fire-department-outline-rounded" /><b>热搜</b><small>右上角滚动热榜</small></span>
+          <NSwitch v-model:value="widgetPreferences.trending" />
+        </label>
+        <button type="button" class="modal-primary-action" @click="showWidgetManager = false">
+          完成
+        </button>
+      </div>
     </NModal>
 
     <!-- 壁纸库 / Wallhaven 选择弹窗 -->
@@ -1035,7 +1137,8 @@ onUnmounted(() => {
       v-model:show="showWallpaperModal"
       preset="card"
       title="高清壁纸库 (Wallhaven 4K / 图库)"
-      style="max-width: 960px; height: 680px; border-radius: 16px;"
+      class="wallpaper-manager-modal extension-surface-modal"
+      style="width: min(960px, calc(100vw - 24px)); height: min(680px, calc(100vh - 24px)); border-radius: 20px; background: rgba(15, 23, 42, 0.98); border: 1px solid rgba(148, 163, 184, 0.18); box-shadow: 0 24px 80px rgba(2, 6, 23, 0.58);"
       size="small"
       role="dialog"
       aria-modal="true"
@@ -1048,6 +1151,14 @@ onUnmounted(() => {
       v-model:show="conflictModalVisible"
       :conflict="currentConflict"
       @resolve="onResolveConflict"
+    />
+
+    <!-- 离线队列管理 -->
+    <OfflineQueueManager
+      v-model:show="queueManagerVisible"
+      :account-id="authStore.userInfo?.id"
+      @replay="triggerOfflineReplay()"
+      @changed="refreshPendingMutationsCount"
     />
   </div>
 </template>
@@ -1401,11 +1512,19 @@ onUnmounted(() => {
 
 .widget-manager-content { display: flex; flex-direction: column; gap: 10px; color: #e2e8f0; }
 .widget-manager-content > p { margin: 0 0 4px; color: #94a3b8; font-size: 12px; }
-.widget-choice { padding: 13px 14px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border: 1px solid rgba(255,255,255,.1); border-radius: 14px; background: rgba(15,23,42,.72); cursor: pointer; }
+.widget-choice { padding: 13px 14px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border: 1px solid rgba(255,255,255,.1); border-radius: 14px; background: rgba(15,23,42,.72); cursor: pointer; transition: border-color .2s ease, background .2s ease, transform .2s ease; }
+.widget-choice:hover { border-color: rgba(52, 211, 153, .42); background: rgba(30, 41, 59, .9); transform: translateY(-1px); }
 .widget-choice > span { min-width: 0; display: grid; grid-template-columns: 24px 1fr; align-items: center; column-gap: 8px; }
 .widget-choice svg { grid-row: 1 / 3; color: #67e8f9; font-size: 18px; }
 .widget-choice b { font-size: 13px; }
 .widget-choice small { color: #64748b; font-size: 10px; }
+.modal-primary-action { align-self: flex-end; min-width: 84px; padding: 9px 18px; border: 1px solid rgba(52, 211, 153, .42); border-radius: 12px; background: linear-gradient(135deg, #10b981, #059669); color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; box-shadow: 0 8px 24px rgba(5, 150, 105, .24); transition: transform .2s ease, filter .2s ease, box-shadow .2s ease; }
+.modal-primary-action:hover { filter: brightness(1.08); transform: translateY(-1px); box-shadow: 0 12px 30px rgba(5, 150, 105, .32); }
+.modal-primary-action:focus-visible { outline: 3px solid rgba(110, 231, 183, .38); outline-offset: 2px; }
+
+:global(.extension-surface-modal .n-card-header) { padding: 17px 20px; border-bottom: 1px solid rgba(148, 163, 184, .14); color: #f8fafc; }
+:global(.extension-surface-modal .n-card__content) { color: #e2e8f0; }
+:global(.wallpaper-manager-modal .n-card__content) { height: calc(100% - 59px); padding: 0; overflow: hidden; }
 
 .card-icon-box {
   width: 58px;
@@ -1463,5 +1582,7 @@ onUnmounted(() => {
   .cards-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
   .speed-card { padding: 10px 5px; }
   .card-desc { display: none; }
+  :global(.extension-surface-modal .n-card-header) { padding: 14px 16px; }
+  :global(.wallpaper-manager-modal .n-card__content) { height: calc(100% - 53px); }
 }
 </style>

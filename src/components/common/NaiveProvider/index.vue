@@ -32,8 +32,8 @@ const NaiveProviderContent = defineComponent({
 <template>
   <NLoadingBarProvider>
     <NDialogProvider>
-      <NNotificationProvider>
-        <NMessageProvider>
+      <NNotificationProvider placement="top-right" :max="4" :keep-alive-on-hover="true">
+        <NMessageProvider placement="top-right" :max="4" :duration="2800">
           <slot />
           <NaiveProviderContent />
         </NMessageProvider>

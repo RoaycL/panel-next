@@ -34,7 +34,7 @@ const restoreDefault: Panel.Info = {
 
 interface Emit {
   (e: 'update:visible', visible: boolean): void
-  (e: 'done', item: Panel.Info): void// 创建完成
+  (e: 'done', item: Panel.Info, meta: { queued: boolean, conflict: boolean }): void// 创建完成
 }
 
 const model = ref<Panel.Info>(props.itemInfo ? { ...props.itemInfo } : { ...restoreDefault })
@@ -88,12 +88,15 @@ async function editApi() {
   try {
     const payload = { ...model.value }
     delete (payload as any).revision
-    const { code, data, msg } = await edit<Panel.ItemInfo>(payload)
+    const { code, data, msg, queued, conflict } = await edit<Panel.ItemInfo>(payload)
     if (code === 0) {
       show.value = false
       model.value = { ...restoreDefault }
-      ms.success(t('common.saveSuccess'))
-      emit('done', data)
+      if (queued)
+        ms.info(conflict ? t('iconItem.queuedWithConflict') : t('iconItem.queuedOffline'))
+      else
+        ms.success(t('common.saveSuccess'))
+      emit('done', data || payload, { queued: Boolean(queued), conflict: Boolean(conflict) })
     }
     else {
       ms.error(`${t('common.saveFail')}:${msg}`)
@@ -147,8 +150,9 @@ watch(() => props.visible, (newValue) => {
   getGroupListOptions()
 }, { immediate: true })
 
-function getGroupListOptions() {
-  getGroupList<Common.ListResponse<Panel.ItemIconGroup[]>>().then(({ data, code, msg }) => {
+async function getGroupListOptions() {
+  try {
+    const { data, code, msg } = await getGroupList<Common.ListResponse<Panel.ItemIconGroup[]>>()
     if (code === 0) {
       itemIconGroupOptions.value = []
 
@@ -168,13 +172,21 @@ function getGroupListOptions() {
     else {
       ms.error(`${t('iconItem.getGroupFail')}:${msg}`)
     }
-  })
+  }
+  catch {
+    // 离线时保留当前分组选项，既有修改仍可入队；在线失败则给出提示。
+    if (navigator.onLine)
+      ms.error(t('iconItem.getGroupFail'))
+    itemIconGroupOptions.value = model.value.itemIconGroupId
+      ? [{ value: model.value.itemIconGroupId, label: t('iconItem.currentGroupOffline') }]
+      : []
+  }
 }
 </script>
 
 <template>
-  <NModal v-model:show="show" preset="card" size="small" style="width: 600px;border-radius: 1rem;" :title="itemInfo ? t('iconItem.edit') : t('iconItem.add')">
-    <div class="h-[600px] overflow-auto p-[5px]">
+  <NModal v-model:show="show" preset="card" size="small" style="width: min(600px, calc(100vw - 24px)); max-height: calc(100vh - 24px); border-radius: 1rem;" :title="itemInfo ? t('iconItem.edit') : t('iconItem.add')">
+    <div class="edit-item-content overflow-auto p-[5px]">
       <NForm ref="formRef" :model="model" :rules="rules">
         <NGrid cols="2" :x-gap="10" item-responsive>
           <NGridItem span="2 500:1">
@@ -225,3 +237,9 @@ function getGroupListOptions() {
     </template>
   </NModal>
 </template>
+
+<style scoped>
+.edit-item-content {
+  height: min(600px, calc(100vh - 180px));
+}
+</style>

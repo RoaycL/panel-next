@@ -219,6 +219,11 @@
     },
     "userInfo": {
       "appName": "My Information",
+      "preferences": "Preferences",
+      "profile": "Profile",
+      "roleAdmin": "Admin",
+      "roleUser": "Member",
+      "security": "Security",
       "theme": "Theme",
       "themeStyle": {
         "auto": "Follow the system ",
@@ -322,6 +327,7 @@
     "add": "Add item",
     "currentPageLayerOpen": "Open in current page as layer",
     "currentPageOpen": "Open in current page",
+    "currentGroupOffline": "Current group (offline)",
     "edit": "Edit item",
     "getGroupFail": "Failed to get group information",
     "getIcon": "Get icon",
@@ -332,6 +338,8 @@
     "lanUrl": "LAN URL",
     "lanUrlInputPlaceholder": "http(s):// (LAN mode, will redirect to this address)",
     "newWindowOpen": "Open in new window",
+    "queuedOffline": "You are offline. The change has been added to the sync queue",
+    "queuedWithConflict": "The cloud has newer changes. Please choose which version to keep in the conflict dialog",
     "onlineIcon": "Online icon",
     "onlineIconLibrary": "Online icon library",
     "openMethod": "Open method",

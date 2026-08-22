@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed, useAttrs } from 'vue'
+import type { CSSProperties } from 'vue'
 import { NModal } from 'naive-ui'
+
+defineOptions({ inheritAttrs: false })
 
 const props = withDefaults(defineProps<{
   title?: string
@@ -19,10 +22,19 @@ const emit = defineEmits<{
 
 const attrs = useAttrs()
 
-const bindAttrs = computed<{ class: string; style: string }>(() => ({
-  class: (attrs.class as string) || '',
-  style: (attrs.style as string) || '',
-}))
+const bindAttrs = computed(() => {
+  const { class: _class, style: _style, ...rest } = attrs
+  return rest
+})
+const modalClass = computed(() => ['round-card-modal', attrs.class])
+const modalStyle = computed(() => [
+  attrs.style,
+  {
+    maxWidth: 'calc(100vw - 24px)',
+    maxHeight: 'calc(100vh - 24px)',
+    borderRadius: '1rem',
+  } satisfies CSSProperties,
+])
 
 const showModal = computed({
   get: () => props.show,
@@ -38,12 +50,12 @@ const showModal = computed({
     preset="card"
     :size="size"
     v-bind="bindAttrs"
-    :style="$parent"
+    :class="modalClass"
+    :style="modalStyle"
     :title="title"
     :draggable="draggable"
     :resizable="resizable"
     :bordered="false"
-    style="border-radius: 1rem;"
   >
     <template #cover>
       <slot name="cover" />
@@ -64,14 +76,14 @@ const showModal = computed({
   </NModal>
 </template>
 
-<style scoped>
+<style>
 /* 移动端全屏优化 */
 @media (max-width: 640px) {
-  :deep(.n-modal) {
-    max-width: 100% !important;
-    margin: 0 !important;
-    height: 100vh !important;
-    border-radius: 0 !important;
+  .round-card-modal {
+    max-width: calc(100vw - 12px) !important;
+    max-height: calc(100vh - 12px) !important;
+    margin: 6px !important;
+    border-radius: 14px !important;
   }
 }
 </style>

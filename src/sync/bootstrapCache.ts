@@ -4,7 +4,7 @@ import { parseBootstrapSnapshot, serializeBootstrapSnapshot } from './bootstrapS
 import { synchronizeBootstrap } from './changes'
 import { retryNetworkOperation } from './retry'
 
-const BOOTSTRAP_SNAPSHOT_KEY_PREFIX = 'PANEL_NEXT_BOOTSTRAP_SNAPSHOT_V1.'
+export const BOOTSTRAP_SNAPSHOT_KEY_PREFIX = 'PANEL_NEXT_BOOTSTRAP_SNAPSHOT_V1.'
 
 function cacheKey(accountId: number) {
   return `${BOOTSTRAP_SNAPSHOT_KEY_PREFIX}${accountId}`
@@ -16,6 +16,20 @@ async function persistSnapshot(key: string, serialized: string) {
   storage.setItem(key, serialized)
   try {
     await storage.flush?.()
+    // Only the active account needs a bootstrap snapshot. Old account
+    // snapshots can otherwise consume the extension's shared local quota.
+    const staleKeys = storage.keys?.().filter(candidate =>
+      candidate.startsWith(BOOTSTRAP_SNAPSHOT_KEY_PREFIX) && candidate !== key,
+    ) ?? []
+    staleKeys.forEach(candidate => storage.removeItem(candidate))
+    if (staleKeys.length) {
+      try {
+        await storage.flush?.()
+      }
+      catch (error) {
+        console.warn('Failed to prune stale bootstrap snapshots.', error)
+      }
+    }
     return true
   }
   catch {

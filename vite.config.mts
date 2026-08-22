@@ -13,8 +13,10 @@ function extensionManifestPlugin(): PluginOption {
     apply: 'build',
     generateBundle() {
       const [, version] = fs.readFileSync(path.resolve(process.cwd(), 'service/assets/version'), 'utf8').trim().split('|')
+      const versionPolicy = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), 'version-policy.json'), 'utf8'))
       const manifest = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), 'extension/manifest.json'), 'utf8'))
       manifest.version = version
+      manifest.version_name = `${version} ${versionPolicy.label}`
       this.emitFile({
         type: 'asset',
         fileName: 'manifest.json',

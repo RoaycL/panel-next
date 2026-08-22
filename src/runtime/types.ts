@@ -1,13 +1,22 @@
 export type RuntimeKind = 'web' | 'extension'
 export type OpenUrlMode = 'current' | 'tab'
 
+export interface StorageChangeEvent {
+  key: string
+  oldValue: string | null
+  newValue: string | null
+  scope: 'runtime' | 'data'
+}
+
 export interface StorageAdapter {
   getItem: (key: string) => string | null
+  keys?: () => string[]
   setItem: (key: string, value: string) => void
   removeItem: (key: string) => void
   clear: () => void
   flush?: () => Promise<void>
   sync?: () => Promise<void>
+  subscribe?: (listener: (change: StorageChangeEvent) => void) => () => void
 }
 
 export interface RuntimeAdapter {

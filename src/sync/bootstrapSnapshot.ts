@@ -1,6 +1,8 @@
 export const BOOTSTRAP_SNAPSHOT_CACHE_VERSION = 2
 export const BOOTSTRAP_SCHEMA_VERSION = 1
-export const MAX_BOOTSTRAP_SNAPSHOT_BYTES = 5 * 1024 * 1024
+// Extension-local storage normally has a 10 MB quota. Keep one snapshot below
+// 3 MB so authentication, appearance and the offline queue retain headroom.
+export const MAX_BOOTSTRAP_SNAPSHOT_BYTES = 3 * 1024 * 1024
 
 export interface BootstrapSnapshotEnvelope {
   cacheVersion: 2

@@ -105,13 +105,18 @@ function handleSubmit() {
 }
 
 onMounted(async () => {
-  const res = await getSiteInfo()
-  if (res.code === 0 && res.data) {
-    siteTitle.value = res.data.siteTitle
-    siteBranding.value = { loginBackground: res.data.loginBackground }
-    if (res.data.siteTitle)
-      document.title = res.data.siteTitle
-    applyFavicon(res.data.siteFavicon)
+  try {
+    const res = await getSiteInfo()
+    if (res.code === 0 && res.data) {
+      siteTitle.value = res.data.siteTitle
+      siteBranding.value = { loginBackground: res.data.loginBackground }
+      if (res.data.siteTitle)
+        document.title = res.data.siteTitle
+      applyFavicon(res.data.siteFavicon)
+    }
+  }
+  catch (error) {
+    console.warn('Failed to load site branding on the login page.', error)
   }
   await checkLoginConfig()
 })
@@ -187,11 +192,11 @@ function handleChangeLanuage(value: Language) {
 
   <style>
     .login-container {
-        padding: 20px;
+        padding: 12px;
         display: flex;
         justify-content: center;
         align-items: center;
-        height: 100vh;
+        min-height: 100vh;
         background-color: #f2f6ff;
     }
 
@@ -202,8 +207,7 @@ function handleChangeLanuage(value: Language) {
 
     @media (min-width: 600px) {
         .login-card {
-            width: auto;
-            margin: 0px 10px;
+            margin: 0 10px;
         }
         .login-button {
             width: 100%;
@@ -211,8 +215,8 @@ function handleChangeLanuage(value: Language) {
     }
 
     .login-card {
-        margin: 20px;
-        min-width:400px;
+        width: min(440px, 100%);
+        margin: 0;
     }
 
   .login-title{

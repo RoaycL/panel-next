@@ -10,6 +10,7 @@ import { getList as getGroupList } from '@/api/panel/itemIconGroup'
 import { set as setUserConfig } from '@/api/panel/userConfig'
 
 import { setTitle, updateLocalUserInfo } from '@/utils/cmn'
+import { sanitizeUserHtml } from '@/utils/sanitizeHtml'
 import { useAuthStore, usePanelState, useUserStore } from '@/store'
 import { PanelPanelConfigStyleEnum, PanelStateNetworkModeEnum } from '@/enums'
 import { VisitMode } from '@/enums/auth'
@@ -60,6 +61,7 @@ const currentRightSelectItem = ref<Panel.ItemInfo | null>(null)
 const currentAddItenIconGroupId = ref<number | undefined>()
 
 const settingModalShow = ref(false)
+const safeFooterHtml = computed(() => sanitizeUserHtml(panelState.panelConfig.footerHtml || ''))
 
 const items = ref<DashboardGroup[]>([])
 const filterItems = ref<DashboardGroup[]>([])
@@ -106,6 +108,8 @@ async function triggerOfflineReplay() {
     else
       void getList()
   }
+  if (result.interrupted && result.error && navigator.onLine)
+    ms.warning(`同步已暂停：${result.error}`)
 }
 
 const canEdit = computed(() => authStore.visitMode === VisitMode.VISIT_MODE_LOGIN
@@ -171,12 +175,19 @@ watch(() => panelState.panelConfig.widgets, (stored) => {
 const visibleWidgetInstances = computed(() => widgetInstances.value.filter(instance => !instance.hidden))
 
 const widgetAddOptions = computed(() => widgetRegistry.list().map(definition => ({
-  label: t(`widgetLayout.types.${definition.type}`),
+  label: widgetDefinitionTitle(definition),
   key: definition.type,
 })))
 
+// 标准化接口：优先读取组件自描述 meta.title（i18n key 或字面文案），回退到内置语言包
+function widgetDefinitionTitle(definition: { type: string, meta?: { title?: string } }) {
+  if (definition.meta?.title)
+    return t(definition.meta.title)
+  return t(`widgetLayout.types.${definition.type}`)
+}
+
 function widgetTypeLabel(type: string) {
-  return t(`widgetLayout.types.${type}`)
+  return widgetDefinitionTitle(widgetRegistry.get(type) ?? { type })
 }
 
 function widgetCellStyle(instance: WidgetInstance) {
@@ -407,7 +418,7 @@ function onClickoutside() {
   dropdownShow.value = false
 }
 
-function handleEditSuccess(_item: Panel.ItemInfo) {
+function handleEditSuccess(_item: Panel.ItemInfo, _meta?: { queued: boolean }) {
   getList()
 }
 
@@ -910,7 +921,7 @@ function handleAddItem(itemIconGroupId?: number) {
                       @click="handleAddItem(itemGroup.id)"
                     />
                   </div>
-                </vuedraggable>
+                </VueDraggable>
               </div>
             </div>
 
@@ -929,7 +940,7 @@ function handleAddItem(itemIconGroupId?: number) {
             </div>
           </div>
         </div>
-        <div class="mt-5 footer" v-html="panelState.panelConfig.footerHtml" />
+        <div class="mt-5 footer" v-html="safeFooterHtml" />
       </div>
     </div>
 

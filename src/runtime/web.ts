@@ -8,6 +8,11 @@ class WebStorageAdapter implements StorageAdapter {
     return this.storage.getItem(key)
   }
 
+  keys() {
+    return Array.from({ length: this.storage.length }, (_, index) => this.storage.key(index))
+      .filter((key): key is string => key !== null)
+  }
+
   setItem(key: string, value: string) {
     this.storage.setItem(key, value)
   }

@@ -1,4 +1,4 @@
-import type { RuntimeAdapter, StorageAdapter } from './types'
+import type { RuntimeAdapter, StorageAdapter, StorageChangeEvent } from './types'
 import { resolveHttpUrl } from './url'
 
 const SERVER_ORIGIN_KEY = 'panelNext.runtime.serverOrigin'
@@ -12,6 +12,7 @@ interface ChromeStorageArea {
 }
 
 interface ChromeStorageChange {
+  oldValue?: unknown
   newValue?: unknown
 }
 
@@ -61,9 +62,12 @@ function normalizeServerOrigin(input: string): string {
 
 class ChromeStorageAdapter implements StorageAdapter {
   private readonly values = new Map<string, string>()
+  private readonly listeners = new Set<(change: StorageChangeEvent) => void>()
+  private readonly localMutations = new Map<string, Array<{ id: number, value: string | undefined }>>()
   private origin: string | null = null
   private writeQueue = Promise.resolve()
   private writeFailure: unknown = null
+  private mutationId = 0
 
   constructor(private readonly area: ChromeStorageArea, onChanged: ChromeRuntimeApi['storage']['onChanged']) {
     onChanged.addListener((changes, areaName) => {
@@ -74,8 +78,82 @@ class ChromeStorageAdapter implements StorageAdapter {
           this.values.set(key, change.newValue)
         else if (change.newValue === undefined)
           this.values.delete(key)
+
+        if (this.consumeLocalMutation(key, change.newValue))
+          continue
+        const normalized = this.normalizeChange(key, change)
+        if (normalized)
+          this.listeners.forEach(listener => listener(normalized))
       }
     })
+  }
+
+  private normalizeChange(key: string, change: ChromeStorageChange): StorageChangeEvent | null {
+    if (key === SERVER_ORIGIN_KEY) {
+      return {
+        key,
+        scope: 'runtime',
+        oldValue: typeof change.oldValue === 'string' ? change.oldValue : null,
+        newValue: typeof change.newValue === 'string' ? change.newValue : null,
+      }
+    }
+    if (!this.origin)
+      return null
+    const prefix = `${DATA_PREFIX}${encodeURIComponent(this.origin)}.`
+    if (!key.startsWith(prefix))
+      return null
+    return {
+      key: key.slice(prefix.length),
+      scope: 'data',
+      oldValue: typeof change.oldValue === 'string' ? change.oldValue : null,
+      newValue: typeof change.newValue === 'string' ? change.newValue : null,
+    }
+  }
+
+  private markLocalMutation(key: string, value: string | undefined) {
+    const marker = { id: ++this.mutationId, value }
+    const markers = this.localMutations.get(key) ?? []
+    markers.push(marker)
+    this.localMutations.set(key, markers)
+    return marker
+  }
+
+  private forgetLocalMutation(key: string, markerId: number) {
+    const markers = this.localMutations.get(key)
+    if (!markers)
+      return
+    const remaining = markers.filter(marker => marker.id !== markerId)
+    if (remaining.length)
+      this.localMutations.set(key, remaining)
+    else
+      this.localMutations.delete(key)
+  }
+
+  private consumeLocalMutation(key: string, value: unknown) {
+    const markers = this.localMutations.get(key)
+    if (!markers)
+      return false
+    const index = markers.findIndex(marker => marker.value === value)
+    if (index < 0)
+      return false
+    markers.splice(index, 1)
+    if (!markers.length)
+      this.localMutations.delete(key)
+    return true
+  }
+
+  private async mutateStorage(changes: Array<[string, string | undefined]>, operation: () => Promise<void>) {
+    const markers = changes.map(([key, value]) => ({ key, marker: this.markLocalMutation(key, value) }))
+    try {
+      await operation()
+    }
+    finally {
+      // Chrome normally emits onChanged before resolving the write. Clean up
+      // no-op writes as well, without suppressing a later external mutation.
+      window.setTimeout(() => {
+        markers.forEach(({ key, marker }) => this.forgetLocalMutation(key, marker.id))
+      }, 250)
+    }
   }
 
   async preload() {
@@ -101,7 +179,7 @@ class ChromeStorageAdapter implements StorageAdapter {
 
   async writeRuntimeValue(key: string, value: string) {
     this.values.set(key, value)
-    await this.area.set({ [key]: value })
+    await this.mutateStorage([[key, value]], () => this.area.set({ [key]: value }))
   }
 
   setOrigin(origin: string | null) {
@@ -126,12 +204,21 @@ class ChromeStorageAdapter implements StorageAdapter {
     return scopedKey ? this.values.get(scopedKey) ?? null : null
   }
 
+  keys() {
+    if (!this.origin)
+      return []
+    const prefix = `${DATA_PREFIX}${encodeURIComponent(this.origin)}.`
+    return [...this.values.keys()]
+      .filter(key => key.startsWith(prefix))
+      .map(key => key.slice(prefix.length))
+  }
+
   setItem(key: string, value: string) {
     const scopedKey = this.scopedKey(key)
     if (!scopedKey)
       return
     this.values.set(scopedKey, value)
-    this.enqueue(() => this.area.set({ [scopedKey]: value }))
+    this.enqueue(() => this.mutateStorage([[scopedKey, value]], () => this.area.set({ [scopedKey]: value })))
   }
 
   removeItem(key: string) {
@@ -139,7 +226,7 @@ class ChromeStorageAdapter implements StorageAdapter {
     if (!scopedKey)
       return
     this.values.delete(scopedKey)
-    this.enqueue(() => this.area.remove(scopedKey))
+    this.enqueue(() => this.mutateStorage([[scopedKey, undefined]], () => this.area.remove(scopedKey)))
   }
 
   clear() {
@@ -149,7 +236,12 @@ class ChromeStorageAdapter implements StorageAdapter {
     const keys = [...this.values.keys()].filter(key => key.startsWith(prefix))
     keys.forEach(key => this.values.delete(key))
     if (keys.length)
-      this.enqueue(() => this.area.remove(keys))
+      this.enqueue(() => this.mutateStorage(keys.map(key => [key, undefined]), () => this.area.remove(keys)))
+  }
+
+  subscribe(listener: (change: StorageChangeEvent) => void) {
+    this.listeners.add(listener)
+    return () => this.listeners.delete(listener)
   }
 
   async flush() {

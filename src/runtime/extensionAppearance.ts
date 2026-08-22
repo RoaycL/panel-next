@@ -1,7 +1,7 @@
 import { getRuntime } from '@/runtime'
 
-const EXTENSION_APPEARANCE_KEY = 'PANEL_NEXT_EXTENSION_APPEARANCE_V1'
-const EXTENSION_WIDGETS_KEY = 'PANEL_NEXT_EXTENSION_WIDGETS_V1'
+export const EXTENSION_APPEARANCE_KEY = 'PANEL_NEXT_EXTENSION_APPEARANCE_V1'
+export const EXTENSION_WIDGETS_KEY = 'PANEL_NEXT_EXTENSION_WIDGETS_V1'
 
 export interface ExtensionWidgetPreferences {
   clock: boolean

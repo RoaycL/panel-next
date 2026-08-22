@@ -16,14 +16,26 @@ export interface OfflineMutation<T = any> {
   action: OfflineMutationAction
   resourceType: 'item' | 'group' | 'panel'
   resourceId?: string | number
-  baseRevision: Sync.Revision
+  // null 表示入队时无法取得可信的服务端 revision（例如离线且快照不可用）。
+  // 冲突判定会降级为「仅检测资源被删」，避免拿未知基线误报冲突。
+  baseRevision: Sync.Revision | null
   payload: T
   createdAt: string
   status: 'pending' | 'replaying' | 'conflict' | 'failed' | 'applied'
   error?: string
 }
 
-const OFFLINE_QUEUE_KEY_PREFIX = 'PANEL_NEXT_OFFLINE_QUEUE_V1.'
+export const OFFLINE_QUEUE_KEY_PREFIX = 'PANEL_NEXT_OFFLINE_QUEUE_V1.'
+const offlineQueueListeners = new Set<() => void>()
+
+export function onOfflineQueueChanged(listener: () => void) {
+  offlineQueueListeners.add(listener)
+  return () => offlineQueueListeners.delete(listener)
+}
+
+function notifyOfflineQueueChanged() {
+  offlineQueueListeners.forEach(listener => listener())
+}
 
 export function generateIdempotencyKey(prefix = 'idemp'): string {
   const timestamp = Date.now().toString(36)
@@ -32,8 +44,13 @@ export function generateIdempotencyKey(prefix = 'idemp'): string {
 }
 
 function queueStorageKey(accountId: number, origin?: string): string {
-  const safeOrigin = (origin || getRuntime().getServerOrigin() || 'default').replace(/[^a-zA-Z0-9_]/g, '_')
+  const safeOrigin = (origin || getRuntime().getServerOrigin() || 'default').replace(/\W/g, '_')
   return `${OFFLINE_QUEUE_KEY_PREFIX}${safeOrigin}.${accountId}`
+}
+
+export function getOfflineQueueLockName(accountId: number, origin?: string) {
+  const scope = origin || getRuntime().getServerOrigin() || 'default'
+  return `panel-next-offline-replay:${scope}:${accountId}`
 }
 
 export function readOfflineQueue(accountId: number, origin?: string): OfflineMutation[] {
@@ -53,16 +70,35 @@ export function readOfflineQueue(accountId: number, origin?: string): OfflineMut
   }
 }
 
+export function normalizeReplayableQueue(queue: OfflineMutation[]): OfflineMutation[] {
+  return queue.map(mutation => mutation.status === 'replaying'
+    ? { ...mutation, status: 'pending', error: '上次同步意外中断，等待重试' }
+    : mutation)
+}
+
 export async function writeOfflineQueue(accountId: number, queue: OfflineMutation[], origin?: string): Promise<boolean> {
   const storage = getRuntime().storage
   const key = queueStorageKey(accountId, origin)
+  const previous = storage.getItem(key)
   try {
     storage.setItem(key, JSON.stringify(queue))
     await storage.flush?.()
+    notifyOfflineQueueChanged()
     return true
   }
   catch (error) {
     console.error('Failed to write offline mutation queue:', error)
+    if (previous === null)
+      storage.removeItem(key)
+    else
+      storage.setItem(key, previous)
+    try {
+      await storage.flush?.()
+    }
+    catch {
+      // Keep the in-memory value aligned with the last trusted payload even
+      // when the browser storage area is temporarily unavailable.
+    }
     return false
   }
 }
@@ -75,40 +111,51 @@ export async function enqueueOfflineMutation<T = any>(
   },
   origin?: string,
 ): Promise<OfflineMutation<T>> {
-  const queue = readOfflineQueue(accountId, origin)
-  const fullMutation: OfflineMutation<T> = {
-    ...mutation,
-    idempotencyKey: mutation.idempotencyKey || generateIdempotencyKey(),
-    createdAt: mutation.createdAt || new Date().toISOString(),
-    status: 'pending',
+  const persist = async () => {
+    const queue = readOfflineQueue(accountId, origin)
+    const fullMutation: OfflineMutation<T> = {
+      ...mutation,
+      idempotencyKey: mutation.idempotencyKey || generateIdempotencyKey(),
+      createdAt: mutation.createdAt || new Date().toISOString(),
+      status: 'pending',
+    }
+
+    // 幂等防重：若已存在相同 idempotencyKey，则更新内容
+    const existingIndex = queue.findIndex(m => m.idempotencyKey === fullMutation.idempotencyKey)
+    if (existingIndex >= 0)
+      queue[existingIndex] = fullMutation
+    else
+      queue.push(fullMutation)
+
+    if (!await writeOfflineQueue(accountId, queue, origin))
+      throw new Error('离线修改无法写入浏览器存储。')
+    return fullMutation
   }
 
-  // 幂等防重：若已存在相同 idempotencyKey，则更新内容
-  const existingIndex = queue.findIndex(m => m.idempotencyKey === fullMutation.idempotencyKey)
-  if (existingIndex >= 0) {
-    queue[existingIndex] = fullMutation
-  }
-  else {
-    queue.push(fullMutation)
-  }
+  return runWithQueueLock(accountId, persist, origin)
+}
 
-  await writeOfflineQueue(accountId, queue, origin)
-  return fullMutation
+/** Serialize read-modify-write cycles with replay/enqueue via Web Locks (S3). */
+async function runWithQueueLock<T>(accountId: number, task: () => Promise<T>, origin?: string): Promise<T> {
+  if (typeof navigator !== 'undefined' && navigator.locks)
+    return navigator.locks.request(getOfflineQueueLockName(accountId, origin), task)
+  return task()
 }
 
 export async function removeOfflineMutation(accountId: number, idempotencyKey: string, origin?: string): Promise<boolean> {
-  const queue = readOfflineQueue(accountId, origin)
-  const nextQueue = queue.filter(m => m.idempotencyKey !== idempotencyKey)
-  if (nextQueue.length !== queue.length) {
-    return writeOfflineQueue(accountId, nextQueue, origin)
-  }
-  return true
+  return runWithQueueLock(accountId, async () => {
+    const queue = readOfflineQueue(accountId, origin)
+    const nextQueue = queue.filter(m => m.idempotencyKey !== idempotencyKey)
+    if (nextQueue.length !== queue.length)
+      return writeOfflineQueue(accountId, nextQueue, origin)
+    return true
+  }, origin)
 }
 
 export async function clearOfflineQueue(accountId: number, origin?: string): Promise<boolean> {
-  return writeOfflineQueue(accountId, [], origin)
+  return runWithQueueLock(accountId, () => writeOfflineQueue(accountId, [], origin), origin)
 }
 
 export function getPendingMutationCount(accountId: number, origin?: string): number {
-  return readOfflineQueue(accountId, origin).filter(m => m.status === 'pending' || m.status === 'conflict').length
+  return readOfflineQueue(accountId, origin).filter(mutation => mutation.status !== 'applied').length
 }

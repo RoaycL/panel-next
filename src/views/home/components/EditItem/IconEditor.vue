@@ -197,7 +197,7 @@ function handleGallerySelect(url: string) {
       </div>
     </div>
 
-    <NModal v-model:show="showGallery" preset="card" size="small" style="width: 700px; max-height: 500px;" :title="t('iconItem.selectFromGallery')">
+    <NModal v-model:show="showGallery" preset="card" size="small" style="width: min(700px, calc(100vw - 24px)); max-height: calc(100vh - 24px);" :title="t('iconItem.selectFromGallery')">
       <GallerySelector type="icon" @select="handleGallerySelect" />
     </NModal>
   </div>

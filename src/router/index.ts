@@ -2,9 +2,10 @@ import type { App } from 'vue'
 import type { RouteRecordRaw } from 'vue-router'
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { setupPageGuard } from './permission'
-import { getRuntime } from '@/runtime'
 
-const homeComponent = getRuntime().kind === 'extension'
+// Use the build-time constant directly so Rollup can remove the other
+// platform's dashboard instead of emitting both entry chunks.
+const homeComponent = __PANEL_RUNTIME__ === 'extension'
   ? () => import('@/views/extension/index.vue')
   : () => import('@/views/home/index.vue')
 

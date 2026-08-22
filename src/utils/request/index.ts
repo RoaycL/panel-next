@@ -1,3 +1,4 @@
+import axios from 'axios'
 import type { AxiosProgressEvent, AxiosResponse, GenericAbortSignal } from 'axios'
 import request from './axios'
 import { apiRespErrMsg, message } from './apiMessage'
@@ -25,6 +26,15 @@ export interface Response<T = any> {
   // status: string
   msg: string
   code: number
+  queued?: boolean
+  conflict?: boolean
+}
+
+export class HttpRequestError extends Error {
+  constructor(message: string, readonly retryable: boolean, readonly status?: number) {
+    super(message)
+    this.name = 'HttpRequestError'
+  }
 }
 
 function http<T = any>(options: HttpOption, sessionRetry = false): Promise<Response<T>> {
@@ -89,7 +99,7 @@ function http<T = any>(options: HttpOption, sessionRetry = false): Promise<Respo
       return res.data
   }
 
-  const failHandler = (error: Response<Error>) => {
+  const failHandler = (error: unknown) => {
     afterRequest?.()
     if (!silentNetworkError) {
       message.error(t('common.networkError'), {
@@ -97,7 +107,11 @@ function http<T = any>(options: HttpOption, sessionRetry = false): Promise<Respo
         closable: true,
       })
     }
-    throw new Error(error?.msg || 'Error')
+    const status = axios.isAxiosError(error) ? error.response?.status : undefined
+    const messageText = axios.isAxiosError(error)
+      ? String(error.response?.data?.msg || error.message || 'Error')
+      : error instanceof Error ? error.message : 'Error'
+    throw new HttpRequestError(messageText, status === undefined || status >= 500, status)
   }
 
   beforeRequest?.()

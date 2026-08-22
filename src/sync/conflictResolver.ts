@@ -8,7 +8,7 @@ export interface ConflictDescriptor {
   resourceName: string
   localVersion: {
     timestamp: string
-    baseRevision: Sync.Revision
+    baseRevision: Sync.Revision | null
     data: any
   }
   remoteVersion: {
@@ -40,6 +40,49 @@ export function getObjectDiffFields(local: Record<string, any>, remote: Record<s
     }
   }
   return diffs
+}
+
+/** 面板配置全量业务字段：任何一项离线改动与云端不一致都应触发裁决（S4）。 */
+export const PANEL_CONFIG_CONFLICT_FIELDS = [
+  'backgroundImageSrc',
+  'backgroundBlur',
+  'backgroundMaskNumber',
+  'iconStyle',
+  'iconTextColor',
+  'iconTextInfoHideDescription',
+  'iconTextIconHideTitle',
+  'logoText',
+  'logoImageSrc',
+  'logoShow',
+  'clockShowSecond',
+  'clockColor',
+  'clockShow',
+  'searchBoxShow',
+  'searchBoxSearchIcon',
+  'marginTop',
+  'marginBottom',
+  'maxWidth',
+  'maxWidthUnit',
+  'marginX',
+  'footerHtml',
+  'systemMonitorShow',
+  'systemMonitorShowTitle',
+  'systemMonitorPublicVisitModeShow',
+  'netModeChangeButtonShow',
+  'widgets',
+] as const
+
+const ITEM_CONFLICT_FIELDS = ['title', 'url', 'lanUrl', 'description', 'icon', 'openMethod', 'itemIconGroupId', 'sort']
+
+const hasTrustedBase = (mutation: OfflineMutation): boolean => mutation.baseRevision !== null
+
+const isRemoteAhead = (remoteRevision: Sync.Revision, baseRevision: Sync.Revision): boolean => {
+  try {
+    return BigInt(remoteRevision) > BigInt(baseRevision)
+  }
+  catch {
+    return false
+  }
 }
 
 /**
@@ -113,18 +156,14 @@ export function evaluateConflict(
       }
     }
 
-    // 检查字段是否有实际冲突
-    const diffs = getObjectDiffFields(payload as any, remoteItem as any, [
-      'title',
-      'url',
-      'lanUrl',
-      'description',
-      'icon',
-      'openMethod',
-      'itemIconGroupId',
-    ])
+    // 检查字段是否有实际冲突。基线不可信时跳过字段级判定，仅依赖「云端已删除」检测，
+    // 避免用未知基线把正常的云端变更误报为冲突。
+    if (!hasTrustedBase(mutation))
+      return null
 
-    if (diffs.length > 0 && BigInt(remoteData.revision) > BigInt(mutation.baseRevision)) {
+    const diffs = getObjectDiffFields(payload as any, remoteItem as any, ITEM_CONFLICT_FIELDS)
+
+    if (diffs.length > 0 && isRemoteAhead(remoteData.revision, mutation.baseRevision!)) {
       return {
         idempotencyKey: mutation.idempotencyKey,
         action: mutation.action,
@@ -175,8 +214,11 @@ export function evaluateConflict(
       }
     }
 
+    if (!hasTrustedBase(mutation))
+      return null
+
     const diffs = getObjectDiffFields(payload as any, remoteGroup as any, ['title', 'icon', 'description'])
-    if (diffs.length > 0 && BigInt(remoteData.revision) > BigInt(mutation.baseRevision)) {
+    if (diffs.length > 0 && isRemoteAhead(remoteData.revision, mutation.baseRevision!)) {
       return {
         idempotencyKey: mutation.idempotencyKey,
         action: mutation.action,
@@ -202,20 +244,15 @@ export function evaluateConflict(
 
   // 6. 面板配置 (panel.set)
   if (mutation.action === 'panel.set') {
+    if (!hasTrustedBase(mutation))
+      return null
     const payload = mutation.payload as { panel?: Panel.panelConfig }
     const localPanel = payload.panel || {}
     const remotePanel = (remoteData.panel.config || {}) as Panel.panelConfig
 
-    const diffs = getObjectDiffFields(localPanel, remotePanel, [
-      'backgroundImageSrc',
-      'backgroundBlur',
-      'backgroundMask',
-      'clockShow',
-      'searchBoxShow',
-      'iconStyle',
-    ])
+    const diffs = getObjectDiffFields(localPanel, remotePanel, [...PANEL_CONFIG_CONFLICT_FIELDS])
 
-    if (diffs.length > 0 && BigInt(remoteData.revision) > BigInt(mutation.baseRevision)) {
+    if (diffs.length > 0 && isRemoteAhead(remoteData.revision, mutation.baseRevision!)) {
       return {
         idempotencyKey: mutation.idempotencyKey,
         action: mutation.action,
