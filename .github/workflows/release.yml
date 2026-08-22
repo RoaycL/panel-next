@@ -37,7 +37,9 @@ jobs:
         run: pnpm run build:extension
 
       - name: Package extension
-        run: pnpm run package:extension
+        # Tag/CI builds reproduce the committed version. Local test packaging
+        # uses package:extension, which advances the patch version once.
+        run: node ./scripts/package-extension.mjs
 
       - name: Upload extension artifact
         uses: actions/upload-artifact@v4

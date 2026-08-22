@@ -12,6 +12,9 @@ if (!/^\d+\.\d+\.\d+(?:\.\d+)?$/.test(version))
 const archiveName = `panel-next-extension-v${version}.zip`
 const archivePath = path.join(artifactRoot, archiveName)
 
+if (fs.existsSync(archivePath) || fs.existsSync(`${archivePath}.sha256`))
+  throw new Error(`Refusing to overwrite an existing package for version ${version}. Increment the version first.`)
+
 const builtManifestPath = path.join(sourceRoot, 'manifest.json')
 if (!fs.existsSync(builtManifestPath))
   throw new Error('Extension build is missing; run the extension build first.')

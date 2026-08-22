@@ -2,11 +2,12 @@
 
 > 用途：指引从本项目构建扩展 ZIP 到 Chrome Web Store（CWS）正式发布的完整流程。
 > 关键约束：**扩展私钥（`.secrets/extension-key.pem`）与任何服务凭据绝不进入仓库或 CI 日志。**
+> 当前状态：**测试版**。版本从 `0.0.1` 开始，只允许 `0.0.x`；进入正式发布阶段前必须单独评审并修改 `version-policy.json`。
 
 ## 1. 前置检查（每次发布前）
 
-- [ ] `service/assets/version` 为期望发布版本（如 `10|1.3.0`），语义版本三段式
-- [ ] `package.json` 与 `extension/manifest.json` 的 `version` 与版本源一致（`bump-extension-version.mjs` 自动同步）
+- [ ] `version-policy.json` 仍为 `testing`、`0.0` 系列，且 `service/assets/version` 当前值正确
+- [ ] `package.json` 与 `extension/manifest.json` 的 `version` 与版本源一致
 - [ ] `extension/manifest.json` 包含固定 `key`（公钥）——保证上传到 CWS 后扩展 ID 与本地加载一致
 - [ ] 本地 `dist/extension` 通过 `pnpm run build:extension` 与 `node ./scripts/validate-extension.mjs`
 - [ ] `pnpm run build:all` 全绿（架构校验、类型检查、双端构建）
@@ -17,17 +18,15 @@
 ## 2. 生成扩展包
 
 ```bash
-# 确保版本源正确
-echo "10|1.3.0" > service/assets/version
-node ./scripts/bump-extension-version.mjs
-pnpm run build:extension
+# 查看本次打包前版本；package:extension 会递增一次补丁号、构建并打包
+cat service/assets/version
 pnpm run package:extension
 ```
 
 产物：
 
-- `artifacts/panel-next-extension-v1.3.0.zip`
-- `artifacts/panel-next-extension-v1.3.0.zip.sha256`
+- `artifacts/panel-next-extension-v<本次版本>.zip`
+- `artifacts/panel-next-extension-v<本次版本>.zip.sha256`
 
 ## 3. 准备商店素材
 
@@ -40,7 +39,7 @@ pnpm run package:extension
 ## 4. 上传到 Chrome Web Store
 
 1. 登录 <https://chrome.google.com/webstore/devconsole>
-2. 创建新项目，上传 `panel-next-extension-v1.3.0.zip`
+2. 创建新项目，上传本次生成的 `panel-next-extension-v<本次版本>.zip`
 3. 填写商店信息：
    - 名称：Panel Next
    - 简短描述：Self-hosted new-tab dashboard（自托管新标签页导航）
@@ -77,8 +76,8 @@ pnpm run package:extension
 
 发新版时：
 
-1. 更新 `service/assets/version`（如 `11|1.4.0`）
-2. 跑第 2 节命令生成新 ZIP
+1. 确认 `service/assets/version` 是上一个测试包版本；测试阶段禁止脱离 `0.0.x`
+2. 只运行第 2 节的 `pnpm run package:extension`，自动递增一次补丁版本并生成新 ZIP
 3. 在 CWS 上传新 ZIP 提交审核
 4. 用户在商店更新即可（扩展 ID 不变）
 

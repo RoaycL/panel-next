@@ -4,6 +4,7 @@ import fs from 'node:fs'
 import ts from 'typescript'
 
 const source = fs.readFileSync(new URL('../src/dashboard/core.ts', import.meta.url), 'utf8')
+const extensionView = fs.readFileSync(new URL('../src/views/extension/index.vue', import.meta.url), 'utf8')
 const transpiled = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
   fileName: 'core.ts',
@@ -72,5 +73,8 @@ assert.deepEqual(createItemSortRequest(dashboard.groups[0]), {
 })
 assert.equal(selectItemUrl(dashboard.groups[0].items[0], true), 'http://example.lan')
 assert.equal(selectItemUrl({ ...dashboard.groups[0].items[0], lanUrl: '' }, true), 'https://example.com')
+assert.match(extensionView, /groups\.value = dashboard\.groups \|\| \[\]/)
+assert.match(extensionView, /if \(authStore\.visitMode !== VisitMode\.VISIT_MODE_LOGIN\)\s+return/)
+assert.match(extensionView, /v-if="!sidePanelOpen" type="button" class="rail-avatar"/)
 
-console.log('Validated shared dashboard state, search, sorting, and URL selection')
+console.log('Validated shared dashboard state, empty-group clearing, guest interactions, sorting, and URL selection')

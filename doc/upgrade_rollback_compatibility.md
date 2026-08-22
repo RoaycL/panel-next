@@ -1,11 +1,12 @@
 # Panel Next 升级、回滚与兼容矩阵
 
-> 最后更新：2026-08-21
+> 最后更新：2026-08-22
 
 ## 1. 版本体系
 
-- 单一版本源：`service/assets/version`（格式 `version_code|semantic_version`，如 `10|1.3.0`）
-- 前端 Web、Chrome 扩展、后端共用该语义版本；扩展 manifest 版本由构建同步
+- 当前阶段：测试版，版本从 `0.0.1` 开始，只允许 `0.0.x`
+- 版本策略：`version-policy.json`；单一版本源：`service/assets/version`（格式 `version_code|semantic_version`，如 `1|0.0.1`）
+- 前端 Web、Chrome 扩展、后端共用该语义版本；每次扩展打包自动递增一次补丁版本，并同步 package 与 manifest，普通编译不修改版本
 - API 版本通过 `X-Panel-API-Version` 协商，当前 `current=1`、`minimum=1`
 
 ## 2. 升级

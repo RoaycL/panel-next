@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="./doc/images/logo.png" width="96" height="96" alt="Panel Next Logo">
+<img src="./public/logo.png" width="96" height="96" alt="Panel Next Logo">
 
 # Panel Next
 
@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-2ea44f.svg)](./LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/RoaycL/panel-next?style=flat&logo=github)](https://github.com/RoaycL/panel-next)
-[![Release](https://img.shields.io/badge/release-v1.3.0-blue.svg)](https://github.com/RoaycL/panel-next/releases)
+[![Version](https://img.shields.io/badge/testing-v0.0.1-orange.svg)](https://github.com/RoaycL/panel-next/releases)
 
 [功能特性](#-功能特性) • [快速开始](#-快速开始) • [Chrome 扩展安装](#-chrome-扩展安装) • [系统架构](#-系统架构) • [开发指南](#-本地开发) • [开源协议](#-开源协议)
 
@@ -20,6 +20,8 @@
 
 **Panel Next** 是一款现代化的自托管个人导航面板与浏览器新标签页系统。项目基于开源基线独立演进，提供强大的 **Web 网页端** 与 **Chrome 扩展新标签页（Manifest V3）** 双端无缝协同体验。
 
+> 当前处于测试阶段，版本从 `0.0.1` 开始并限定在 `0.0.x` 系列。测试完成前请勿标记为正式版或使用 `1.x` 版本号。
+
 无论是在家庭服务器、NAS、云主机上自托管，还是作为日常浏览器的默认新标签页，Panel Next 都能为您提供极致丝滑、美观高雅、高度可定制的数字化仪表盘。
 
 ---
@@ -27,7 +29,7 @@
 ## ✨ 功能特性
 
 ### 🖥️ 1. 双端深度协同 (Web & Chrome Extension)
-- **一个后端，双端体验**：Web 首页与 Chrome 新标签页共用一套 Go 后端、用户配置与业务数据。
+- **一个后端，双端体验**：Web 首页与 Chrome 新标签页共用账号、分组和书签数据；两端的壁纸、样式与小组件显示偏好分别保存，互不覆盖。
 - **离线快照与即时秒开**：扩展新标签页支持本地可信快照预加载，断网或网络抖动时依然瞬时打开，恢复联网后自动后台增量刷新。
 - **细粒度权限控制**：Chrome 扩展遵循最小权限原则，仅声明 `storage` 权限，连接自建服务器时按需申请 Origin 授权。
 
@@ -101,12 +103,12 @@ docker compose up -d
 
 Panel Next 扩展将彻底接管浏览器的新标签页，提供如同原生桌面般强大的操作体验。
 
-1. 前往 GitHub [Releases 页面](https://github.com/RoaycL/panel-next/releases) 下载最新的 `panel-next-extension-v1.3.0.zip`；
+1. 前往 GitHub [Releases 页面](https://github.com/RoaycL/panel-next/releases) 下载最新的测试包 `panel-next-extension-v0.0.1.zip`；
 2. 解压 ZIP 压缩包到本地目录；
 3. 打开 Chrome 浏览器，访问 `chrome://extensions/`；
 4. 开启右上角的 **「开发者模式 (Developer mode)」**；
 5. 点击左上角的 **「加载已解压的扩展程序 (Load unpacked)」**，选择刚才解压的目录；
-6. 新建一个标签页，即可看到 Panel Next 桌面；点击侧边栏或右上角个人中心，输入您的服务端地址（例如 `http://192.168.1.100:3003`）即可完成绑定并同步所有书签与组件！
+6. 新建一个标签页，即可看到 Panel Next 桌面；点击左侧个人中心，输入您的服务端地址（例如 `http://192.168.1.100:3003`）即可完成绑定并同步分组与书签。扩展样式和小组件显示偏好在扩展内独立设置。
 
 ---
 
@@ -164,7 +166,7 @@ flowchart TD
 git clone https://github.com/RoaycL/panel-next.git
 cd panel-next
 corepack enable
-pnpm install
+pnpm run bootstrap
 ```
 
 ### 2. 启动开发服务器

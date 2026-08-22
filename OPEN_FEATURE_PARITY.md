@@ -1,6 +1,6 @@
 # Panel Next 开放功能对齐路线图
 
-> 项目新增 Web/Chrome 扩展双端方向。跨设备执行入口见 `TODO.md`，架构与安全决策见 `doc/web_extension_architecture.md`。双端基础不会取消本文件中的公开功能对齐任务；实现顺序调整为先完成最小扩展原型，再继续品牌和后续能力包。
+> 历史兼容清单，最后复核：2026-08-22。当前使用与构建入口见 `README.md`，架构与安全决策见 `doc/web_extension_architecture.md`。本文件仅保留旧项目迁移依据，不再作为当前执行清单。
 
 ## 1. 范围与边界
 
@@ -130,7 +130,7 @@ Panel Next 必做安全增强（不计入 53 个官方能力包）：版本化 m
 实现不严格照版本号，而按依赖和风险排序：
 
 1. `DATA-*`：备份、恢复、迁移与安全增强（已完成，真实 MySQL 演练待补）。
-2. `DUAL/EXT P0-P1`：建立 Web/Chrome 双端边界并跑通最小新标签页原型，详见 `TODO.md`。
+2. `DUAL/EXT P0-P1`：建立 Web/Chrome 双端边界并跑通新标签页，当前状态详见 `README.md`。
 3. `BRAND-*` + `OPS-01`：全局设置和配置目录迁移，同时保证 Web/Extension 共用。
 4. `IMAGE-*`：图库、分类和公共图库。
 5. `AUTH-*` 与 `SESSION-*`：设备会话、验证码、多账号切换和窗口系统。

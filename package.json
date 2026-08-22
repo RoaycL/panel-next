@@ -1,6 +1,6 @@
 {
   "name": "panel-next",
-  "version": "1.3.0",
+  "version": "0.0.5",
   "packageManager": "pnpm@11.20.0",
   "engines": {
     "node": ">=22.13"
@@ -21,8 +21,9 @@
     "build-only": "pnpm run build:web",
     "build:web": "vite build",
     "bump:extension-version": "node ./scripts/bump-extension-version.mjs",
-    "build:extension": "node ./scripts/bump-extension-version.mjs && vite build --mode extension && node ./scripts/validate-extension.mjs",
-    "package:extension": "pnpm run build:extension && node ./scripts/package-extension.mjs",
+    "build:extension": "node ./scripts/validate-version.mjs && vite build --mode extension && node ./scripts/validate-extension.mjs",
+    "package:extension": "node ./scripts/bump-extension-version.mjs && pnpm run build:extension && node ./scripts/package-extension.mjs",
+    "validate:version": "node ./scripts/validate-version.mjs",
     "validate:extension": "node ./scripts/validate-extension.mjs",
     "validate:architecture": "node ./scripts/validate-architecture.mjs",
     "validate:bootstrap-cache": "node ./scripts/validate-bootstrap-snapshot.mjs",
@@ -33,7 +34,8 @@
     "validate:responsive-ui": "node ./scripts/validate-responsive-ui.mjs",
     "validate:widget-registry": "node ./scripts/validate-widget-registry.mjs",
     "validate:offline-sync": "node ./scripts/validate-offline-sync.mjs",
-    "build:all": "pnpm run validate:architecture && pnpm run validate:bootstrap-cache && pnpm run validate:dashboard-core && pnpm run validate:runtime-navigation && pnpm run validate:lazy-management && pnpm run validate:status-ui && pnpm run validate:responsive-ui && pnpm run validate:widget-registry && pnpm run validate:offline-sync && pnpm run type-check && pnpm run build:web && pnpm run build:extension",
+    "validate:repository": "node ./scripts/validate-repository-hygiene.mjs",
+    "build:all": "pnpm run validate:version && pnpm run validate:repository && pnpm run validate:architecture && pnpm run validate:bootstrap-cache && pnpm run validate:dashboard-core && pnpm run validate:runtime-navigation && pnpm run validate:lazy-management && pnpm run validate:status-ui && pnpm run validate:responsive-ui && pnpm run validate:widget-registry && pnpm run validate:offline-sync && pnpm run type-check && pnpm run build:web && pnpm run build:extension",
     "type-check": "vue-tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -42,15 +44,13 @@
     "common:prepare": "husky install"
   },
   "dependencies": {
-    "@vueuse/core": "^14.4.0",
     "moment": "^2.30.1",
     "naive-ui": "^2.44.1",
     "pinia": "^4.0.2",
     "vue": "^3.5.41",
     "vue-draggable-plus": "^0.6.1",
     "vue-i18n": "^11.4.8",
-    "vue-router": "^5.2.0",
-    "vuedraggable": "^4.1.0"
+    "vue-router": "^5.2.0"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^9.3.0",
@@ -80,8 +80,6 @@
     "vue-tsc": "^3.3.9"
   },
   "lint-staged": {
-    "*.{ts,tsx,vue}": [
-      "pnpm lint:fix"
-    ]
+    "*.{js,cjs,mjs,ts,tsx,vue}": "eslint --fix"
   }
 }

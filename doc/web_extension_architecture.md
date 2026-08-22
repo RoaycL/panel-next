@@ -1,12 +1,14 @@
 # Web 与 Chrome 扩展双端架构
 
+> 最后架构复核：2026-08-22
+
 ## 1. 目标
 
-Sun-Panel 同时提供两种客户端，并共用同一个 Go 后端和账号数据：
+Panel Next 同时提供两种客户端，并共用同一个 Go 后端和账号数据：
 
 - Web：保持现有网页部署、公开访问和管理体验。
 - Chrome 扩展：使用 Manifest V3 覆盖新标签页，提供类似 iTab 的快速启动桌面。
-- 同一账号的分组、卡片、壁纸、搜索引擎、主题和组件配置由后端同步。
+- 同一账号的分组和卡片由后端同步；Web 与 Extension 的壁纸、主题、布局和小组件显示偏好分别保存，避免一端调整覆盖另一端。
 - 扩展在网络暂时不可用时优先展示最近一次可信缓存，恢复联网后刷新。
 
 这不是重写项目。现有 Vue 组件、Pinia 状态和 Go 业务模型继续使用；改造重点是客户端运行环境抽象、设备会话、同步协议和扩展构建外壳。
@@ -15,7 +17,7 @@ Sun-Panel 同时提供两种客户端，并共用同一个 Go 后端和账号数
 
 - Chrome 扩展只使用打包在扩展内的脚本，不加载或执行远程代码。
 - 扩展默认只申请 `storage`；服务器访问权限按用户配置的源站按需申请，避免默认使用 `<all_urls>`。
-- 后端是跨设备数据的唯一权威来源；`chrome.storage.local` 只保存服务器地址、设备会话和可丢弃缓存。
+- 后端是账号、分组和卡片数据的唯一权威来源；`chrome.storage.local` 额外保存服务器地址、设备会话、可信缓存和扩展专属外观偏好。
 - 密钥、第三方 API Token 和用户密码不得进入客户端同步数据。
 - 第一版不实现多端离线同时编辑、浏览器书签接管、内容脚本注入或 Chrome Sync 数据同步。
 - Web 保持现有部署方式；双端改造不得要求现有用户必须安装扩展。
@@ -64,7 +66,8 @@ interface RuntimeAdapter {
 
 ### 版本与产物规则
 
-- `service/assets/version` 是 Web、后端和扩展的唯一发布版本来源；Chrome Manifest 构建时自动写入同一语义版本。
+- 当前为 `0.0.x` 测试阶段，从 `0.0.1` 开始；`version-policy.json` 固化阶段和版本系列，`service/assets/version` 是唯一版本源。
+- 普通 Extension 构建不改变版本；统一打包命令在构建前递增一次补丁号，并同步写入 package 与 Chrome Manifest，避免误装同版本旧包。
 - Web 兼容产物继续输出到 `dist`；扩展目录输出到 `dist/extension`。
 - 扩展发布包命名为 `panel-next-extension-v<version>.zip`，同时生成同名 `.sha256` 文件，统一放在 `artifacts`。
 
@@ -200,8 +203,8 @@ DELETE /api/v1/sessions/:id
 
 平台无关的面板状态转换位于 `src/dashboard/core.ts`：bootstrap 映射、分组规范化、搜索、排序请求和网络地址选择均为无浏览器依赖的纯函数。页面组件只保留 Vue 状态编排和 RuntimeAdapter 副作用，Web 与 Extension 不维护两套业务分支。
 
-- 服务器数据：账号、分组、卡片、面板配置、搜索引擎、组件布局和资源元数据。
-- 设备本地数据：服务器地址、设备 ID、会话、最近成功快照、最后同步 revision、设备专属偏好。
+- 服务器数据：账号、分组、卡片、Web 面板配置、搜索引擎和资源元数据。
+- 设备本地数据：服务器地址、设备 ID、会话、最近成功快照、最后同步 revision，以及 Extension 专属壁纸、样式和小组件显示偏好。
 - Web 使用 localStorage/IndexedDB 适配器；扩展使用 `chrome.storage.local`。
 - Pinia 与工具层只使用语义明确的 `persistentStorage` 包装器，包装器再调用当前 Runtime 的 StorageAdapter；历史 `ss`/`ls` 别名已移除，现有键名和 JSON 信封保持兼容。
 - 会话和缓存使用不同键空间；退出登录必须清除会话，用户可选择保留非敏感缓存。

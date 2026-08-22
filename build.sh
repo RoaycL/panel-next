@@ -34,7 +34,7 @@ buildBackEndAssets() {
 # buildBinary() {
 #   cd $REPO/service
 #   # mv "${REPO}/dist" "${REPO}/web"
-#   go build -o "sun-panel" --ldflags="-X sun-panel/global.RUNCODE=release" main.go
+#   go build -o "panel-next" --ldflags="-X panel-next/global.RUNCODE=release" main.go
 # }
 
 _build() {
@@ -61,7 +61,7 @@ _build() {
     outPath="panel-next_${COMMIT_SHA}_${os}_${arch}"
   fi
   outname="${pathRelease}/${outPath}/panel-next"
-  go build -o "${outname}" --ldflags="-X sun-panel/global.RUNCODE=release" main.go
+  go build -o "${outname}" --ldflags="-X panel-next/global.RUNCODE=release" main.go
 
   cd "$pathRelease"
   # copy front file
@@ -81,7 +81,7 @@ _build() {
 # 构建 Linux musl 静态二进制（参考 Alist 构建方案）
 buildReleaseLinuxMusl() {
   cd "$REPO/service"
-  ldflags="-X sun-panel/global.RUNCODE=release"
+  ldflags="-X panel-next/global.RUNCODE=release"
   pathRelease=$REPO/release
   muslflags="--extldflags '-static -fpic' $ldflags"
   BASE="https://musl.nn.ci/"

@@ -38,6 +38,7 @@ WORKDIR /app
 COPY --from=web_image /build/dist /app/web
 
 COPY --from=server_image /build/panel-next /app/panel-next
+COPY ./LICENSE /app/LICENSE
 
 EXPOSE 3002 3003
 

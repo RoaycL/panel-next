@@ -20,41 +20,33 @@
   ],
   "cSpell.words": [
     "axios",
-    "bumpp",
     "commitlint",
-    "davinci",
     "dockerhub",
-    "esno",
-    "highlightjs",
-    "hljs",
     "iconify",
-    "katex",
-    "katexmath",
-    "linkify",
-    "logprobs",
-    "mdhljs",
-    "mila",
-    "nodata",
+    "panelnext",
     "pinia",
+    "pnpm",
     "Popconfirm",
-    "rushstack",
+    "Roayc",
     "Sider",
     "tailwindcss",
-    "traptitech",
-    "tsup",
-    "Typecheck",
-    "unplugin",
+    "vuejs",
     "VITE",
-    "vueuse"
+    "Wallhaven"
   ],
   "i18n-ally.enabledParsers": [
-    "ts"
+    "ts",
+    "js",
+    "json"
   ],
+  "i18n-ally.enabledFrameworks": ["vue"],
   "i18n-ally.sortKeys": true,
   "i18n-ally.keepFulfilled": true,
   "i18n-ally.localesPaths": [
     "src/locales"
   ],
+  "i18n-ally.sourceLanguage": "zh-CN",
   "i18n-ally.keystyle": "nested",
-  "vue.codeActions.enabled": false
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true
 }

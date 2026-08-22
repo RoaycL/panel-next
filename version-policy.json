@@ -1,0 +1,8 @@
+{
+  "stage": "testing",
+  "label": "测试版",
+  "series": "0.0",
+  "firstVersion": "0.0.1",
+  "packageIncrement": "patch",
+  "source": "service/assets/version"
+}

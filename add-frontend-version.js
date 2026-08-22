@@ -1,7 +1,7 @@
 const fs = require('fs')
 
 // 从唯一发布版本源读取版本号（DUAL-02：service/assets/version 为唯一版本源）
-// 文件格式："<version_code>|<semantic_version>"，如 "10|1.3.0"
+// 文件格式："<version_code>|<semantic_version>"，测试阶段如 "1|0.0.1"
 let appVersion = ''
 try {
   const versionSource = fs.readFileSync('service/assets/version', 'utf-8').trim()

@@ -24,6 +24,23 @@ async function importTypeScript(sourceText, fileName) {
 // 1. 测试 conflictResolver
 const conflictSrc = fs.readFileSync(new URL('../src/sync/conflictResolver.ts', import.meta.url), 'utf8')
 const { evaluateConflict, getObjectDiffFields } = await importTypeScript(conflictSrc, 'conflictResolver.ts')
+const mutationSource = fs.readFileSync(new URL('../src/api/panel/mutation.ts', import.meta.url), 'utf8')
+const queueSource = fs.readFileSync(new URL('../src/sync/offlineQueue.ts', import.meta.url), 'utf8')
+const replaySource = fs.readFileSync(new URL('../src/sync/offlineReplay.ts', import.meta.url), 'utf8')
+const editItemSource = fs.readFileSync(new URL('../src/views/home/components/EditItem/index.vue', import.meta.url), 'utf8')
+const extensionViewSource = fs.readFileSync(new URL('../src/views/extension/index.vue', import.meta.url), 'utf8')
+
+assert.match(mutationSource, /enqueueIfSupported/)
+assert.match(mutationSource, /error instanceof HttpRequestError && error\.retryable/)
+assert.match(mutationSource, /queueOnFailure !== false/)
+assert.match(mutationSource, /silentNetworkError: queueSupported/)
+assert.match(queueSource, /navigator\.locks\.request\(getOfflineQueueLockName/)
+assert.match(queueSource, /const previous = storage\.getItem\(key\)/)
+assert.match(replaySource, /getOfflineQueueLockName\(accountId, origin\)/)
+assert.match(replaySource, /editItem\(itemPayload, false\)/)
+assert.match(replaySource, /setUserConfig\(payload as Panel\.userConfig, false\)/)
+assert.match(editItemSource, /queued: Boolean\(queued\)/)
+assert.match(extensionViewSource, /if \(!meta\.queued\)\s+void refreshBootstrap\(\)/)
 
 // 模拟云端基线数据
 function mockRemoteBootstrap(revision = '10') {

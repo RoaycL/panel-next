@@ -52,7 +52,6 @@ extension_ids=abcdefghijklmnopabcdefghijklmnop
 corepack pnpm install
 corepack pnpm run type-check
 corepack pnpm run build:web
-corepack pnpm run build:extension
 corepack pnpm run package:extension
 ```
 
@@ -69,6 +68,7 @@ corepack pnpm run build:all
 - 发布 ZIP 与 SHA-256：`artifacts/panel-next-extension-v<version>.zip[.sha256]`
 
 注意：Web 构建会清空 `dist`，因此需要同时产出两端时必须先构建 Web，再构建 Extension；`build:all` 已使用正确顺序。
+当前为测试阶段，版本从 `0.0.1` 开始并限定为 `0.0.x`。普通 `build:extension` 只复现当前版本，不修改版本文件；`package:extension` 在打包前只递增一次补丁号，例如 `0.0.1` → `0.0.2`。不要手工单独修改 `package.json` 或 Manifest，版本策略和唯一版本源由 `version-policy.json`、`service/assets/version` 与 `validate-version.mjs` 强制校验。
 
 ## 本地加载
 
@@ -81,7 +81,7 @@ corepack pnpm run build:all
 7. 输入服务器 Origin（例如 `https://panel.example.com`），确认 Chrome 只请求该站点权限。
 8. 连接成功后可通过页面右下角“服务器”入口切换实例。
 
-当前阶段不要发布到 Chrome Web Store。人工验证结果应记录在 `TODO.md` 的 `EXT-08` 条目后，并包含 Chrome 版本、扩展 ID、安装结果和已知错误。
+发布到 Chrome Web Store 前必须完成手工验收，并在发布记录中注明 Chrome 版本、扩展 ID、安装结果和已知错误；发布检查项见 `doc/chrome_store_release.md`。
 
 ## 产物安全检查
 
