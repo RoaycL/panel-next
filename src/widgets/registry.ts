@@ -5,10 +5,9 @@ import type {
   WidgetPosition,
   WidgetSize,
 } from './types'
+import { WIDGET_ID_PATTERN, WIDGET_TYPE_PATTERN } from './constants'
 import { WIDGET_LAYOUT_SCHEMA_VERSION } from './types'
 
-const WIDGET_ID_PATTERN = /^[a-z\d][\w.-]{0,63}$/i
-const WIDGET_TYPE_PATTERN = /^[a-z][a-z\d.-]{0,63}$/
 const MAX_GRID_VALUE = 10000
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -41,6 +40,8 @@ function parseSize(value: unknown, definition: WidgetDefinition): WidgetSize {
 function validateDefinition(definition: WidgetDefinition) {
   if (!WIDGET_TYPE_PATTERN.test(definition.type) || !Number.isSafeInteger(definition.currentVersion) || definition.currentVersion < 1)
     throw new Error('Invalid widget definition identity.')
+  if (definition.meta && (typeof definition.meta.title !== 'string' || !definition.meta.title.trim()))
+    throw new Error(`Widget ${definition.type} declared an invalid meta.title.`)
   for (const axis of ['columns', 'rows'] as const) {
     const minimum = definition.size.min[axis]
     const initial = definition.size.default[axis]
