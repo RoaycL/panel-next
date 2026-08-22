@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -98,5 +99,17 @@ func TestClientValidatesInputAndMissingLocation(t *testing.T) {
 	client = NewClient(server.Client(), server.URL, server.URL, time.Minute, time.Hour)
 	if _, err := client.Get(context.Background(), "Nowhere", "metric", "en"); !errors.Is(err, ErrLocationNotFound) {
 		t.Fatalf("expected missing location, got %v", err)
+	}
+}
+
+func TestCachePruningIsBounded(t *testing.T) {
+	client := NewClient(nil, "http://example.invalid", "http://example.invalid", time.Minute, time.Hour)
+	now := time.Now()
+	for index := 0; index < maxCacheEntries+10; index++ {
+		client.cache[strconv.Itoa(index)] = cacheEntry{staleUntil: now.Add(time.Hour)}
+	}
+	client.pruneCacheLocked(now)
+	if len(client.cache) >= maxCacheEntries {
+		t.Fatalf("cache was not pruned below insertion limit: %d", len(client.cache))
 	}
 }

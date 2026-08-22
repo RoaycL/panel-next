@@ -19,6 +19,7 @@ const (
 	defaultGeocodingURL = "https://geocoding-api.open-meteo.com/v1/search"
 	defaultForecastURL  = "https://api.open-meteo.com/v1/forecast"
 	maxResponseBytes    = 1 << 20
+	maxCacheEntries     = 512
 )
 
 var (
@@ -129,11 +130,26 @@ func (client *Client) Get(ctx context.Context, city, units, language string) (Re
 	}
 	result.FetchedAt = now.UTC()
 	client.mu.Lock()
+	client.pruneCacheLocked(now)
 	client.cache[key] = cacheEntry{
 		result: result, expiresAt: now.Add(client.ttl), staleUntil: now.Add(client.staleTTL),
 	}
 	client.mu.Unlock()
 	return result, nil
+}
+
+func (client *Client) pruneCacheLocked(now time.Time) {
+	for key, candidate := range client.cache {
+		if !now.Before(candidate.staleUntil) {
+			delete(client.cache, key)
+		}
+	}
+	for len(client.cache) >= maxCacheEntries {
+		for key := range client.cache {
+			delete(client.cache, key)
+			break
+		}
+	}
 }
 
 func normalizeLanguage(language string) string {

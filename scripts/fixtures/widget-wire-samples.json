@@ -1,0 +1,159 @@
+{
+  "$comment": "Widget wire-contract shared samples. Consumed by scripts/validate-widget-registry.mjs (TypeScript) and service/api/api_v1/panel/widgetLayoutValidation_test.go (Go). Rules under test mirror src/widgets/registry.ts#validateWidgetWireInstance and service/api/api_v1/panel/widgetLayoutValidation.go. Byte accounting MUST match Go json.Marshal: <, >, &, U+2028 and U+2029 are escaped to \\uXXXX (6 bytes each). 'expect' must be \"valid\" when both implementations must accept the instance, \"invalid\" when both must reject it. Samples with synthesizeBlob get config = { blob: String.fromCodePoint(codepoint).repeat(repeat) } injected by BOTH test harnesses identically.",
+  "instances": [
+    {
+      "name": "valid builtin-shaped instance",
+      "expect": "valid",
+      "instance": {
+        "id": "clock.main", "type": "core.clock", "version": 1,
+        "position": { "column": 0, "row": 3 }, "size": { "columns": 2, "rows": 1 },
+        "hidden": false, "config": { "hideSecond": false, "showDate": true }
+      }
+    },
+    {
+      "name": "unknown future type with structurally valid body",
+      "expect": "valid",
+      "instance": {
+        "id": "acme.stock.abc123", "type": "acme.stock", "version": 9,
+        "position": { "column": 4, "row": 2 }, "size": { "columns": 12, "rows": 24 },
+        "config": { "symbol": "AAPL" }
+      }
+    },
+    {
+      "name": "missing hidden and config fields",
+      "expect": "valid",
+      "instance": {
+        "id": "date.solo", "type": "core.date", "version": 1,
+        "position": { "column": 10000, "row": 10000 }, "size": { "columns": 1, "rows": 1 }
+      }
+    },
+    {
+      "name": "version at javascript safe-integer bound",
+      "expect": "valid",
+      "instance": {
+        "id": "version.max", "type": "acme.future", "version": 9007199254740991,
+        "position": { "column": 0, "row": 0 }, "size": { "columns": 1, "rows": 1 },
+        "config": {}
+      }
+    },
+    {
+      "name": "plain blob within limit",
+      "expect": "valid",
+      "synthesizeBlob": { "codepoint": 97, "repeat": 32000 },
+      "instance": {
+        "id": "ok.config.size", "type": "core.clock", "version": 1,
+        "position": { "column": 0, "row": 0 }, "size": { "columns": 1, "rows": 1 },
+        "config": {}
+      }
+    },
+    {
+      "name": "config blob exceeding transport limit",
+      "expect": "invalid",
+      "synthesizeBlob": { "codepoint": 97, "repeat": 33000 },
+      "instance": {
+        "id": "bad.config.size", "type": "core.clock", "version": 1,
+        "position": { "column": 0, "row": 0 }, "size": { "columns": 1, "rows": 1 },
+        "config": {}
+      }
+    },
+    {
+      "name": "html-escaped chars inflate beyond limit (Go \\u003c rule)",
+      "expect": "invalid",
+      "synthesizeBlob": { "codepoint": 60, "repeat": 6000 },
+      "instance": {
+        "id": "bad.config.escape", "type": "core.clock", "version": 1,
+        "position": { "column": 0, "row": 0 }, "size": { "columns": 1, "rows": 1 },
+        "config": {}
+      }
+    },
+    {
+      "name": "line-separator escaping inflates beyond limit (U+2028)",
+      "expect": "invalid",
+      "synthesizeBlob": { "codepoint": 8233, "repeat": 6000 },
+      "instance": {
+        "id": "bad.config.ls", "type": "core.clock", "version": 1,
+        "position": { "column": 0, "row": 0 }, "size": { "columns": 1, "rows": 1 },
+        "config": {}
+      }
+    },
+    {
+      "name": "version beyond javascript safe integer",
+      "expect": "invalid",
+      "instance": {
+        "id": "version.overflow", "type": "acme.future", "version": 9007199254740992,
+        "position": { "column": 0, "row": 0 }, "size": { "columns": 1, "rows": 1 },
+        "config": {}
+      }
+    },
+    {
+      "name": "version below one",
+      "expect": "invalid",
+      "instance": {
+        "id": "bad.version", "type": "core.clock", "version": 0,
+        "position": { "column": 0, "row": 0 }, "size": { "columns": 1, "rows": 1 }
+      }
+    },
+    {
+      "name": "size columns below minimum",
+      "expect": "invalid",
+      "instance": {
+        "id": "bad.size.low", "type": "core.clock", "version": 1,
+        "position": { "column": 0, "row": 0 }, "size": { "columns": 0, "rows": 1 }
+      }
+    },
+    {
+      "name": "size rows above host maximum",
+      "expect": "invalid",
+      "instance": {
+        "id": "bad.size.high", "type": "acme.tall", "version": 3,
+        "position": { "column": 0, "row": 0 }, "size": { "columns": 4, "rows": 25 }
+      }
+    },
+    {
+      "name": "negative position row",
+      "expect": "invalid",
+      "instance": {
+        "id": "bad.position", "type": "core.date", "version": 1,
+        "position": { "column": 0, "row": -1 }, "size": { "columns": 1, "rows": 1 }
+      }
+    },
+    {
+      "name": "position beyond server grid bound",
+      "expect": "invalid",
+      "instance": {
+        "id": "bad.position.far", "type": "core.date", "version": 1,
+        "position": { "column": 0, "row": 10001 }, "size": { "columns": 1, "rows": 1 }
+      }
+    },
+    {
+      "name": "id violating pattern",
+      "expect": "invalid",
+      "instance": {
+        "id": "../unsafe", "type": "core.clock", "version": 1,
+        "position": { "column": 0, "row": 0 }, "size": { "columns": 1, "rows": 1 }
+      }
+    },
+    {
+      "name": "type must start lowercase",
+      "expect": "invalid",
+      "instance": {
+        "id": "ok.id", "type": "Acme.stock", "version": 1,
+        "position": { "column": 0, "row": 0 }, "size": { "columns": 1, "rows": 1 }
+      }
+    },
+    {
+      "name": "hidden flag not boolean",
+      "expect": "invalid",
+      "instance": {
+        "id": "bad.hidden", "type": "core.clock", "version": 1,
+        "position": { "column": 0, "row": 0 }, "size": { "columns": 1, "rows": 1 },
+        "hidden": "yes"
+      }
+    },
+    {
+      "name": "non-object instance",
+      "expect": "invalid",
+      "instance": "not-an-object"
+    }
+  ]
+}

@@ -4,12 +4,16 @@ import { computed, onErrorCaptured, provide, reactive, ref, shallowRef, useAttrs
 import type { WidgetInstance } from './types'
 import { widgetRegistry } from './registry'
 import { WIDGET_CONTEXT_KEY } from './context'
+import { getRuntime } from '@/runtime'
+import { t } from '@/locales'
 
 defineOptions({ inheritAttrs: false })
 const props = defineProps<{ instance: WidgetInstance; editMode?: boolean }>()
 const attrs = useAttrs()
 const component = shallowRef<Component | null>(null)
 const renderError = ref<string | null>(null)
+const loading = ref(false)
+const retryGeneration = ref(0)
 const componentProps = computed(() => ({
   ...(typeof props.instance.config === 'object' && props.instance.config !== null ? props.instance.config : {}),
   ...attrs,
@@ -20,6 +24,8 @@ const widgetContext = reactive({
   instanceId: props.instance.id,
   type: props.instance.type,
   editMode: props.editMode === true,
+  capabilities: widgetRegistry.get(props.instance.type)?.capabilities ?? [],
+  surface: getRuntime().kind,
 })
 watch(() => props.editMode, (editMode) => {
   widgetContext.editMode = editMode === true
@@ -27,6 +33,7 @@ watch(() => props.editMode, (editMode) => {
 watch(() => [props.instance.id, props.instance.type] as const, ([instanceId, type]) => {
   widgetContext.instanceId = instanceId
   widgetContext.type = type
+  widgetContext.capabilities = widgetRegistry.get(type)?.capabilities ?? []
 })
 provide(WIDGET_CONTEXT_KEY, widgetContext)
 
@@ -39,30 +46,53 @@ onErrorCaptured((error) => {
 
 let loadGeneration = 0
 
-watch(() => ({ type: props.instance.type, id: props.instance.id }), async (next, previous) => {
+watch(() => ({ type: props.instance.type, id: props.instance.id, retry: retryGeneration.value }), async (next) => {
   const generation = ++loadGeneration
   component.value = null
-  if (next.type !== previous?.type)
-    renderError.value = null
+  renderError.value = null
+  loading.value = true
   const definition = widgetRegistry.get(next.type)
-  if (!definition)
+  if (!definition) {
+    renderError.value = t('widgetLayout.host.unsupported')
+    loading.value = false
     return
+  }
   try {
     const loaded = await definition.load()
-    if (generation === loadGeneration)
+    if (generation === loadGeneration) {
       component.value = loaded
+      loading.value = false
+    }
   }
   catch (error) {
     console.error(`Failed to load widget ${next.type}.`, error)
+    if (generation === loadGeneration) {
+      renderError.value = error instanceof Error ? error.message : t('widgetLayout.host.loadFailed')
+      loading.value = false
+    }
   }
 }, { immediate: true })
+
+watch(() => props.instance.config, () => {
+  renderError.value = null
+}, { deep: true })
+
+function retryLoad() {
+  retryGeneration.value++
+}
 </script>
 
 <template>
   <div v-if="renderError" class="widget-error-boundary" role="alert">
     <span class="widget-error-icon" aria-hidden="true">⚠️</span>
-    <span class="widget-error-text">组件加载异常</span>
+    <span class="widget-error-text">{{ t('widgetLayout.host.error') }}</span>
     <code class="widget-error-detail">{{ instance.type }}</code>
+    <button type="button" class="widget-error-retry" @click="retryLoad">
+      {{ t('widgetLayout.host.retry') }}
+    </button>
+  </div>
+  <div v-else-if="loading" class="widget-loading" role="status">
+    {{ t('widgetLayout.host.loading') }}
   </div>
   <component :is="component" v-else-if="component && !instance.hidden" v-bind="componentProps" />
 </template>
@@ -87,5 +117,23 @@ watch(() => ({ type: props.instance.type, id: props.instance.id }), async (next,
   border-radius: 6px;
   background: rgb(255 255 255 / 10%);
   font-size: 11px;
+}
+
+.widget-error-retry {
+  padding: 3px 8px;
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: 7px;
+  color: inherit;
+  background: rgb(255 255 255 / 8%);
+  cursor: pointer;
+}
+
+.widget-loading {
+  display: grid;
+  width: 100%;
+  min-height: 56px;
+  place-items: center;
+  color: rgb(255 255 255 / 58%);
+  font-size: 12px;
 }
 </style>

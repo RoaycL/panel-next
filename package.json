@@ -1,6 +1,6 @@
 {
   "name": "panel-next",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "packageManager": "pnpm@11.20.0",
   "engines": {
     "node": ">=22.13"
@@ -22,7 +22,7 @@
     "build:web": "vite build",
     "bump:extension-version": "node ./scripts/bump-extension-version.mjs",
     "build:extension": "node ./scripts/validate-version.mjs && vite build --mode extension && node ./scripts/validate-extension.mjs",
-    "package:extension": "node ./scripts/bump-extension-version.mjs && pnpm run build:extension && node ./scripts/package-extension.mjs",
+    "package:extension": "node ./scripts/package-extension-transactional.mjs",
     "validate:version": "node ./scripts/validate-version.mjs",
     "validate:extension": "node ./scripts/validate-extension.mjs",
     "validate:architecture": "node ./scripts/validate-architecture.mjs",
@@ -33,9 +33,13 @@
     "validate:status-ui": "node ./scripts/validate-status-ui.mjs",
     "validate:responsive-ui": "node ./scripts/validate-responsive-ui.mjs",
     "validate:widget-registry": "node ./scripts/validate-widget-registry.mjs",
+    "test:widget-network": "node ./scripts/test-widget-network.mjs",
+    "test:widget-capabilities": "node ./scripts/test-widget-capabilities.mjs",
+    "test:extension-persistence": "node ./scripts/test-extension-persistence.mjs",
+    "test:request-security": "node ./scripts/test-request-security.mjs",
     "validate:offline-sync": "node ./scripts/validate-offline-sync.mjs",
     "validate:repository": "node ./scripts/validate-repository-hygiene.mjs",
-    "build:all": "pnpm run validate:version && pnpm run validate:repository && pnpm run validate:architecture && pnpm run validate:bootstrap-cache && pnpm run validate:dashboard-core && pnpm run validate:runtime-navigation && pnpm run validate:lazy-management && pnpm run validate:status-ui && pnpm run validate:responsive-ui && pnpm run validate:widget-registry && pnpm run validate:offline-sync && pnpm run type-check && pnpm run build:web && pnpm run build:extension",
+    "build:all": "node ./scripts/build-all.mjs",
     "type-check": "vue-tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

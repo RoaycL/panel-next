@@ -2,8 +2,9 @@ import crypto from 'node:crypto'
 import { Buffer } from 'node:buffer'
 import fs from 'node:fs'
 import path from 'node:path'
+import process from 'node:process'
 
-const sourceRoot = path.resolve('dist/extension')
+const sourceRoot = path.resolve(process.argv[2] ?? 'dist/extension')
 const artifactRoot = path.resolve('artifacts')
 const [, version] = fs.readFileSync(path.resolve('service/assets/version'), 'utf8').trim().split('|')
 if (!/^\d+\.\d+\.\d+(?:\.\d+)?$/.test(version))
@@ -101,8 +102,30 @@ if (files.length > 0xFFFF)
 
 fs.mkdirSync(artifactRoot, { recursive: true })
 const archive = buildZip(files)
-fs.writeFileSync(archivePath, archive, { mode: 0o644 })
-const digest = crypto.createHash('sha256').update(archive).digest('hex')
-fs.writeFileSync(`${archivePath}.sha256`, `${digest}  ${archiveName}\n`, { mode: 0o644 })
-console.log(`Packaged ${files.length} files at ${archivePath}`)
-console.log(`SHA-256 ${digest}`)
+const tmpZip = `${archivePath}.tmp.${process.pid}`
+const tmpSha = `${archivePath}.sha256.tmp.${process.pid}`
+
+try {
+  fs.writeFileSync(tmpZip, archive, { mode: 0o644 })
+  const digest = crypto.createHash('sha256').update(archive).digest('hex')
+  fs.writeFileSync(tmpSha, `${digest}  ${archiveName}\n`, { mode: 0o644 })
+
+  fs.renameSync(tmpZip, archivePath)
+  fs.renameSync(tmpSha, `${archivePath}.sha256`)
+  console.log(`Packaged ${files.length} files at ${archivePath}`)
+  console.log(`SHA-256 ${digest}`)
+}
+catch (error) {
+  if (fs.existsSync(tmpZip))
+    fs.unlinkSync(tmpZip)
+  if (fs.existsSync(tmpSha))
+    fs.unlinkSync(tmpSha)
+  // The ZIP rename can succeed before the checksum rename fails. Both final
+  // names were verified absent at startup, so anything present here belongs
+  // to this failed packaging attempt and is safe to remove.
+  if (fs.existsSync(archivePath))
+    fs.unlinkSync(archivePath)
+  if (fs.existsSync(`${archivePath}.sha256`))
+    fs.unlinkSync(`${archivePath}.sha256`)
+  throw error
+}

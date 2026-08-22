@@ -7,7 +7,7 @@ import { set as savePanelConfig } from '@/api/panel/userConfig'
 import { RoundCardModal, SvgIcon } from '@/components/common'
 import { copyToClipboard, timeFormat } from '@/utils/cmn'
 import { t } from '@/locales'
-import { usePanelState } from '@/store'
+import { useAuthStore, usePanelState } from '@/store'
 import { getRuntime } from '@/runtime'
 import { saveExtensionAppearance } from '@/runtime/extensionAppearance'
 
@@ -21,6 +21,7 @@ const imageList = ref<File.Info[]>([])
 const ms = useMessage()
 const dialog = useDialog()
 const panelStore = usePanelState()
+const authStore = useAuthStore()
 const loading = ref(false)
 const activeType = ref<string>('all')
 const imgbedConfigured = ref(false)
@@ -95,11 +96,20 @@ function handleInfoClick(fileInfo: File.Info) {
   infoModalState.value.show = true
 }
 
-function handleSetWallpaper(imgSrc: string) {
+async function handleSetWallpaper(imgSrc: string) {
+  const previousBg = panelStore.panelConfig.backgroundImageSrc
   panelStore.panelConfig.backgroundImageSrc = imgSrc
   if (getRuntime().kind === 'extension') {
-    saveExtensionAppearance(panelStore.panelConfig)
-    ms.success('扩展壁纸已独立保存')
+    try {
+      await saveExtensionAppearance(panelStore.panelConfig)
+      ms.success('扩展壁纸已独立保存')
+    }
+    catch (err) {
+      if (panelStore.panelConfig.backgroundImageSrc === imgSrc)
+        panelStore.panelConfig.backgroundImageSrc = previousBg
+      ms.error('扩展壁纸保存失败，请重试')
+      console.error('Failed to save extension wallpaper preference:', err)
+    }
     return
   }
   savePanelConfig({ panel: panelStore.panelConfig })
@@ -168,10 +178,9 @@ onMounted(() => {
           name="imgfile"
           accept=".webp,.png,.jpg,.jpeg,.gif,.svg,.avif,.ico"
           :data="{ fileType: uploadFileType }"
-          :headers="{
-            Authorization: `Bearer ${usePanelState().$state ? '' : ''}`,
-            token: '',
-          }"
+          :headers="authStore.token
+            ? { Authorization: `Bearer ${authStore.token}`, token: authStore.token }
+            : {}"
           @finish="handleUploadFinish"
         >
           <NButton size="small" type="primary">

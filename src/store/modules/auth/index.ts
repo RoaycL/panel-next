@@ -5,6 +5,7 @@ import { VisitMode } from '@/enums/auth'
 import { getRuntime } from '@/runtime'
 import { useAppStore } from '@/store/modules/app'
 import { getDeviceIdentity } from '@/runtime/device'
+import { clearWidgetNetworkState } from '@/widgets/networkState'
 
 // interface SessionResponse {
 //   auth: boolean
@@ -51,6 +52,7 @@ export const useAuthStore = defineStore('auth-store', {
       this.accessExpiresAt = null
       this.refreshExpiresAt = null
       this.saveStorage()
+      clearWidgetNetworkState()
     },
 
     setDeviceSession(session: Login.DeviceSessionLoginResponse) {
@@ -61,6 +63,7 @@ export const useAuthStore = defineStore('auth-store', {
       this.refreshExpiresAt = session.refreshExpiresAt
       this.userInfo = session.user
       this.saveStorage()
+      clearWidgetNetworkState()
     },
 
     updateDeviceSession(session: Login.DeviceSessionRefreshResponse) {
@@ -171,12 +174,14 @@ export const useAuthStore = defineStore('auth-store', {
     removeToken() {
       this.$state = defaultState()
       hRemoveToken()
+      clearWidgetNetworkState()
     },
 
     // AUTH-02: 清除当前会话，不保留失效凭据，避免重复账号记录
     clearSession() {
       this.$state = defaultState()
       hRemoveToken()
+      clearWidgetNetworkState()
     },
   },
 

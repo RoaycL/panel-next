@@ -2,7 +2,9 @@ package panel
 
 import (
 	"encoding/json"
+	"net/http"
 	"strconv"
+
 	"panel-next/api/api_v1/common/apiReturn"
 	"panel-next/api/api_v1/common/base"
 	"panel-next/global"
@@ -41,9 +43,14 @@ func (a *UserConfig) Get(c *gin.Context) {
 }
 
 func (a *UserConfig) Set(c *gin.Context) {
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxUserConfigRequestBytes)
 	userInfo, _ := base.GetCurrentUserInfo(c)
 	req, expectedRevision, ok := bindSyncMutation[models.UserConfig](c)
 	if !ok {
+		return
+	}
+	if err := validatePanelWidgetLayout(req.Panel); err != nil {
+		apiReturn.ErrorParamFomat(c, err.Error())
 		return
 	}
 

@@ -1,7 +1,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import process from 'node:process'
 
-const root = path.resolve('dist/extension')
+const root = path.resolve(process.argv[2] ?? 'dist/extension')
 const manifestPath = path.join(root, 'manifest.json')
 const newtabPath = path.join(root, 'newtab.html')
 

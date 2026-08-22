@@ -5,8 +5,12 @@ import {
   NDropdown,
   NModal,
   NSwitch,
+  useDialog,
   useMessage,
 } from 'naive-ui'
+import { t } from '@/locales'
+import type { WidgetInstance } from '@/widgets'
+import { WidgetHost, WidgetSettingsModal, generateWidgetInstanceId, resizeInstanceWithinBounds, serializeWidgetLayout, widgetRegistry } from '@/widgets'
 import { useRouter } from 'vue-router'
 import { SvgIcon, ItemIcon, ConflictResolverModal, OfflineQueueManager } from '@/components/common'
 import { useAuthStore, usePanelState, useUserStore } from '@/store'
@@ -15,7 +19,7 @@ import { PanelStateNetworkModeEnum } from '@/enums'
 import { VisitMode } from '@/enums/auth'
 import { getRuntime } from '@/runtime'
 import type { StorageChangeEvent } from '@/runtime/types'
-import { EXTENSION_APPEARANCE_KEY, EXTENSION_WIDGETS_KEY, readExtensionAppearance, readExtensionWidgets, saveExtensionAppearance, saveExtensionWidgets } from '@/runtime/extensionAppearance'
+import { EXTENSION_APPEARANCE_KEY, EXTENSION_WIDGETS_KEY, processPendingWidgetCleanups, readExtensionAppearance, readExtensionWidgets, removeExtensionWidgetFlow, saveExtensionAppearance, saveExtensionWidgets } from '@/runtime/extensionAppearance'
 import { BOOTSTRAP_SNAPSHOT_KEY_PREFIX, readBootstrapSnapshot, refreshBootstrapSnapshot } from '@/sync/bootstrapCache'
 import { onSyncConflict, setSyncRevision } from '@/sync/revision'
 import { replayOfflineQueue } from '@/sync/offlineReplay'
@@ -30,6 +34,7 @@ import { getWeather } from '@/api/weather'
 import type { WeatherResponse } from '@/api/weather'
 import { getTrending } from '@/api/trending'
 import type { TrendingItem, TrendingSource } from '@/api/trending'
+import { VueDraggable } from 'vue-draggable-plus'
 import defaultBackground from '@/assets/defaultBackground.webp'
 
 import SvgSrcBaidu from '@/assets/search_engine_svg/baidu.svg'
@@ -42,6 +47,7 @@ const GallerySelector = defineAsyncComponent(() => import('@/components/common/G
 
 const router = useRouter()
 const ms = useMessage()
+const dialog = useDialog()
 const panelState = usePanelState()
 const authStore = useAuthStore()
 const userStore = useUserStore()
@@ -94,14 +100,251 @@ async function triggerOfflineReplay() {
 const showWallpaperModal = ref(false)
 const showWidgetManager = ref(false)
 const widgetPreferences = ref(readExtensionWidgets())
+const extensionWidgetInstances = ref<WidgetInstance[]>([])
+const extensionQuarantinedWidgets = ref<unknown[]>([])
+const extensionWidgetSettingsVisible = ref(false)
+const extensionWidgetSettingsInstance = ref<WidgetInstance | null>(null)
+const isRemovingWidget = ref(false)
+const isWidgetLayoutDirty = ref(false)
+let saveTimer: ReturnType<typeof setTimeout> | null = null
 
-watch(widgetPreferences, value => saveExtensionWidgets(value), { deep: true })
+async function persistExtensionWidgets(): Promise<boolean> {
+  if (saveTimer) {
+    clearTimeout(saveTimer)
+    saveTimer = null
+  }
+  try {
+    const layout = serializeWidgetLayout(extensionWidgetInstances.value, extensionQuarantinedWidgets.value)
+    widgetPreferences.value.contentLayout = layout
+    const success = await saveExtensionWidgets(widgetPreferences.value)
+    if (success) {
+      isWidgetLayoutDirty.value = false
+      return true
+    }
+    return false
+  }
+  catch (error) {
+    isWidgetLayoutDirty.value = true
+    console.error('Failed to persist extension widget layout.', error)
+    ms.error(t('widgetLayout.saveFail'))
+    return false
+  }
+}
 
-function handleWallpaperSelect(url: string) {
+function scheduleSaveExtensionWidgets(delay = 300) {
+  isWidgetLayoutDirty.value = true
+  if (saveTimer)
+    clearTimeout(saveTimer)
+  saveTimer = setTimeout(() => {
+    void persistExtensionWidgets()
+  }, delay)
+}
+
+function onExtensionWidgetDragEnd() {
+  isWidgetLayoutDirty.value = true
+  void persistExtensionWidgets()
+}
+
+function flushPendingLayoutIfDirty() {
+  if (isWidgetLayoutDirty.value) {
+    if (saveTimer) {
+      clearTimeout(saveTimer)
+      saveTimer = null
+    }
+    void persistExtensionWidgets()
+  }
+}
+
+function loadExtensionWidgetLayout(layout: unknown) {
+  try {
+    const result = widgetRegistry.loadLayout(layout)
+    extensionWidgetInstances.value = result.layout.widgets
+    extensionQuarantinedWidgets.value = result.quarantinedWidgets
+    if (result.issues.length)
+      console.warn('Quarantined incompatible extension widgets.', result.issues)
+  }
+  catch (error) {
+    extensionWidgetInstances.value = []
+    extensionQuarantinedWidgets.value = []
+    console.warn('Invalid extension widget layout was ignored.', error)
+  }
+}
+
+loadExtensionWidgetLayout(widgetPreferences.value.contentLayout)
+
+// 防抖保存实例拖拽/缩放/隐藏/设置修改
+watch(extensionWidgetInstances, () => {
+  if (!isRemovingWidget.value) {
+    scheduleSaveExtensionWidgets(300)
+  }
+}, { deep: true })
+
+// 监听固定组件偏好开关
+watch([
+  () => widgetPreferences.value.clock,
+  () => widgetPreferences.value.search,
+  () => widgetPreferences.value.weather,
+  () => widgetPreferences.value.trending,
+], () => {
+  scheduleSaveExtensionWidgets(150)
+})
+
+const fixedExtensionWidgetTypes = new Set(['core.clock', 'core.search', 'core.weather', 'core.trending'])
+const extensionWidgetAddOptions = computed(() => widgetRegistry.list()
+  .filter(definition => (!definition.surfaces || definition.surfaces.includes('extension')) && !fixedExtensionWidgetTypes.has(definition.type))
+  .map(definition => ({ label: widgetDefinitionTitle(definition), key: definition.type })))
+
+function widgetDefinitionTitle(definition: { type: string, meta?: { title?: string } }) {
+  const metaTitle = definition.meta?.title
+  if (metaTitle) {
+    const res = t(metaTitle)
+    if (res && res !== metaTitle)
+      return res
+    return metaTitle
+  }
+  const typeKey = `widgetLayout.types.${definition.type}`
+  const typeRes = t(typeKey)
+  if (typeRes && typeRes !== typeKey)
+    return typeRes
+  return definition.type
+}
+
+function addExtensionWidget(type: string | number) {
+  try {
+    extensionWidgetInstances.value.push(widgetRegistry.create(String(type), generateWidgetInstanceId(String(type)), { column: 0, row: extensionWidgetInstances.value.length }))
+    isWidgetLayoutDirty.value = true
+    void persistExtensionWidgets()
+  }
+  catch (error) {
+    ms.error(error instanceof Error ? error.message : '添加组件失败')
+  }
+}
+
+function openExtensionWidgetSettings(instance: WidgetInstance) {
+  extensionWidgetSettingsInstance.value = instance
+  extensionWidgetSettingsVisible.value = true
+}
+
+function applyExtensionWidgetSettings(updated: WidgetInstance) {
+  const index = extensionWidgetInstances.value.findIndex(instance => instance.id === updated.id)
+  if (index >= 0) {
+    extensionWidgetInstances.value[index] = updated
+    isWidgetLayoutDirty.value = true
+    void persistExtensionWidgets()
+  }
+}
+
+const extensionWidgetEditMode = ref(false)
+watch(extensionWidgetEditMode, (isEditing) => {
+  if (!isEditing) {
+    flushPendingLayoutIfDirty()
+  }
+})
+
+function resizeExtensionWidget(instance: WidgetInstance, axis: 'columns' | 'rows', delta: number) {
+  resizeInstanceWithinBounds(instance, axis, delta)
+  isWidgetLayoutDirty.value = true
+  void persistExtensionWidgets()
+}
+
+function toggleExtensionWidgetHidden(instance: WidgetInstance) {
+  instance.hidden = !instance.hidden
+  isWidgetLayoutDirty.value = true
+  void persistExtensionWidgets()
+}
+
+function hasExtensionWidgetSettings(instance: WidgetInstance) {
+  return Boolean(Object.keys(widgetRegistry.get(instance.type)?.configSchema.fields ?? {}).length)
+}
+
+function confirmRemoveExtensionWidget(index: number) {
+  if (isRemovingWidget.value || index < 0 || index >= extensionWidgetInstances.value.length)
+    return
+  const target = extensionWidgetInstances.value[index]
+  if (!target)
+    return
+  const targetTitle = widgetDefinitionTitle(widgetRegistry.get(target.type) ?? { type: target.type })
+  dialog.warning({
+    title: t('widgetLayout.removeConfirmTitle'),
+    content: `${t('widgetLayout.removeConfirm')} (${targetTitle})`,
+    positiveText: t('common.confirm') || '确定',
+    negativeText: t('common.cancel') || '取消',
+    onPositiveClick: async () => {
+      await executeRemoveExtensionWidget(target.id)
+    },
+  })
+}
+
+async function executeRemoveExtensionWidget(instanceId: string) {
+  if (isRemovingWidget.value)
+    return
+  isRemovingWidget.value = true
+  if (saveTimer) {
+    clearTimeout(saveTimer)
+    saveTimer = null
+  }
+
+  try {
+    const result = await removeExtensionWidgetFlow(
+      extensionWidgetInstances.value,
+      instanceId,
+      extensionQuarantinedWidgets.value,
+      widgetPreferences.value,
+    )
+
+    if (!result.success) {
+      // 布局保存失败：恢复 UI
+      extensionWidgetInstances.value = result.updatedInstances
+      ms.error(t('widgetLayout.saveFail'))
+      return
+    }
+
+    // 布局保存成功：更新组件状态
+    extensionWidgetInstances.value = result.updatedInstances
+    widgetPreferences.value.contentLayout = serializeWidgetLayout(
+      result.updatedInstances,
+      extensionQuarantinedWidgets.value,
+    )
+
+    if (result.storageCleanupFailed) {
+      ms.warning(t('widgetLayout.storageCleanupFail'))
+    }
+    else {
+      ms.success(t('widgetLayout.removeSuccess'))
+    }
+  }
+  catch (error) {
+    console.error('Failed to execute remove widget flow.', error)
+    ms.error(t('widgetLayout.saveFail'))
+  }
+  finally {
+    isRemovingWidget.value = false
+  }
+}
+
+function extensionWidgetCellStyle(instance: WidgetInstance) {
+  return {
+    gridColumn: `span ${Math.min(12, Math.max(1, instance.size.columns))}`,
+    gridRow: `span ${Math.max(1, instance.size.rows)}`,
+  }
+}
+
+async function handleWallpaperSelect(url: string) {
+  const previousBg = panelState.panelConfig.backgroundImageSrc
   panelState.panelConfig.backgroundImageSrc = url
-  saveExtensionAppearance(panelState.panelConfig)
-  showWallpaperModal.value = false
-  ms.success('已切换背景壁纸')
+  try {
+    await saveExtensionAppearance(panelState.panelConfig)
+    showWallpaperModal.value = false
+    ms.success('已切换背景壁纸')
+  }
+  catch (error) {
+    // Do not overwrite a newer appearance change that happened while this
+    // save was awaiting extension storage.
+    if (panelState.panelConfig.backgroundImageSrc === url)
+      panelState.panelConfig.backgroundImageSrc = previousBg
+    ms.error('保存壁纸设置失败，请重试')
+    console.error('Failed to save wallpaper preference:', error)
+  }
 }
 
 // 1. 时钟与日期
@@ -300,7 +543,9 @@ function applyBootstrapData(data: Sync.BootstrapResponseV1) {
     // Use the cloud appearance only as a first-run starting point, then fork it
     // locally so later extension changes cannot overwrite the web appearance.
     panelState.applyPanelConfig(dashboard.panelConfig)
-    saveExtensionAppearance(panelState.panelConfig)
+    void saveExtensionAppearance(panelState.panelConfig).catch((error) => {
+      console.error('Failed to initialize extension appearance.', error)
+    })
   }
   authStore.setUserInfo(dashboard.account)
   authStore.setVisitMode(VisitMode.VISIT_MODE_LOGIN)
@@ -613,6 +858,7 @@ function handleBrowserOffline() {
 }
 
 async function handleBrowserOnline() {
+  await processPendingWidgetCleanups()
   await triggerOfflineReplay()
   await refreshBootstrap()
 }
@@ -629,6 +875,8 @@ function applyExternalStorageChanges() {
   }
   if (keys.includes(EXTENSION_WIDGETS_KEY))
     widgetPreferences.value = readExtensionWidgets()
+  if (keys.includes(EXTENSION_WIDGETS_KEY))
+    loadExtensionWidgetLayout(widgetPreferences.value.contentLayout)
   if (keys.includes('panelStorage')) {
     const localPanelState = getLocalPanelState()
     panelState.$patch({
@@ -679,7 +927,10 @@ onMounted(async () => {
   window.addEventListener('wheel', handleGroupWheel, { passive: false })
   window.addEventListener('online', handleBrowserOnline)
   window.addEventListener('offline', handleBrowserOffline)
+  window.addEventListener('pagehide', flushPendingLayoutIfDirty)
+  window.addEventListener('beforeunload', flushPendingLayoutIfDirty)
 
+  void processPendingWidgetCleanups()
   await refreshBootstrap()
   if (isDisposed) return
   await triggerOfflineReplay()
@@ -691,6 +942,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   isDisposed = true
+  flushPendingLayoutIfDirty()
   if (clockTimer) clearInterval(clockTimer)
   if (trendingTimer) clearInterval(trendingTimer)
   if (wheelHintTimer) clearTimeout(wheelHintTimer)
@@ -702,6 +954,8 @@ onUnmounted(() => {
   window.removeEventListener('wheel', handleGroupWheel)
   window.removeEventListener('online', handleBrowserOnline)
   window.removeEventListener('offline', handleBrowserOffline)
+  window.removeEventListener('pagehide', flushPendingLayoutIfDirty)
+  window.removeEventListener('beforeunload', flushPendingLayoutIfDirty)
 })
 </script>
 
@@ -735,7 +989,7 @@ onUnmounted(() => {
       <button type="button" class="rail-button" title="壁纸设置" @click="showWallpaperModal = true">
         <SvgIcon icon="material-symbols:wallpaper" />
       </button>
-      <button type="button" class="rail-button" title="添加和管理小组件" @click="showWidgetManager = true">
+      <button type="button" class="rail-button" :title="t('widgetLayout.manager.title')" @click="showWidgetManager = true">
         <SvgIcon icon="material-symbols:widgets-outline-rounded" />
       </button>
       <button
@@ -822,7 +1076,7 @@ onUnmounted(() => {
       </div>
       <div class="quick-actions">
         <button type="button" class="quick-action-wide" @click="showWidgetManager = true">
-          <SvgIcon icon="material-symbols:add-box-outline-rounded" />添加小组件
+          <SvgIcon icon="material-symbols:add-box-outline-rounded" />{{ t('widgetLayout.add') }}
         </button>
         <button type="button" @click="toggleNetworkMode">
           <SvgIcon :icon="panelState.networkMode === PanelStateNetworkModeEnum.lan ? 'material-symbols:lan-outline-rounded' : 'mdi:wan'" />
@@ -1019,6 +1273,139 @@ onUnmounted(() => {
         </div>
       </section>
 
+      <section
+        v-if="extensionWidgetInstances.length || extensionWidgetEditMode"
+        class="extension-widget-grid w-full max-w-[1280px] mb-8"
+        :class="{ 'is-editing': extensionWidgetEditMode }"
+      >
+        <div class="extension-widget-toolbar">
+          <div class="flex items-center gap-2">
+            <NDropdown v-if="extensionWidgetEditMode" trigger="click" :options="extensionWidgetAddOptions" @select="addExtensionWidget">
+              <button
+                type="button"
+                class="modal-secondary-action flex items-center gap-1"
+                :title="t('widgetLayout.add')"
+                :aria-label="t('widgetLayout.add')"
+              >
+                <SvgIcon icon="material-symbols:add-rounded" class="w-4 h-4" />
+                <span>{{ t('widgetLayout.add') }}</span>
+              </button>
+            </NDropdown>
+            <button
+              type="button"
+              class="modal-secondary-action flex items-center gap-1"
+              :title="extensionWidgetEditMode ? t('widgetLayout.done') : t('widgetLayout.edit')"
+              :aria-label="extensionWidgetEditMode ? t('widgetLayout.done') : t('widgetLayout.edit')"
+              @click="extensionWidgetEditMode = !extensionWidgetEditMode"
+            >
+              <SvgIcon :icon="extensionWidgetEditMode ? 'material-symbols:check-rounded' : 'material-symbols:dashboard-customize-outline-rounded'" class="w-4 h-4" />
+              <span>{{ extensionWidgetEditMode ? t('widgetLayout.done') : t('widgetLayout.edit') }}</span>
+            </button>
+          </div>
+        </div>
+
+        <div v-if="!extensionWidgetInstances.length && extensionWidgetEditMode" class="extension-widget-empty col-span-full flex flex-col items-center justify-center p-8 border border-dashed border-cyan-500/30 rounded-2xl bg-slate-900/60 text-cyan-200">
+          <SvgIcon icon="material-symbols:widgets-outline-rounded" class="w-10 h-10 mb-2 opacity-60" />
+          <p class="text-sm font-semibold mb-1">
+            {{ t('widgetLayout.empty') }}
+          </p>
+          <p class="text-xs opacity-70 mb-4">
+            {{ t('widgetLayout.emptyTip') }}
+          </p>
+          <NDropdown trigger="click" :options="extensionWidgetAddOptions" @select="addExtensionWidget">
+            <button type="button" class="modal-primary-action flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs">
+              <SvgIcon icon="material-symbols:add-rounded" class="w-4 h-4" />
+              <span>{{ t('widgetLayout.add') }}</span>
+            </button>
+          </NDropdown>
+        </div>
+
+        <VueDraggable
+          v-else
+          v-model="extensionWidgetInstances"
+          class="extension-widget-track"
+          handle=".extension-widget-handle"
+          :disabled="!extensionWidgetEditMode"
+          :animation="150"
+          @end="onExtensionWidgetDragEnd"
+        >
+          <div
+            v-for="instance in extensionWidgetInstances"
+            :key="instance.id"
+            class="extension-widget-cell"
+            :class="{ 'is-widget-hidden': instance.hidden }"
+            :style="extensionWidgetCellStyle(instance)"
+          >
+            <div v-if="extensionWidgetEditMode" class="extension-widget-editor">
+              <span class="extension-widget-handle" :title="t('widgetLayout.drag')" :aria-label="t('widgetLayout.drag')">
+                <SvgIcon icon="material-symbols:drag-indicator" class="w-4 h-4" />
+              </span>
+              <span class="extension-widget-name">{{ widgetDefinitionTitle(widgetRegistry.get(instance.type) ?? { type: instance.type }) }}</span>
+              <span class="extension-widget-actions">
+                <button
+                  type="button"
+                  :title="t('widgetLayout.narrow')"
+                  :aria-label="t('widgetLayout.narrow')"
+                  @click="resizeExtensionWidget(instance, 'columns', -1)"
+                >
+                  <SvgIcon icon="material-symbols:chevron-left-rounded" class="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  :title="t('widgetLayout.widen')"
+                  :aria-label="t('widgetLayout.widen')"
+                  @click="resizeExtensionWidget(instance, 'columns', 1)"
+                >
+                  <SvgIcon icon="material-symbols:chevron-right-rounded" class="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  :title="t('widgetLayout.shrink')"
+                  :aria-label="t('widgetLayout.shrink')"
+                  @click="resizeExtensionWidget(instance, 'rows', -1)"
+                >
+                  <SvgIcon icon="material-symbols:keyboard-arrow-up-rounded" class="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  :title="t('widgetLayout.stretch')"
+                  :aria-label="t('widgetLayout.stretch')"
+                  @click="resizeExtensionWidget(instance, 'rows', 1)"
+                >
+                  <SvgIcon icon="material-symbols:keyboard-arrow-down-rounded" class="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  :title="instance.hidden ? t('widgetLayout.show') : t('widgetLayout.hide')"
+                  :aria-label="instance.hidden ? t('widgetLayout.show') : t('widgetLayout.hide')"
+                  @click="toggleExtensionWidgetHidden(instance)"
+                >
+                  <SvgIcon :icon="instance.hidden ? 'material-symbols:visibility-off-outline-rounded' : 'material-symbols:visibility-outline-rounded'" class="w-3.5 h-3.5" />
+                </button>
+                <button
+                  v-if="hasExtensionWidgetSettings(instance)"
+                  type="button"
+                  :title="t('widgetLayout.configure')"
+                  :aria-label="t('widgetLayout.configure')"
+                  @click="openExtensionWidgetSettings(instance)"
+                >
+                  <SvgIcon icon="material-symbols:settings-outline-rounded" class="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  :title="t('widgetLayout.remove')"
+                  :aria-label="t('widgetLayout.remove')"
+                  @click="confirmRemoveExtensionWidget(extensionWidgetInstances.indexOf(instance))"
+                >
+                  <SvgIcon icon="material-symbols:close-rounded" class="w-3.5 h-3.5" />
+                </button>
+              </span>
+            </div>
+            <WidgetHost :instance="instance" :edit-mode="extensionWidgetEditMode" />
+          </div>
+        </VueDraggable>
+      </section>
+
       <!-- 现代应用网格 (Speed Dial Grid) -->
       <section class="cards-grid-section w-full max-w-[1280px]">
         <div class="active-group-meta">
@@ -1104,33 +1491,59 @@ onUnmounted(() => {
     <NModal
       v-model:show="showWidgetManager"
       preset="card"
-      title="添加和管理小组件"
+      :title="t('widgetLayout.manager.title')"
       class="widget-manager-modal extension-surface-modal"
       style="width: min(520px, calc(100vw - 24px)); border-radius: 20px; background: rgba(15, 23, 42, 0.98); border: 1px solid rgba(148, 163, 184, 0.18); box-shadow: 0 24px 80px rgba(2, 6, 23, 0.58);"
     >
       <div class="widget-manager-content">
-        <p>选择要显示在扩展新标签页上的组件，设置只保存在扩展端。</p>
+        <p>{{ t('widgetLayout.manager.desc') }}</p>
         <label class="widget-choice">
-          <span><SvgIcon icon="material-symbols:schedule-outline-rounded" /><b>时钟与日期</b><small>页面中央的大号时间</small></span>
+          <span><SvgIcon icon="material-symbols:schedule-outline-rounded" /><b>{{ t('widgetLayout.manager.clockTitle') }}</b><small>{{ t('widgetLayout.manager.clockDesc') }}</small></span>
           <NSwitch v-model:value="widgetPreferences.clock" />
         </label>
         <label class="widget-choice">
-          <span><SvgIcon icon="material-symbols:search-rounded" /><b>搜索框</b><small>书签与全网搜索</small></span>
+          <span><SvgIcon icon="material-symbols:search-rounded" /><b>{{ t('widgetLayout.manager.searchTitle') }}</b><small>{{ t('widgetLayout.manager.searchDesc') }}</small></span>
           <NSwitch v-model:value="widgetPreferences.search" />
         </label>
         <label class="widget-choice">
-          <span><SvgIcon icon="material-symbols:partly-cloudy-day-outline" /><b>天气</b><small>右上角实时天气</small></span>
+          <span><SvgIcon icon="material-symbols:partly-cloudy-day-outline" /><b>{{ t('widgetLayout.manager.weatherTitle') }}</b><small>{{ t('widgetLayout.manager.weatherDesc') }}</small></span>
           <NSwitch v-model:value="widgetPreferences.weather" />
         </label>
         <label class="widget-choice">
-          <span><SvgIcon icon="material-symbols:local-fire-department-outline-rounded" /><b>热搜</b><small>右上角滚动热榜</small></span>
+          <span><SvgIcon icon="material-symbols:local-fire-department-outline-rounded" /><b>{{ t('widgetLayout.manager.trendingTitle') }}</b><small>{{ t('widgetLayout.manager.trendingDesc') }}</small></span>
           <NSwitch v-model:value="widgetPreferences.trending" />
         </label>
+        <div class="extension-widget-library">
+          <div class="extension-widget-library-head">
+            <div><b>{{ t('widgetLayout.manager.contentWidgetsTitle') }}</b><small>{{ t('widgetLayout.manager.contentWidgetsDesc') }}</small></div>
+            <NDropdown trigger="click" :options="extensionWidgetAddOptions" @select="addExtensionWidget">
+              <button type="button" class="modal-secondary-action">
+                {{ t('widgetLayout.add') }}
+              </button>
+            </NDropdown>
+          </div>
+          <div v-if="extensionWidgetInstances.length" class="extension-widget-list">
+            <div v-for="(instance, index) in extensionWidgetInstances" :key="instance.id" class="extension-widget-list-item">
+              <span>{{ widgetDefinitionTitle(widgetRegistry.get(instance.type) ?? { type: instance.type }) }}</span>
+              <div>
+                <button v-if="Object.keys(widgetRegistry.get(instance.type)?.configSchema.fields ?? {}).length" type="button" @click="openExtensionWidgetSettings(instance)">
+                  {{ t('widgetLayout.configure') }}
+                </button>
+                <button type="button" @click="confirmRemoveExtensionWidget(index)">
+                  {{ t('widgetLayout.remove') }}
+                </button>
+              </div>
+            </div>
+          </div>
+          <small v-else>{{ t('widgetLayout.empty') }}</small>
+        </div>
         <button type="button" class="modal-primary-action" @click="showWidgetManager = false">
-          完成
+          {{ t('widgetLayout.done') }}
         </button>
       </div>
     </NModal>
+
+    <WidgetSettingsModal v-model:show="extensionWidgetSettingsVisible" :instance="extensionWidgetSettingsInstance" @save="applyExtensionWidgetSettings" />
 
     <!-- 壁纸库 / Wallhaven 选择弹窗 -->
     <NModal
@@ -1510,6 +1923,59 @@ onUnmounted(() => {
   box-shadow: 0 0 0 3px rgba(34, 211, 238, .18);
 }
 
+.extension-widget-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-auto-flow: dense;
+  grid-auto-rows: minmax(72px, auto);
+  gap: 14px;
+  padding: 8px;
+}
+.extension-widget-cell { min-width: 0; min-height: 0; }
+.extension-widget-cell.is-widget-hidden { display: none; }
+.extension-widget-grid.is-editing .is-widget-hidden { display: block; opacity: 0.4; }
+.extension-widget-toolbar { display: flex; justify-content: flex-end; grid-column: 1 / -1; }
+.extension-widget-track { display: contents; }
+.extension-widget-editor { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; padding: 5px 8px; border: 1px dashed rgba(103,232,249,.35); border-radius: 10px; background: rgba(15,23,42,.78); font-size: 11px; color: #a5f3fc; cursor: default; }
+.extension-widget-handle { cursor: grab; padding: 0 2px; font-size: 13px; color: #67e8f9; user-select: none; display: inline-flex; align-items: center; justify-content: center; }
+.extension-widget-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+.extension-widget-actions { display: flex; align-items: center; gap: 4px; }
+.extension-widget-actions button {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(103,232,249,.28);
+  border-radius: 7px;
+  background: rgba(15,23,42,.85);
+  color: #a5f3fc;
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease;
+  touch-action: manipulation;
+}
+.extension-widget-actions button:hover { border-color: rgba(103,232,249,.6); background: rgba(30,41,59,.95); }
+.extension-widget-actions button:focus-visible,
+.extension-widget-list-item button:focus-visible,
+.modal-secondary-action:focus-visible,
+.modal-primary-action:focus-visible {
+  outline: 2px solid #67e8f9;
+  outline-offset: 2px;
+}
+
+@media (pointer: coarse), (max-width: 720px) {
+  .extension-widget-grid { grid-template-columns: 1fr; }
+  .extension-widget-cell { grid-column: 1 / -1 !important; }
+  .extension-widget-actions { flex-wrap: wrap; }
+  .extension-widget-actions button { min-width: 44px; height: 44px; padding: 0 8px; }
+  .extension-widget-editor { min-height: 48px; padding: 6px 10px; }
+  .extension-widget-handle { min-width: 32px; min-height: 32px; }
+  .modal-secondary-action { min-height: 44px; padding: 10px 14px; }
+  .extension-widget-list-item button { min-height: 44px; min-width: 44px; padding: 10px 12px; }
+}
+
 .widget-manager-content { display: flex; flex-direction: column; gap: 10px; color: #e2e8f0; }
 .widget-manager-content > p { margin: 0 0 4px; color: #94a3b8; font-size: 12px; }
 .widget-choice { padding: 13px 14px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border: 1px solid rgba(255,255,255,.1); border-radius: 14px; background: rgba(15,23,42,.72); cursor: pointer; transition: border-color .2s ease, background .2s ease, transform .2s ease; }
@@ -1518,6 +1984,18 @@ onUnmounted(() => {
 .widget-choice svg { grid-row: 1 / 3; color: #67e8f9; font-size: 18px; }
 .widget-choice b { font-size: 13px; }
 .widget-choice small { color: #64748b; font-size: 10px; }
+.extension-widget-library { display: flex; flex-direction: column; gap: 9px; margin-top: 2px; padding: 13px 14px; border: 1px solid rgba(255,255,255,.1); border-radius: 14px; background: rgba(15,23,42,.72); }
+.extension-widget-library > small { color: #64748b; font-size: 11px; }
+.extension-widget-library-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.extension-widget-library-head > div { display: flex; min-width: 0; flex-direction: column; }
+.extension-widget-library-head b { font-size: 13px; }
+.extension-widget-library-head small { color: #64748b; font-size: 10px; }
+.extension-widget-list { display: flex; flex-direction: column; gap: 6px; }
+.extension-widget-list-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px; border-radius: 10px; background: rgba(30,41,59,.8); font-size: 12px; }
+.extension-widget-list-item > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.extension-widget-list-item > div { display: flex; flex: none; gap: 5px; }
+.extension-widget-list-item button,.modal-secondary-action { padding: 5px 9px; border: 1px solid rgba(103,232,249,.24); border-radius: 8px; background: rgba(15,23,42,.7); color: #a5f3fc; font-size: 11px; cursor: pointer; transition: border-color .2s ease, background .2s ease; }
+.extension-widget-list-item button:hover,.modal-secondary-action:hover { border-color: rgba(103,232,249,.58); background: rgba(30,41,59,.96); }
 .modal-primary-action { align-self: flex-end; min-width: 84px; padding: 9px 18px; border: 1px solid rgba(52, 211, 153, .42); border-radius: 12px; background: linear-gradient(135deg, #10b981, #059669); color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; box-shadow: 0 8px 24px rgba(5, 150, 105, .24); transition: transform .2s ease, filter .2s ease, box-shadow .2s ease; }
 .modal-primary-action:hover { filter: brightness(1.08); transform: translateY(-1px); box-shadow: 0 12px 30px rgba(5, 150, 105, .32); }
 .modal-primary-action:focus-visible { outline: 3px solid rgba(110, 231, 183, .38); outline-offset: 2px; }
@@ -1525,6 +2003,7 @@ onUnmounted(() => {
 :global(.extension-surface-modal .n-card-header) { padding: 17px 20px; border-bottom: 1px solid rgba(148, 163, 184, .14); color: #f8fafc; }
 :global(.extension-surface-modal .n-card__content) { color: #e2e8f0; }
 :global(.wallpaper-manager-modal .n-card__content) { height: calc(100% - 59px); padding: 0; overflow: hidden; }
+
 
 .card-icon-box {
   width: 58px;

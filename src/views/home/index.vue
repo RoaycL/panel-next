@@ -27,7 +27,7 @@ import type { ConflictDescriptor, ConflictResolutionChoice } from '@/sync/confli
 import type { DashboardGroup } from '@/dashboard/core'
 import { createDashboardState, createItemSortRequest, filterDashboardGroups, normalizeDashboardGroups, selectItemUrl } from '@/dashboard/core'
 import type { WidgetInstance } from '@/widgets'
-import { WidgetHost, createHeaderClockWidget, createHeaderSearchWidget, createHeaderWeatherWidget, createTrendingWidget, createCountdownWidget, generateWidgetInstanceId, serializeWidgetLayout, widgetRegistry } from '@/widgets'
+import { WidgetHost, WidgetSettingsModal, clearWidgetStorage, createHeaderClockWidget, createHeaderSearchWidget, createHeaderWeatherWidget, createTrendingWidget, createCountdownWidget, generateWidgetInstanceId, serializeWidgetLayout, widgetRegistry } from '@/widgets'
 
 withDefaults(defineProps<{
   layout?: 'web' | 'extension'
@@ -146,21 +146,35 @@ const widgetInstances = ref<WidgetInstance[]>([])
 const widgetEditMode = ref(false)
 const widgetLayoutDirty = ref(false)
 const widgetLayoutSaving = ref(false)
+const quarantinedWidgets = ref<unknown[]>([])
+const widgetLayoutLoadError = ref(false)
+const pendingWidgetStorageCleanup = new Set<string>()
+const widgetSettingsVisible = ref(false)
+const widgetSettingsInstance = ref<WidgetInstance | null>(null)
 
 function createDefaultWidgetInstances(): WidgetInstance[] {
   return [createTrendingWidget(), createCountdownWidget(t('countdown.newYearDay'), '2027-01-01', 'yearly')]
 }
 
 function buildWidgetInstances(stored: unknown): WidgetInstance[] {
-  if (!stored)
+  if (!stored) {
+    quarantinedWidgets.value = []
+    widgetLayoutLoadError.value = false
     return createDefaultWidgetInstances()
+  }
   try {
     const result = widgetRegistry.loadLayout(stored)
+    quarantinedWidgets.value = result.quarantinedWidgets
+    widgetLayoutLoadError.value = false
     if (result.droppedWidgetIds.length)
       console.warn('Dropped invalid widget instances.', result.droppedWidgetIds)
+    if (result.issues.length)
+      console.warn('Quarantined incompatible widget instances.', result.issues)
     return result.layout.widgets
   }
-  catch {
+  catch (error) {
+    widgetLayoutLoadError.value = true
+    console.warn('Unable to load this widget layout without data loss.', error)
     return createDefaultWidgetInstances()
   }
 }
@@ -174,16 +188,27 @@ watch(() => panelState.panelConfig.widgets, (stored) => {
 
 const visibleWidgetInstances = computed(() => widgetInstances.value.filter(instance => !instance.hidden))
 
-const widgetAddOptions = computed(() => widgetRegistry.list().map(definition => ({
+const widgetAddOptions = computed(() => widgetRegistry.list()
+  .filter(definition => !definition.surfaces || definition.surfaces.includes(runtime.kind))
+  .map(definition => ({
   label: widgetDefinitionTitle(definition),
   key: definition.type,
 })))
 
 // 标准化接口：优先读取组件自描述 meta.title（i18n key 或字面文案），回退到内置语言包
 function widgetDefinitionTitle(definition: { type: string, meta?: { title?: string } }) {
-  if (definition.meta?.title)
-    return t(definition.meta.title)
-  return t(`widgetLayout.types.${definition.type}`)
+  const metaTitle = definition.meta?.title
+  if (metaTitle) {
+    const res = t(metaTitle)
+    if (res && res !== metaTitle)
+      return res
+    return metaTitle
+  }
+  const typeKey = `widgetLayout.types.${definition.type}`
+  const typeRes = t(typeKey)
+  if (typeRes && typeRes !== typeKey)
+    return typeRes
+  return definition.type
 }
 
 function widgetTypeLabel(type: string) {
@@ -223,8 +248,28 @@ function toggleWidgetHidden(instance: WidgetInstance) {
 }
 
 function removeWidgetInstance(index: number) {
+  const instance = widgetInstances.value[index]
+  if (instance)
+    pendingWidgetStorageCleanup.add(instance.id)
   widgetInstances.value.splice(index, 1)
   widgetLayoutDirty.value = true
+}
+
+function hasWidgetSettings(instance: WidgetInstance) {
+  return Boolean(Object.keys(widgetRegistry.get(instance.type)?.configSchema.fields ?? {}).length)
+}
+
+function openWidgetSettings(instance: WidgetInstance) {
+  widgetSettingsInstance.value = instance
+  widgetSettingsVisible.value = true
+}
+
+function applyWidgetSettings(updated: WidgetInstance) {
+  const index = widgetInstances.value.findIndex(instance => instance.id === updated.id)
+  if (index >= 0) {
+    widgetInstances.value[index] = updated
+    widgetLayoutDirty.value = true
+  }
 }
 
 function handleWidgetAdd(type: string | number) {
@@ -239,6 +284,10 @@ function handleWidgetAdd(type: string | number) {
 }
 
 function enterWidgetLayoutEdit() {
+  if (widgetLayoutLoadError.value) {
+    ms.warning('当前布局来自更高版本，已阻止编辑以避免覆盖未知组件数据')
+    return
+  }
   widgetEditMode.value = true
   widgetLayoutDirty.value = false
 }
@@ -247,6 +296,7 @@ function cancelWidgetLayoutEdit() {
   widgetInstances.value = buildWidgetInstances(panelState.panelConfig.widgets)
   widgetLayoutDirty.value = false
   widgetEditMode.value = false
+  pendingWidgetStorageCleanup.clear()
 }
 
 async function saveWidgetLayout() {
@@ -254,12 +304,16 @@ async function saveWidgetLayout() {
     return
   widgetLayoutSaving.value = true
   try {
-    panelState.panelConfig.widgets = serializeWidgetLayout(widgetInstances.value)
+    panelState.panelConfig.widgets = serializeWidgetLayout(widgetInstances.value, quarantinedWidgets.value)
     panelState.recordState()
-    const { code, msg } = await setUserConfig({ panel: panelState.panelConfig })
+    const { code, msg, queued } = await setUserConfig({ panel: panelState.panelConfig })
     if (code === 0) {
       widgetLayoutDirty.value = false
       widgetEditMode.value = false
+      // 离线排队时远端尚未确认删除，保留组件私有数据可避免冲突恢复后丢失。
+      if (!queued)
+        await Promise.all([...pendingWidgetStorageCleanup].map(id => clearWidgetStorage(id)))
+      pendingWidgetStorageCleanup.clear()
       ms.success(t('widgetLayout.saveSuccess'))
     }
     else {
@@ -795,11 +849,14 @@ function handleAddItem(itemIconGroupId?: number) {
                   <button type="button" class="widget-edit-action" :title="t('widgetLayout.hide')" @click="toggleWidgetHidden(instance)">
                     {{ '🚫' }}
                   </button>
+                  <button v-if="hasWidgetSettings(instance)" type="button" class="widget-edit-action" title="配置" @click="openWidgetSettings(instance)">
+                    {{ '⚙' }}
+                  </button>
                   <button type="button" class="widget-edit-action" :title="t('widgetLayout.remove')" @click="removeWidgetInstance(index)">
                     {{ '✕' }}
                   </button>
                 </div>
-                <WidgetHost :instance="instance" @item-search="itemFrontEndSearch" />
+                <WidgetHost :instance="instance" :edit-mode="true" @item-search="itemFrontEndSearch" />
               </div>
             </div>
           </VueDraggable>
@@ -1005,6 +1062,7 @@ function handleAddItem(itemIconGroupId?: number) {
     </NBackTop>
 
     <EditItem v-if="editItemInfoShow" v-model:visible="editItemInfoShow" :item-info="editItemInfoData" :item-group-id="currentAddItenIconGroupId" @done="handleEditSuccess" />
+    <WidgetSettingsModal v-model:show="widgetSettingsVisible" :instance="widgetSettingsInstance" @save="applyWidgetSettings" />
 
     <!-- 弹窗 -->
     <NModal

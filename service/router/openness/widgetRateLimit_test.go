@@ -93,3 +93,22 @@ func TestWidgetRateLimitKeysByClientIP(t *testing.T) {
 		t.Fatalf("unrelated client was limited with %d", other.Code)
 	}
 }
+
+func TestWidgetRateLimitSeparatesEndpoints(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	limiter := ratelimit.NewFixedWindow(1, time.Minute)
+	router := gin.New()
+	router.Use(WidgetRateLimit(limiter))
+	router.GET("/weather", func(c *gin.Context) { c.Status(http.StatusOK) })
+	router.GET("/trending", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+	for _, path := range []string{"/weather", "/trending"} {
+		request := httptest.NewRequest(http.MethodGet, path, nil)
+		request.RemoteAddr = "192.0.2.40:1234"
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("%s unexpectedly shared another endpoint's rate limit: %d", path, response.Code)
+		}
+	}
+}

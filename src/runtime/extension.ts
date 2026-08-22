@@ -60,24 +60,31 @@ function normalizeServerOrigin(input: string): string {
   return url.origin
 }
 
-class ChromeStorageAdapter implements StorageAdapter {
+export class ChromeStorageAdapter implements StorageAdapter {
   private readonly values = new Map<string, string>()
+  private readonly lastPersistedValues = new Map<string, string>()
+  private readonly keyVersions = new Map<string, number>()
   private readonly listeners = new Set<(change: StorageChangeEvent) => void>()
   private readonly localMutations = new Map<string, Array<{ id: number, value: string | undefined }>>()
   private origin: string | null = null
   private writeQueue = Promise.resolve()
-  private writeFailure: unknown = null
   private mutationId = 0
+  private latestOpId = 0
+  private pendingOps: Array<{ opId: number, error?: unknown }> = []
 
   constructor(private readonly area: ChromeStorageArea, onChanged: ChromeRuntimeApi['storage']['onChanged']) {
     onChanged.addListener((changes, areaName) => {
       if (areaName !== 'local')
         return
       for (const [key, change] of Object.entries(changes)) {
-        if (typeof change.newValue === 'string')
+        if (typeof change.newValue === 'string') {
           this.values.set(key, change.newValue)
-        else if (change.newValue === undefined)
+          this.lastPersistedValues.set(key, change.newValue)
+        }
+        else if (change.newValue === undefined) {
           this.values.delete(key)
+          this.lastPersistedValues.delete(key)
+        }
 
         if (this.consumeLocalMutation(key, change.newValue))
           continue
@@ -143,14 +150,18 @@ class ChromeStorageAdapter implements StorageAdapter {
   }
 
   private async mutateStorage(changes: Array<[string, string | undefined]>, operation: () => Promise<void>) {
-    const markers = changes.map(([key, value]) => ({ key, marker: this.markLocalMutation(key, value) }))
+    const markers = changes.map(([key, value]) => ({
+      key,
+      marker: this.markLocalMutation(key, value),
+    }))
+
     try {
       await operation()
     }
     finally {
       // Chrome normally emits onChanged before resolving the write. Clean up
       // no-op writes as well, without suppressing a later external mutation.
-      window.setTimeout(() => {
+      setTimeout(() => {
         markers.forEach(({ key, marker }) => this.forgetLocalMutation(key, marker.id))
       }, 250)
     }
@@ -159,17 +170,22 @@ class ChromeStorageAdapter implements StorageAdapter {
   async preload() {
     const stored = await this.area.get(null)
     for (const [key, value] of Object.entries(stored)) {
-      if (typeof value === 'string')
+      if (typeof value === 'string') {
         this.values.set(key, value)
+        this.lastPersistedValues.set(key, value)
+      }
     }
   }
 
   async sync() {
     const stored = await this.area.get(null)
     this.values.clear()
+    this.lastPersistedValues.clear()
     for (const [key, value] of Object.entries(stored)) {
-      if (typeof value === 'string')
+      if (typeof value === 'string') {
         this.values.set(key, value)
+        this.lastPersistedValues.set(key, value)
+      }
     }
   }
 
@@ -178,8 +194,23 @@ class ChromeStorageAdapter implements StorageAdapter {
   }
 
   async writeRuntimeValue(key: string, value: string) {
+    const version = (this.keyVersions.get(key) ?? 0) + 1
+    this.keyVersions.set(key, version)
     this.values.set(key, value)
-    await this.mutateStorage([[key, value]], () => this.area.set({ [key]: value }))
+    try {
+      await this.mutateStorage([[key, value]], () => this.area.set({ [key]: value }))
+      this.lastPersistedValues.set(key, value)
+    }
+    catch (error) {
+      if (this.keyVersions.get(key) === version) {
+        const persisted = this.lastPersistedValues.get(key)
+        if (persisted !== undefined)
+          this.values.set(key, persisted)
+        else
+          this.values.delete(key)
+      }
+      throw error
+    }
   }
 
   setOrigin(origin: string | null) {
@@ -192,10 +223,17 @@ class ChromeStorageAdapter implements StorageAdapter {
     return `${DATA_PREFIX}${encodeURIComponent(this.origin)}.${key}`
   }
 
-  private enqueue(operation: () => Promise<void>) {
-    this.writeQueue = this.writeQueue.then(operation).catch((error) => {
-      this.writeFailure = error
-      console.error('Failed to persist extension storage.', error)
+  private enqueue(opId: number, operation: () => Promise<void>) {
+    const entry: { opId: number, error?: unknown } = { opId, error: undefined }
+    this.pendingOps.push(entry)
+    this.writeQueue = this.writeQueue.then(async () => {
+      try {
+        await operation()
+      }
+      catch (error) {
+        entry.error = error
+        console.error('Failed to persist extension storage.', error)
+      }
     })
   }
 
@@ -217,26 +255,86 @@ class ChromeStorageAdapter implements StorageAdapter {
     const scopedKey = this.scopedKey(key)
     if (!scopedKey)
       return
+    const opId = ++this.latestOpId
+    const version = (this.keyVersions.get(scopedKey) ?? 0) + 1
+    this.keyVersions.set(scopedKey, version)
     this.values.set(scopedKey, value)
-    this.enqueue(() => this.mutateStorage([[scopedKey, value]], () => this.area.set({ [scopedKey]: value })))
+    this.enqueue(opId, async () => {
+      try {
+        await this.mutateStorage([[scopedKey, value]], () => this.area.set({ [scopedKey]: value }))
+        this.lastPersistedValues.set(scopedKey, value)
+      }
+      catch (error) {
+        if (this.keyVersions.get(scopedKey) === version) {
+          const persisted = this.lastPersistedValues.get(scopedKey)
+          if (persisted !== undefined)
+            this.values.set(scopedKey, persisted)
+          else
+            this.values.delete(scopedKey)
+        }
+        throw error
+      }
+    })
   }
 
   removeItem(key: string) {
     const scopedKey = this.scopedKey(key)
     if (!scopedKey)
       return
+    const opId = ++this.latestOpId
+    const version = (this.keyVersions.get(scopedKey) ?? 0) + 1
+    this.keyVersions.set(scopedKey, version)
     this.values.delete(scopedKey)
-    this.enqueue(() => this.mutateStorage([[scopedKey, undefined]], () => this.area.remove(scopedKey)))
+    this.enqueue(opId, async () => {
+      try {
+        await this.mutateStorage([[scopedKey, undefined]], () => this.area.remove(scopedKey))
+        this.lastPersistedValues.delete(scopedKey)
+      }
+      catch (error) {
+        if (this.keyVersions.get(scopedKey) === version) {
+          const persisted = this.lastPersistedValues.get(scopedKey)
+          if (persisted !== undefined)
+            this.values.set(scopedKey, persisted)
+        }
+        throw error
+      }
+    })
   }
 
   clear() {
     if (!this.origin)
       return
     const prefix = `${DATA_PREFIX}${encodeURIComponent(this.origin)}.`
-    const keys = [...this.values.keys()].filter(key => key.startsWith(prefix))
-    keys.forEach(key => this.values.delete(key))
-    if (keys.length)
-      this.enqueue(() => this.mutateStorage(keys.map(key => [key, undefined]), () => this.area.remove(keys)))
+    const targetKeys: string[] = []
+    const affectedVersions = new Map<string, number>()
+    for (const key of this.values.keys()) {
+      if (key.startsWith(prefix)) {
+        targetKeys.push(key)
+        const version = (this.keyVersions.get(key) ?? 0) + 1
+        this.keyVersions.set(key, version)
+        affectedVersions.set(key, version)
+        this.values.delete(key)
+      }
+    }
+    if (targetKeys.length) {
+      const opId = ++this.latestOpId
+      this.enqueue(opId, async () => {
+        try {
+          await this.mutateStorage(targetKeys.map(key => [key, undefined]), () => this.area.remove(targetKeys))
+          targetKeys.forEach(k => this.lastPersistedValues.delete(k))
+        }
+        catch (error) {
+          for (const [key, ver] of affectedVersions.entries()) {
+            if (this.keyVersions.get(key) === ver) {
+              const persisted = this.lastPersistedValues.get(key)
+              if (persisted !== undefined)
+                this.values.set(key, persisted)
+            }
+          }
+          throw error
+        }
+      })
+    }
   }
 
   subscribe(listener: (change: StorageChangeEvent) => void) {
@@ -245,11 +343,17 @@ class ChromeStorageAdapter implements StorageAdapter {
   }
 
   async flush() {
+    const targetOpId = this.latestOpId
+    // Capture the operation entries before awaiting. Multiple concurrent
+    // flush callers must each observe failures from the operations that were
+    // pending when that caller started; consuming the shared array first
+    // would otherwise let a second caller report a false success.
+    const targetOps = this.pendingOps.filter(op => op.opId <= targetOpId)
     await this.writeQueue
-    if (this.writeFailure) {
-      const failure = this.writeFailure
-      this.writeFailure = null
-      throw failure
+    const failedOp = targetOps.find(op => op.error !== undefined)
+    this.pendingOps = this.pendingOps.filter(op => op.opId > targetOpId)
+    if (failedOp) {
+      throw failedOp.error
     }
   }
 }

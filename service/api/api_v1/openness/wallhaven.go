@@ -1,10 +1,12 @@
 package openness
 
 import (
+	"errors"
 	"net/http"
+	"strconv"
+
 	"panel-next/api/api_v1/common/apiReturn"
 	"panel-next/lib/wallhaven"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
@@ -26,6 +28,10 @@ func (a *Openness) Wallhaven(c *gin.Context) {
 
 	result, err := wallhaven.DefaultClient.Search(c.Request.Context(), params)
 	if err != nil {
+		if errors.Is(err, wallhaven.ErrInvalidParams) {
+			apiReturn.ErrorParamFomat(c, "wallpaper search parameters")
+			return
+		}
 		apiReturn.Error(c, err.Error())
 		return
 	}

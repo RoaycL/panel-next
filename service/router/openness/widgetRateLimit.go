@@ -9,14 +9,17 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// DefaultWidgetLimiter 限制单个客户端 IP 每分钟最多 30 次组件代理请求，
-// 覆盖天气与热搜两个公共端点的总入口。
+// DefaultWidgetLimiter 限制单个客户端 IP 对每个组件代理端点每分钟最多 30 次请求。
 var DefaultWidgetLimiter = ratelimit.NewFixedWindow(30, time.Minute)
 
-// WidgetRateLimit 对公共组件代理端点按客户端 IP 限流，超限时返回 1600 与 Retry-After。
+// WidgetRateLimit 按客户端 IP + 路由分别限流，避免某个组件耗尽其他组件的额度。
 func WidgetRateLimit(limiter *ratelimit.FixedWindow) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		key := c.ClientIP()
+		route := c.FullPath()
+		if route == "" {
+			route = c.Request.URL.Path
+		}
+		key := c.ClientIP() + "|" + route
 		if !limiter.Allow(key) {
 			retryAfter := int(limiter.RetryAfter(key).Seconds())
 			if retryAfter < 1 {

@@ -419,6 +419,7 @@
   },
   "widgetLayout": {
     "edit": "Edit widgets",
+    "done": "Done",
     "add": "Add widget",
     "save": "Save layout",
     "cancel": "Cancel",
@@ -429,9 +430,54 @@
     "shrink": "Shorten",
     "hide": "Hide",
     "show": "Show",
+    "configure": "Configure",
     "remove": "Remove",
+    "removeConfirmTitle": "Remove Widget",
+    "removeConfirm": "Are you sure you want to remove this widget? Its private storage will be cleared.",
+    "removeSuccess": "Widget removed",
+    "empty": "No content widgets added yet",
+    "emptyTip": "Click 'Add widget' to display content widgets on the extension new tab",
     "saveSuccess": "Widget layout saved",
     "saveFail": "Failed to save widget layout",
+    "storageCleanupFail": "Widget removed, but residual data cleanup failed. Will retry later.",
+    "manager": {
+      "title": "Add and Manage Widgets",
+      "desc": "Choose widgets to display on the extension new tab. Settings are saved only in the extension.",
+      "clockTitle": "Clock & Date",
+      "clockDesc": "Large time in the center of the page",
+      "searchTitle": "Search box",
+      "searchDesc": "Bookmark and web search",
+      "weatherTitle": "Weather",
+      "weatherDesc": "Real-time weather in top right corner",
+      "trendingTitle": "Trending",
+      "trendingDesc": "Rolling hotlist in top right corner",
+      "contentWidgetsTitle": "Content Widgets",
+      "contentWidgetsDesc": "Loaded via unified WidgetRegistry, saved only in extension"
+    },
+    "host": {
+      "error": "Widget failed to load",
+      "loadFailed": "Widget code failed to load",
+      "loading": "Loading widget…",
+      "retry": "Retry",
+      "unsupported": "Widget is not registered or supported by this version"
+    },
+    "settings": {
+      "empty": "This widget has no editable settings.",
+      "invalid": "Invalid widget configuration",
+      "save": "Save settings",
+      "title": "Widget settings"
+    },
+    "fields": {
+      "background": "Background color",
+      "city": "City",
+      "date": "Date",
+      "limit": "Item count",
+      "repeat": "Repeat",
+      "source": "Source",
+      "textColor": "Text color",
+      "title": "Title",
+      "units": "Units"
+    },
     "types": {
       "core": {
         "clock": "Clock",
@@ -452,5 +498,8 @@
     "newPassword": "New password",
     "oldPassword": "Old password",
     "updatePassword": "Change password"
+  },
+  "widgetActions": {
+    "confirmTitle": "Confirm Action"
   }
 }

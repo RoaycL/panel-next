@@ -26,6 +26,12 @@ const isExtension = getRuntime().kind === 'extension'
 
 const isSaveing = ref(false)
 
+function clonePanelConfig(config: Panel.panelConfig): Panel.panelConfig {
+  return JSON.parse(JSON.stringify(config)) as Panel.panelConfig
+}
+
+let lastConfirmedExtensionAppearance = isExtension ? clonePanelConfig(panelState.panelConfig) : null
+
 const iconTypeOptions = [
   {
     label: t('apps.baseSettings.detailIcon'),
@@ -72,10 +78,23 @@ function handleUploadBackgroundFinish({
   return file
 }
 
-function uploadCloud() {
+async function uploadCloud() {
   if (isExtension) {
-    saveExtensionAppearance(panelState.panelConfig)
-    ms.success('扩展外观已独立保存')
+    const attempted = clonePanelConfig(panelState.panelConfig)
+    const attemptedBytes = JSON.stringify(attempted)
+    try {
+      await saveExtensionAppearance(attempted)
+      lastConfirmedExtensionAppearance = attempted
+      ms.success('扩展外观已独立保存')
+    }
+    catch (err) {
+      // A newer edit may already be visible and queued. Only roll the UI back
+      // when it still represents the exact snapshot that failed.
+      if (lastConfirmedExtensionAppearance && JSON.stringify(panelState.panelConfig) === attemptedBytes)
+        panelState.applyPanelConfig(clonePanelConfig(lastConfirmedExtensionAppearance))
+      ms.error('扩展外观保存失败，请重试')
+      console.error('Failed to save extension appearance:', err)
+    }
     return
   }
   setUserConfig({ panel: panelState.panelConfig }).then((res) => {

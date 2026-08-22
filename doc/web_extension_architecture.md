@@ -224,9 +224,9 @@ DELETE /api/v1/sessions/:id
 
 首批内置定义为 `core.clock`、`core.date`、`core.search`，后续加入 `core.weather`、`core.trending` 与 `core.countdown`。通用 WidgetHost 通过定义的异步 loader 渲染并透传配置/事件；首页历史时钟和搜索配置映射为注册表实例，保持升级兼容。热搜组件的数据源是可替换的：`service/lib/trending` 以 Provider 接口聚合微博/百度/知乎/Hacker News，通过注册表按名替换或扩展，公共代理端点统一实施校验、超时、缓存和陈旧降级。倒计时/纪念日组件纯本地计算，不发起网络请求。
 
-内容组件区使用 12 列网格与 v1 布局信封：编辑模式支持拖拽排序、按定义边界缩放、隐藏/显示、移除与从注册表新增实例，布局作为 `panelConfig.widgets` 随面板配置经 `userConfig/set` mutation（`expectedRevision`）同步，并随 bootstrap/增量同步在双端刷新。损坏、未知或重复实例在加载时隔离并回退默认布局。
+内容组件区使用 12 列网格与 v1 布局信封：Web 编辑模式支持拖拽排序、按定义边界缩放、隐藏/显示、移除与从注册表新增实例，其布局作为 `panelConfig.widgets` 经 `userConfig/set` mutation（`expectedRevision`）同步。Extension 使用相同 WidgetRegistry、Host 和配置表单，但组件布局写入 `chrome.storage.local` 的扩展外观信封；只共享账号分组和书签，不读取或回写 Web 的组件布局。未知或未来版本实例会被隔离并在再次保存时保留，身份损坏、重复或超限实例才丢弃。
 
-第三方数据代理统一实施四层保护：5 秒超时与响应体上限、TTL 内存缓存、6 小时陈旧缓存降级，以及按客户端 IP 的固定窗口速率限制（`service/lib/ratelimit`，公开组件端点合计每分钟 30 次，超限返回 `1600` 与 `Retry-After`）。客户端对限流响应静默降级为组件不可用状态，不弹全局错误。
+第三方数据代理统一实施四层保护：超时与响应体上限、有数量上限的 TTL 内存缓存、支持源的陈旧缓存降级，以及按客户端 IP + 端点的固定窗口速率限制（`service/lib/ratelimit`，每端点每分钟 30 次，超限返回 `1600` 与 `Retry-After`）。客户端保留重试秒数供组件降级展示，不弹全局错误。
 
 - 有缓存时应立即绘制基本布局，不因后端离线显示空白页。
 - Extension 的缓存读取和应用发生在首次渲染前；网络刷新不阻塞已缓存首屏。

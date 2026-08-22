@@ -8,20 +8,27 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 const (
 	defaultWallhavenEndpoint = "https://wallhaven.cc/api/v1/search"
 	maxResponseBytes         = 2 << 20
+	maxCacheEntries          = 256
 	providerUserAgent        = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 )
 
 var (
 	ErrUpstreamUnavailable = errors.New("wallhaven service unavailable")
+	ErrInvalidParams       = errors.New("invalid wallhaven search parameters")
+	bitsetPattern          = regexp.MustCompile(`^[01]{3}$`)
+	resolutionPattern      = regexp.MustCompile(`^[0-9]{2,5}x[0-9]{2,5}$`)
+	ratioPattern           = regexp.MustCompile(`^[0-9]{1,3}x[0-9]{1,3}(,[0-9]{1,3}x[0-9]{1,3}){0,7}$`)
 )
 
 type WallpaperItem struct {
@@ -115,6 +122,9 @@ func (client *Client) Search(ctx context.Context, params SearchParams) (Result, 
 	}
 	if params.Page <= 0 {
 		params.Page = 1
+	}
+	if err := validateSearchParams(params); err != nil {
+		return Result{}, err
 	}
 
 	cacheKey := fmt.Sprintf("%s|%s|%s|%s|%s|%s|%s|%s|%d",
@@ -229,6 +239,7 @@ func (client *Client) Search(ctx context.Context, params SearchParams) (Result, 
 	}
 
 	client.mu.Lock()
+	client.pruneCacheLocked(now)
 	client.cache[cacheKey] = cacheEntry{
 		result:    result,
 		expiresAt: now.Add(client.ttl),
@@ -236,4 +247,31 @@ func (client *Client) Search(ctx context.Context, params SearchParams) (Result, 
 	client.mu.Unlock()
 
 	return result, nil
+}
+
+func validateSearchParams(params SearchParams) error {
+	validSorting := map[string]bool{"date_added": true, "relevance": true, "random": true, "views": true, "favorites": true, "toplist": true, "hot": true}
+	validTopRange := map[string]bool{"1d": true, "3d": true, "1w": true, "1M": true, "3M": true, "6M": true, "1y": true}
+	if utf8.RuneCountInString(params.Query) > 100 || !bitsetPattern.MatchString(params.Categories) ||
+		!bitsetPattern.MatchString(params.Purity) || !validSorting[params.Sorting] ||
+		(params.Order != "asc" && params.Order != "desc") || !validTopRange[params.TopRange] ||
+		!resolutionPattern.MatchString(params.AtLeast) || (params.Ratios != "" && !ratioPattern.MatchString(params.Ratios)) ||
+		params.Page < 1 || params.Page > 100 {
+		return ErrInvalidParams
+	}
+	return nil
+}
+
+func (client *Client) pruneCacheLocked(now time.Time) {
+	for key, candidate := range client.cache {
+		if !now.Before(candidate.expiresAt) {
+			delete(client.cache, key)
+		}
+	}
+	for len(client.cache) >= maxCacheEntries {
+		for key := range client.cache {
+			delete(client.cache, key)
+			break
+		}
+	}
 }

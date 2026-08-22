@@ -7,6 +7,12 @@ const service = axios.create()
 
 service.interceptors.request.use(
   (config) => {
+    const url = config.url ?? ''
+    // Defensive check: reject external, protocol-relative, backslash, or control char URLs
+    // eslint-disable-next-line no-control-regex
+    if (typeof url !== 'string' || !url.startsWith('/') || url.startsWith('//') || /[\\\u0000-\u001F\u007F]/.test(url)) {
+      throw new Error(`Forbidden request to external or invalid URL "${url}" in project Axios layer.`)
+    }
     config.baseURL = getRuntime().getApiBaseUrl()
     const token = useAuthStore().token
     if (token)
@@ -14,7 +20,7 @@ service.interceptors.request.use(
     return config
   },
   (error) => {
-    return Promise.reject(error.response)
+    return Promise.reject(error.response || error)
   },
 )
 
