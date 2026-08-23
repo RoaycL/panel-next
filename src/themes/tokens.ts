@@ -1,0 +1,194 @@
+import type { ThemeTokens } from './types'
+import { cloneJson } from './clone'
+
+/**
+ * 默认 Token 集：视觉上对齐当前 Panel Next 默认风格。
+ * core.default 必须完整提供所有 Token；第三方主题允许部分覆盖，
+ * 解析结果始终用该默认集深度补齐。
+ */
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** 深度冻结：嵌套对象与数组（如 chartColors）全部只读。 */
+export function deepFreezeTokens<T>(value: T): Readonly<T> {
+  if (Array.isArray(value)) {
+    value.forEach(element => deepFreezeTokens(element))
+    return Object.freeze(value)
+  }
+  if (isPlainObject(value)) {
+    Object.values(value).forEach(child => deepFreezeTokens(child))
+    return Object.freeze(value)
+  }
+  return value
+}
+
+export const DEFAULT_LIGHT_TOKENS: Readonly<ThemeTokens> = deepFreezeTokens({
+  color: {
+    pageBackground: '#0f172a',
+    surface: 'rgba(255,255,255,0.92)',
+    surfaceOverlay: 'rgba(15,23,42,0.55)',
+    surfaceHover: 'rgba(148,163,184,0.14)',
+    mask: 'rgba(2,6,23,0.35)',
+    border: 'rgba(148,163,184,0.28)',
+    textPrimary: '#0f172a',
+    textSecondary: '#334155',
+    textMuted: '#64748b',
+    accent: '#10b981',
+    success: '#34d399',
+    warning: '#f59e0b',
+    danger: '#f87171',
+  },
+  font: {
+    family: 'system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif',
+    weightHeading: '600',
+    weightBody: '400',
+  },
+  radius: {
+    small: '8px',
+    medium: '12px',
+    large: '18px',
+    round: '999px',
+  },
+  spacing: {
+    compact: '4px',
+    normal: '10px',
+    relaxed: '20px',
+  },
+  effect: {
+    blur: '14px',
+    shadowLow: '0 1px 3px rgba(2,6,23,0.18)',
+    shadowMedium: '0 10px 30px rgba(2,6,23,0.22)',
+    shadowHigh: '0 22px 60px rgba(2,6,23,0.30)',
+    durationFast: '120ms',
+    durationNormal: '220ms',
+    durationSlow: '360ms',
+  },
+  bookmark: {
+    cardBackground: 'rgba(255,255,255,0.86)',
+    cardBorder: 'rgba(255,255,255,0.55)',
+    cardShadow: '0 8px 24px rgba(2,6,23,0.16)',
+    titleColor: '#1e293b',
+    descriptionColor: '#64748b',
+    iconBackground: 'rgba(241,245,249,0.9)',
+    iconRadius: '12px',
+  },
+  widget: {
+    background: 'rgba(15,23,42,0.55)',
+    border: 'rgba(255,255,255,0.18)',
+    shadow: '0 10px 30px rgba(2,6,23,0.25)',
+    textColor: '#f8fafc',
+    mutedText: 'rgba(248,250,252,0.62)',
+    loadingColor: 'rgba(248,250,252,0.58)',
+    errorColor: 'rgba(255,255,255,0.75)',
+    errorBorder: 'rgba(255,255,255,0.25)',
+    retryBackground: 'rgba(255,255,255,0.08)',
+    retryBorder: 'rgba(255,255,255,0.22)',
+    chartColors: ['#34d399', '#38bdf8', '#f59e0b', '#a78bfa', '#f87171', '#4ade80', '#fbbf24', '#60a5fa'],
+  },
+  sidebar: {
+    background: 'rgba(15,23,42,0.55)',
+    border: 'rgba(255,255,255,0.16)',
+    hoverBackground: 'rgba(255,255,255,0.12)',
+    activeBackground: 'rgba(16,185,129,0.28)',
+    textColor: 'rgba(248,250,252,0.82)',
+    activeTextColor: '#ffffff',
+  },
+  modal: {
+    background: 'rgba(255,255,255,0.98)',
+    overlay: 'rgba(2,6,23,0.55)',
+    border: 'rgba(148,163,184,0.24)',
+    titleTextColor: '#0f172a',
+    contentTextColor: '#334155',
+  },
+  notification: {
+    background: 'rgba(255,255,255,0.97)',
+    titleTextColor: '#0f172a',
+    contentTextColor: '#334155',
+    successColor: '#34d399',
+    warningColor: '#f59e0b',
+    errorColor: '#f87171',
+    boxShadow: '0 22px 60px rgba(2,6,23,0.48)',
+  },
+  icon: {
+    defaultColor: '#ffffff',
+    activeColor: '#10b981',
+  },
+})
+
+/** 暗色 Token：在浅色集基础上替换表面/文字等关键值，保证 auto 模式切换有真实视觉差异。 */
+const DARK_OVERRIDES = Object.freeze(completeTokens(DEFAULT_LIGHT_TOKENS, {
+  color: {
+    pageBackground: '#020617',
+    surface: 'rgba(2,6,23,0.82)',
+    surfaceHover: 'rgba(148,163,184,0.10)',
+    border: 'rgba(71,85,105,0.42)',
+    textPrimary: '#f8fafc',
+    textSecondary: '#cbd5e1',
+    textMuted: '#94a3b8',
+  },
+  bookmark: {
+    cardBackground: 'rgba(15,23,42,0.78)',
+    titleColor: '#e2e8f0',
+    descriptionColor: '#94a3b8',
+    iconBackground: 'rgba(30,41,59,0.9)',
+  },
+  modal: {
+    background: 'rgba(15,23,42,0.98)',
+    titleTextColor: '#f8fafc',
+    contentTextColor: '#cbd5e1',
+  },
+  notification: {
+    background: 'rgba(15,23,42,0.97)',
+    titleTextColor: '#f8fafc',
+    contentTextColor: '#cbd5e1',
+  },
+}))
+
+export const DEFAULT_DARK_TOKENS: Readonly<ThemeTokens> = deepFreezeTokens(DARK_OVERRIDES as unknown as ThemeTokens)
+
+/** 递归深度合并：后者覆盖前者叶子值，普通对象递归合并，数组整体替换。 */
+export function deepMergeTokens(base: unknown, override: unknown): Record<string, unknown> {
+  const result: Record<string, unknown> = isPlainObject(base) ? cloneJson(base) : {}
+  if (!isPlainObject(override))
+    return result
+  for (const [key, value] of Object.entries(override)) {
+    if (value === undefined)
+      continue
+    result[key] = isPlainObject(value) && isPlainObject(result[key])
+      ? deepMergeTokens(result[key], value)
+      : cloneJson(value)
+  }
+  return result
+}
+
+/**
+ * 深度补齐：overrides 只允许出现默认 Token 中已存在的键，
+ * 数组（如图表色板）整体替换。返回全新对象，调用方可自由冻结。
+ */
+export function completeTokens(base: unknown, overrides?: unknown): Record<string, unknown> {
+  if (!isPlainObject(base))
+    throw new Error('Invalid base tokens.')
+  if (!isPlainObject(overrides))
+    return cloneJson(base)
+  const result: Record<string, unknown> = cloneJson(base)
+  for (const [key, overrideValue] of Object.entries(overrides)) {
+    if (overrideValue === undefined)
+      continue
+    if (!(key in result))
+      throw new Error(`Unknown theme token key "${key}".`)
+    const baseValue = result[key]
+    result[key] = isPlainObject(baseValue) && !Array.isArray(baseValue)
+      ? completeTokens(baseValue, overrideValue)
+      : cloneJson(overrideValue)
+  }
+  return result
+}
+
+/** 冻结完整 Token 树（浅层兼容入口），保证组件拿到只读视图。 */
+export function freezeTokens(tokens: Record<string, unknown>): Readonly<ThemeTokens> {
+  const cloned = cloneJson(tokens)
+  deepFreezeTokens(cloned)
+  return deepFreezeTokens(cloned as unknown as ThemeTokens)
+}

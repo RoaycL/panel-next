@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { NAlert, NButton, NButtonGroup, NCard, NDropdown, NEllipsis, NGrid, NGridItem, NImage, NImageGroup, NSelect, NSpin, NUpload, useDialog, useMessage } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
-import { deletes, getList, updateType } from '@/api/system/file'
+import { deleteInvalid, deletes, getList, updateType } from '@/api/system/file'
+import type { DeleteInvalidResult } from '@/api/system/file'
 import { getImgbedConfig } from '@/api/imgbed'
 import { set as savePanelConfig } from '@/api/panel/userConfig'
 import { RoundCardModal, SvgIcon } from '@/components/common'
@@ -10,6 +11,7 @@ import { t } from '@/locales'
 import { useAuthStore, usePanelState } from '@/store'
 import { getRuntime } from '@/runtime'
 import { saveExtensionAppearance } from '@/runtime/extensionAppearance'
+import { enqueueAppearanceSave } from '@/themes/appearanceSaveQueue'
 
 interface InfoModalState {
   title: string
@@ -100,19 +102,22 @@ async function handleSetWallpaper(imgSrc: string) {
   const previousBg = panelStore.panelConfig.backgroundImageSrc
   panelStore.panelConfig.backgroundImageSrc = imgSrc
   if (getRuntime().kind === 'extension') {
-    try {
-      await saveExtensionAppearance(panelStore.panelConfig)
-      ms.success('扩展壁纸已独立保存')
-    }
-    catch (err) {
-      if (panelStore.panelConfig.backgroundImageSrc === imgSrc)
-        panelStore.panelConfig.backgroundImageSrc = previousBg
-      ms.error('扩展壁纸保存失败，请重试')
-      console.error('Failed to save extension wallpaper preference:', err)
-    }
+    // 经统一外观保存队列串行化，避免整份外观写入与主题/布局保存交错覆盖。
+    await enqueueAppearanceSave(async () => {
+      try {
+        await saveExtensionAppearance(panelStore.panelConfig)
+        ms.success(t('apps.uploadsFileManager.wallpaperSavedExtension'))
+      }
+      catch (err) {
+        if (panelStore.panelConfig.backgroundImageSrc === imgSrc)
+          panelStore.panelConfig.backgroundImageSrc = previousBg
+        ms.error(t('apps.uploadsFileManager.wallpaperSaveFailedExtension'))
+        console.error('Failed to save extension wallpaper preference:', err)
+      }
+    })
     return
   }
-  savePanelConfig({ panel: panelStore.panelConfig })
+  await enqueueAppearanceSave(() => savePanelConfig({ panel: panelStore.panelConfig }))
 }
 
 function handleUploadFinish({ file }: { file: any }) {
@@ -135,6 +140,43 @@ async function handleChangeType(id: number, type: string) {
   }
 }
 
+// 一键清理失效文件：删除磁盘上物理文件已不存在（失效）的文件记录
+async function handleCleanInvalid() {
+  dialog.warning({
+    title: t('apps.uploadsFileManager.cleanInvalidTitle'),
+    content: t('apps.uploadsFileManager.cleanInvalidConfirm'),
+    positiveText: t('common.confirm'),
+    negativeText: t('common.cancel'),
+    onPositiveClick: async () => {
+      try {
+        const { code, msg, data } = await deleteInvalid<DeleteInvalidResult>()
+        if (code === 0) {
+          if (data?.deletedCount > 0)
+            ms.success(t('apps.uploadsFileManager.cleanInvalidSuccess', { count: data.deletedCount }))
+          else
+            ms.info(t('apps.uploadsFileManager.cleanInvalidEmpty'))
+          getFileList()
+        }
+        else {
+          ms.error(`${t('common.failed')}:${msg}`)
+        }
+      }
+      catch {
+        ms.error(t('common.failed'))
+      }
+    },
+  })
+}
+
+// 文件类型 → 可读中文/翻译
+function fileTypeLabel(type?: string | null) {
+  if (type === 'icon')
+    return t('apps.uploadsFileManager.typeIcon')
+  if (type === 'wallpaper')
+    return t('apps.uploadsFileManager.typeWallpaper')
+  return t('apps.uploadsFileManager.typeOther')
+}
+
 const typeDropdownOptions = [
   { label: t('apps.uploadsFileManager.typeIcon'), key: 'icon' },
   { label: t('apps.uploadsFileManager.typeWallpaper'), key: 'wallpaper' },
@@ -151,7 +193,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="bg-slate-200 dark:bg-zinc-900 p-2 h-full">
+  <div class="p-1 h-full flex flex-col">
     <NSpin v-show="loading" size="small" />
     <NAlert type="info" :bordered="false">
       {{ $t('apps.uploadsFileManager.alertText') }}
@@ -187,6 +229,9 @@ onMounted(() => {
             {{ $t('apps.uploadsFileManager.upload') }}
           </NButton>
         </NUpload>
+        <NButton size="small" tertiary type="warning" @click="handleCleanInvalid">
+          {{ $t('apps.uploadsFileManager.cleanInvalid') }}
+        </NButton>
       </div>
     </div>
 
@@ -282,7 +327,7 @@ onMounted(() => {
             {{ $t('apps.uploadsFileManager.typeLabel') }}
           </span>
           <div class="text-xs">
-            {{ infoModalState.fileInfo?.type || 'other' }}
+            {{ fileTypeLabel(infoModalState.fileInfo?.type) }}
           </div>
         </div>
       </div>

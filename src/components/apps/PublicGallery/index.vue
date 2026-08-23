@@ -104,7 +104,7 @@ onMounted(getFileList)
 </script>
 
 <template>
-  <div class="bg-slate-200 dark:bg-zinc-900 p-2 h-full">
+  <div class="p-1 h-full flex flex-col">
     <NSpin v-show="loading" size="small" />
     <NAlert type="info" :bordered="false">
       {{ $t('apps.publicGallery.alertText') }}

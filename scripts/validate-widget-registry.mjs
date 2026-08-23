@@ -6,7 +6,7 @@ import ts from 'typescript'
 const typesSource = fs.readFileSync(new URL('../src/widgets/types.ts', import.meta.url), 'utf8')
   .replace(/^import type .*$/gm, '')
 const constantsSource = fs.readFileSync(new URL('../src/widgets/constants.ts', import.meta.url), 'utf8')
-const schemaSource = fs.readFileSync(new URL('../src/widgets/schema.ts', import.meta.url), 'utf8')
+const schemaSource = fs.readFileSync(new URL('../src/sdk/configSchema.ts', import.meta.url), 'utf8')
   .replace(/^import type .*$/gm, '')
 const registrySource = fs.readFileSync(new URL('../src/widgets/registry.ts', import.meta.url), 'utf8')
   .replace(/^import type \{[\s\S]*?\} from '\.\/types'\r?\n/, '')

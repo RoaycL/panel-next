@@ -4,14 +4,17 @@ import { NBackTop, NButton, NButtonGroup, NDropdown, NModal, NSkeleton, NSpin, u
 import { computed, defineAsyncComponent, h, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { AppIcon } from './components'
 import { SystemMonitor } from '@/components/deskModule'
-import { SvgIcon, ConflictResolverModal } from '@/components/common'
+import { ConflictResolverModal } from '@/components/common'
 import { deletes, getListByGroupId, saveSort } from '@/api/panel/itemIcon'
 import { getList as getGroupList } from '@/api/panel/itemIconGroup'
 import { set as setUserConfig } from '@/api/panel/userConfig'
+import { enqueueAppearanceSave } from '@/themes/appearanceSaveQueue'
 
 import { setTitle, updateLocalUserInfo } from '@/utils/cmn'
 import { sanitizeUserHtml } from '@/utils/sanitizeHtml'
-import { useAuthStore, usePanelState, useUserStore } from '@/store'
+import { isLegacyBrandedFooter } from '@/utils/branding'
+import { defaultFooterHtml } from '@/utils/defaultFooter'
+import { useAppStore, useAuthStore, usePanelState, useUserStore } from '@/store'
 import { PanelPanelConfigStyleEnum, PanelStateNetworkModeEnum } from '@/enums'
 import { VisitMode } from '@/enums/auth'
 import { persistentStorage } from '@/utils/storage'
@@ -26,6 +29,7 @@ import { getPendingMutationCount } from '@/sync/offlineQueue'
 import type { ConflictDescriptor, ConflictResolutionChoice } from '@/sync/conflictResolver'
 import type { DashboardGroup } from '@/dashboard/core'
 import { createDashboardState, createItemSortRequest, filterDashboardGroups, normalizeDashboardGroups, selectItemUrl } from '@/dashboard/core'
+import { ThemeIcon, ThemeSettingsModal } from '@/themes'
 import type { WidgetInstance } from '@/widgets'
 import { WidgetHost, WidgetSettingsModal, clearWidgetStorage, createHeaderClockWidget, createHeaderSearchWidget, createHeaderWeatherWidget, createTrendingWidget, createCountdownWidget, generateWidgetInstanceId, serializeWidgetLayout, widgetRegistry } from '@/widgets'
 
@@ -37,6 +41,7 @@ withDefaults(defineProps<{
 
 const ms = useMessage()
 const dialog = useDialog()
+const appStore = useAppStore()
 const panelState = usePanelState()
 const authStore = useAuthStore()
 const userStore = useUserStore()
@@ -61,7 +66,13 @@ const currentRightSelectItem = ref<Panel.ItemInfo | null>(null)
 const currentAddItenIconGroupId = ref<number | undefined>()
 
 const settingModalShow = ref(false)
-const safeFooterHtml = computed(() => sanitizeUserHtml(panelState.panelConfig.footerHtml || ''))
+const themeCenterVisible = ref(false)
+const safeFooterHtml = computed(() => {
+  const raw = panelState.panelConfig.footerHtml || defaultFooterHtml
+  if (isLegacyBrandedFooter(raw))
+    return sanitizeUserHtml(defaultFooterHtml)
+  return sanitizeUserHtml(raw)
+})
 
 const items = ref<DashboardGroup[]>([])
 const filterItems = ref<DashboardGroup[]>([])
@@ -306,7 +317,7 @@ async function saveWidgetLayout() {
   try {
     panelState.panelConfig.widgets = serializeWidgetLayout(widgetInstances.value, quarantinedWidgets.value)
     panelState.recordState()
-    const { code, msg, queued } = await setUserConfig({ panel: panelState.panelConfig })
+    const { code, msg, queued } = await enqueueAppearanceSave(() => setUserConfig({ panel: panelState.panelConfig }))
     if (code === 0) {
       widgetLayoutDirty.value = false
       widgetEditMode.value = false
@@ -511,7 +522,7 @@ function getDropdownMenuOptions() {
     {
       label: t('iconItem.newWindowOpen'),
       key: 'newWindows',
-      icon: () => h(SvgIcon, { icon: 'mdi:open-in-new' }),
+      icon: () => h(ThemeIcon, { name: 'externalLink' }),
     },
 
   ]
@@ -521,7 +532,7 @@ function getDropdownMenuOptions() {
     dropdownMenuOptions.push({
       label: t('panelHome.openWanUrl'),
       key: 'openWanUrl',
-      icon: () => h(SvgIcon, { icon: 'mdi:web' }),
+      icon: () => h(ThemeIcon, { name: 'externalLink' }),
     })
   }
 
@@ -529,7 +540,7 @@ function getDropdownMenuOptions() {
     dropdownMenuOptions.push({
       label: t('panelHome.openLanUrl'),
       key: 'openLanUrl',
-      icon: () => h(SvgIcon, { icon: 'mdi:lan' }),
+      icon: () => h(ThemeIcon, { name: 'networkWired' }),
     })
   }
 
@@ -537,11 +548,11 @@ function getDropdownMenuOptions() {
     dropdownMenuOptions.push({
       label: t('common.edit'),
       key: 'edit',
-      icon: () => h(SvgIcon, { icon: 'mdi:pencil' }),
+      icon: () => h(ThemeIcon, { name: 'edit' }),
     }, {
       label: t('common.delete'),
       key: 'delete',
-      icon: () => h(SvgIcon, { icon: 'mdi:delete' }),
+      icon: () => h(ThemeIcon, { name: 'delete' }),
     })
   }
 
@@ -628,6 +639,14 @@ if (runtime.kind === 'extension') {
 }
 
 onMounted(async () => {
+  // Theme SDK 统一外观入口：结构性校验 + 剥离非法主题 + 补默认选择（含旧字段迁移）。
+  // 由 store.applyPanelConfig 内部统一跑一次 preparePanelAppearance；扩展端在清理后回写
+  // EXTENSION_APPEARANCE_KEY（字节去重，未变化不写）。
+  panelState.applyPanelConfig(panelState.panelConfig, {
+    mode: appStore.theme,
+    writeBack: runtime.kind === 'extension',
+  })
+
   removeSyncConflictListener = onSyncConflict(handleSyncConflict)
   window.addEventListener('online', handleBrowserOnline)
   window.addEventListener('offline', handleBrowserOffline)
@@ -742,12 +761,11 @@ function handleAddItem(itemIconGroupId?: number) {
       </button>
       <span class="status-chip" :title="sessionTitle">{{ sessionLabel }}</span>
     </div>
-    <div ref="scrollContainerRef" class="absolute w-full h-full overflow-auto">
+    <div ref="scrollContainerRef" class="absolute w-full h-full overflow-auto flex flex-col justify-between">
       <div
-        class="home-content p-2.5 mx-auto"
+        class="home-content p-2.5 mx-auto w-full flex-1 flex flex-col"
         :style="{
           marginTop: layout === 'extension' ? '0' : `${panelState.panelConfig.marginTop}%`,
-          marginBottom: `${panelState.panelConfig.marginBottom}%`,
           maxWidth: layout === 'extension' ? '1440px' : (panelState.panelConfig.maxWidth ?? '1200') + panelState.panelConfig.maxWidthUnit,
         }"
       >
@@ -901,10 +919,10 @@ function handleAddItem(itemIconGroupId?: number) {
                 :class="itemGroup.hoverStatus ? 'opacity-100' : 'opacity-0'"
               >
                 <span class="mr-2 cursor-pointer" :title="t('common.add')" @click="handleAddItem(itemGroup.id)">
-                  <SvgIcon class="text-white font-xl" icon="typcn:plus" />
+                  <span class="text-white font-xl"><ThemeIcon name="add" /></span>
                 </span>
                 <span class="mr-2 cursor-pointer " :title="t('common.sort')" @click="handleSetSortStatus(itemGroup, !itemGroup.sortStatus)">
-                  <SvgIcon class="text-white font-xl" icon="ri:drag-drop-line" />
+                  <span class="text-white font-xl"><ThemeIcon name="drag" /></span>
                 </span>
               </div>
             </div>
@@ -987,7 +1005,7 @@ function handleAddItem(itemIconGroupId?: number) {
               <div>
                 <NButton color="#2a2a2a6b" @click="handleSaveSort(itemGroup)">
                   <template #icon>
-                    <SvgIcon class="text-white font-xl" icon="material-symbols:save" />
+                    <span class="text-white font-xl"><ThemeIcon name="save" /></span>
                   </template>
                   <div>
                     {{ $t('common.saveSort') }}
@@ -997,8 +1015,16 @@ function handleAddItem(itemIconGroupId?: number) {
             </div>
           </div>
         </div>
-        <div class="mt-5 footer" v-html="safeFooterHtml" />
       </div>
+      <!-- 页面底栏 (全局居中) -->
+      <footer
+        class="home-footer w-full flex items-center justify-center text-center py-6 px-4 select-none z-10"
+        :style="{
+          marginBottom: `${panelState.panelConfig.marginBottom}%`,
+        }"
+      >
+        <div class="footer-inner flex items-center justify-center text-center" v-html="safeFooterHtml" />
+      </footer>
     </div>
 
     <!-- 右键菜单 -->
@@ -1016,7 +1042,7 @@ function handleAddItem(itemIconGroupId?: number) {
           :title="t('panelHome.changeToWanModel')" @click="handleChangeNetwork(PanelStateNetworkModeEnum.wan)"
         >
           <template #icon>
-            <SvgIcon class="text-white font-xl" icon="material-symbols:lan-outline-rounded" />
+            <span class="text-white font-xl"><ThemeIcon name="networkWired" /></span>
           </template>
         </NButton>
 
@@ -1025,19 +1051,25 @@ function handleAddItem(itemIconGroupId?: number) {
           :title="t('panelHome.changeToLanModel')" @click="handleChangeNetwork(PanelStateNetworkModeEnum.lan)"
         >
           <template #icon>
-            <SvgIcon class="text-white font-xl" icon="mdi:wan" />
+            <span class="text-white font-xl"><ThemeIcon name="networkWireless" /></span>
           </template>
         </NButton>
 
         <NButton v-if="canEdit" color="#2a2a2a6b" :title="t('appLauncher.title')" @click="settingModalShow = !settingModalShow">
           <template #icon>
-            <SvgIcon class="text-white font-xl" icon="majesticons-applications" />
+            <span class="text-white font-xl"><ThemeIcon name="dashboard" /></span>
+          </template>
+        </NButton>
+
+        <NButton v-if="canEdit" color="#2a2a2a6b" :title="t('theme.entry')" @click="themeCenterVisible = true">
+          <template #icon>
+            <span class="text-white font-xl"><ThemeIcon name="theme" /></span>
           </template>
         </NButton>
 
         <NButton v-if="authStore.visitMode === VisitMode.VISIT_MODE_PUBLIC" color="#2a2a2a6b" :title="$t('panelHome.goToLogin')" @click="router.push('/login')">
           <template #icon>
-            <SvgIcon class="text-white font-xl" icon="material-symbols:account-circle" />
+            <span class="text-white font-xl"><ThemeIcon name="user" /></span>
           </template>
         </NButton>
       </NButtonGroup>
@@ -1055,7 +1087,7 @@ function handleAddItem(itemIconGroupId?: number) {
       <div class="shadow-[0_0_10px_2px_rgba(0,0,0,0.2)]">
         <NButton color="#2a2a2a6b">
           <template #icon>
-            <SvgIcon class="text-white font-xl" icon="icon-park-outline:to-top" />
+            <span class="text-white font-xl"><ThemeIcon name="toTop" /></span>
           </template>
         </NButton>
       </div>
@@ -1063,6 +1095,13 @@ function handleAddItem(itemIconGroupId?: number) {
 
     <EditItem v-if="editItemInfoShow" v-model:visible="editItemInfoShow" :item-info="editItemInfoData" :item-group-id="currentAddItenIconGroupId" @done="handleEditSuccess" />
     <WidgetSettingsModal v-model:show="widgetSettingsVisible" :instance="widgetSettingsInstance" @save="applyWidgetSettings" />
+    <ThemeSettingsModal
+      :show="themeCenterVisible"
+      :surface="runtime.kind"
+      :current-selection="panelState.panelConfig.theme ?? null"
+      @update:show="(value: boolean) => themeCenterVisible = value"
+      @saved="(selection) => panelState.panelConfig = { ...panelState.panelConfig, theme: selection }"
+    />
 
     <!-- 弹窗 -->
     <NModal
@@ -1140,12 +1179,12 @@ html {
   align-items: center;
   gap: 7px;
   padding: 8px 12px;
-  border: 1px solid rgb(255 255 255 / 16%);
-  border-radius: 999px;
-  color: #fff;
-  background: rgb(18 25 39 / 68%);
-  box-shadow: 0 8px 28px rgb(0 0 0 / 16%);
-  backdrop-filter: blur(14px);
+  border: 1px solid var(--pn-color-border, rgb(255 255 255 / 16%));
+  border-radius: var(--pn-radius-round, 999px);
+  color: var(--pn-sidebar-text-color, #fff);
+  background: var(--pn-sidebar-background, rgb(18 25 39 / 68%));
+  box-shadow: var(--pn-effect-shadow-low, 0 8px 28px rgb(0 0 0 / 16%));
+  backdrop-filter: blur(var(--pn-effect-blur, 14px));
   font-size: 12px;
   line-height: 1;
   white-space: nowrap;
@@ -1252,12 +1291,12 @@ html {
 
 .widget-tool-button {
   padding: 6px 12px;
-  border: 1px solid rgb(255 255 255 / 18%);
-  border-radius: 999px;
-  color: white;
-  background: rgb(18 25 39 / 68%);
-  box-shadow: 0 8px 28px rgb(0 0 0 / 16%);
-  backdrop-filter: blur(14px);
+  border: 1px solid var(--pn-color-border, rgb(255 255 255 / 18%));
+  border-radius: var(--pn-radius-round, 999px);
+  color: var(--pn-widget-text-color, white);
+  background: var(--pn-widget-background, rgb(18 25 39 / 68%));
+  box-shadow: var(--pn-effect-shadow-low, 0 8px 28px rgb(0 0 0 / 16%));
+  backdrop-filter: blur(var(--pn-effect-blur, 14px));
   cursor: pointer;
   font-size: 12px;
   line-height: 1;
@@ -1302,8 +1341,8 @@ html {
   width: 100%;
   min-width: 0;
   flex-direction: column;
-  border: 1px dashed rgb(255 255 255 / 38%);
-  border-radius: 16px;
+  border: 1px dashed var(--pn-widget-border, rgb(255 255 255 / 38%));
+  border-radius: var(--pn-radius-large, 16px);
 }
 
 .widget-edit-card > :deep(*) {
@@ -1381,10 +1420,11 @@ html {
 
 .extension-home .home-search :deep(.search-container) {
   min-height: 52px;
-  border-color: rgb(255 255 255 / 24%);
-  background: rgb(18 25 39 / 58%) !important;
-  box-shadow: 0 18px 60px rgb(0 0 0 / 18%);
-  backdrop-filter: blur(18px);
+  border: 1px solid var(--pn-search-border, var(--pn-widget-border, rgb(255 255 255 / 24%)));
+  border-radius: var(--pn-search-radius, var(--pn-radius-large, 16px));
+  background: var(--pn-search-background, var(--pn-widget-background, rgb(18 25 39 / 58%))) !important;
+  box-shadow: var(--pn-effect-shadow-medium, 0 18px 60px rgb(0 0 0 / 18%));
+  backdrop-filter: blur(var(--pn-effect-blur, 18px));
 }
 
 .extension-home .home-groups {
@@ -1397,11 +1437,11 @@ html {
   min-width: 0;
   margin-top: 0;
   padding: 22px;
-  border: 1px solid rgb(255 255 255 / 14%);
-  border-radius: 24px;
-  background: rgb(18 25 39 / 42%);
-  box-shadow: 0 18px 60px rgb(0 0 0 / 14%);
-  backdrop-filter: blur(18px);
+  border: 1px solid var(--pn-bookmark-card-border, rgb(255 255 255 / 14%));
+  border-radius: var(--pn-radius-large, 24px);
+  background: var(--pn-bookmark-card-background, rgb(18 25 39 / 42%));
+  box-shadow: var(--pn-bookmark-card-shadow, 0 18px 60px rgb(0 0 0 / 14%));
+  backdrop-filter: blur(var(--pn-effect-blur, 18px));
 }
 
 .extension-home .item-list > :first-child {

@@ -53,7 +53,13 @@
     "1502": "This dashboard changed on another device. The latest version is being loaded."
   },
   "appLauncher": {
-    "title": "System Applications"
+    "title": "Control Center",
+    "categoryPersonal": "Personal & Appearance",
+    "categoryResources": "Resources & Data",
+    "categoryAdmin": "System & Admin",
+    "categoryAbout": "About & Info",
+    "expandMenu": "Expand menu",
+    "collapseMenu": "Collapse menu"
   },
   "apps": {
     "about": {
@@ -61,6 +67,7 @@
       "QR": "QR Code(recommend)",
       "addQQGroupUrl": "Click to join",
       "appName": "About",
+      "description": "An open-source, self-hosted bookmark & widget dashboard",
       "author": "Author:",
       "checkUpdate": "Check for new version",
       "discussions": "Discussions:",
@@ -78,6 +85,9 @@
       "clockSecondShow": "Show seconds",
       "configFailed": "Configuration save failed, {message}",
       "configSaved": "Configuration saved",
+      "extensionAppearanceSaved": "Extension appearance saved independently.",
+      "extensionAppearanceSaveFailed": "Failed to save extension appearance. Please retry.",
+      "logoTextPlaceholder": "Enter text",
       "contentArea": "Content area",
       "customFooter": "Custom footer",
       "logoShow": "Show logo",
@@ -94,6 +104,7 @@
       "searchBar": "Search bar component",
       "searchBarSearchItem": "Allow search bar to search items",
       "searchBarShow": "Configuration saved",
+      "selectFromGallery": "Select from gallery",
       "show": "Show",
       "showTitle": "Show title",
       "smallIcon": "Small icon",
@@ -158,7 +169,11 @@
       "changeType": "Change Type",
       "typeLabel": "Type",
     "selectFromGallery": "Select from Gallery",
-    "multipleIconsFound": "Found {count} candidate icons, using the first one"
+    "multipleIconsFound": "Found {count} candidate icons, using the first one",
+    "clickChangeIcon": "Click to change icon",
+    "supportIconFormats": "Supports .ico, .png, .svg, .jpg, .avif formats",
+    "clickChangeWallpaper": "Click to change wallpaper",
+    "supportWallpaperFormats": "Supports .webp, .png, .jpg, .jpeg, .gif, .avif formats"
 	},
 	"publicGallery": {
 		"appName": "Public Gallery",
@@ -180,7 +195,8 @@
 		"stopConfirm": "Stop container {name}?",
 		"restartConfirm": "Restart container {name}?",
 		"createCard": "Create Card",
-		"createCardHint": "Container {name} card creation will be done in the card editor"
+		"createCardHint": "Container {name} card creation will be done in the card editor",
+		"action": "Action"
 	},
     "exportImport": {
       "appName": "Export/Import",
@@ -206,6 +222,12 @@
     "uploadsFileManager": {
       "alertText": "Here you can manage wallpapers and icons you have uploaded.",
       "appName": "Upload File Management",
+      "changeType": "Change type",
+      "cleanInvalid": "Clean invalid files",
+      "cleanInvalidConfirm": "Remove all file records whose disk file no longer exists. Continue?",
+      "cleanInvalidEmpty": "No invalid files found",
+      "cleanInvalidSuccess": "Cleaned {count} invalid file(s)",
+      "cleanInvalidTitle": "Clean invalid files",
       "copyFailed": "Copy failed",
       "copyLink": "Copy link",
       "copySuccess": "Link copied successfully. You can paste it in the address bar.",
@@ -215,7 +237,15 @@
       "nothingText": "You haven't uploaded any images yet.",
       "path": "File path",
       "setWallpaper": "Set as wallpaper",
-      "uploadTime": "Upload time"
+      "typeAll": "All",
+      "typeIcon": "Icon",
+      "typeLabel": "File type",
+      "typeOther": "Other",
+      "typeWallpaper": "Wallpaper",
+      "upload": "Upload",
+      "uploadTime": "Upload time",
+      "wallpaperSaveFailedExtension": "Failed to save extension wallpaper. Please retry.",
+      "wallpaperSavedExtension": "Extension wallpaper saved independently."
     },
     "userInfo": {
       "appName": "My Information",
@@ -268,6 +298,7 @@
     "no": "No",
     "noData": "No data available",
     "password": "Password",
+    "refresh": "Refresh",
     "refreshPage": "Please refresh the page",
     "repeatLater": "Please try again later",
     "reset": "Reset",
@@ -337,6 +368,7 @@
     "inputIconUrlOrUpload": "Enter icon URL or upload",
     "lanUrl": "LAN URL",
     "lanUrlInputPlaceholder": "http(s):// (LAN mode, will redirect to this address)",
+    "multipleIconsFound": "Found {count} candidate icon(s). Please pick one from the list.",
     "newWindowOpen": "Open in new window",
     "queuedOffline": "You are offline. The change has been added to the sync queue",
     "queuedWithConflict": "The cloud has newer changes. Please choose which version to keep in the conflict dialog",
@@ -348,6 +380,7 @@
     "url": "URL"
   },
   "login": {
+    "captchaPlaceholder": "Enter captcha",
     "loginButton": "Login",
     "passwordPlaceholder": "Password",
     "usernamePlaceholder": "Username",
@@ -501,5 +534,58 @@
   },
   "widgetActions": {
     "confirmTitle": "Confirm Action"
+  },
+  "theme": {
+    "center": {
+      "title": "Theme Center",
+      "themes": "Themes",
+      "config": "Theme Settings"
+    },
+    "mode": {
+      "title": "Appearance Mode",
+      "light": "Light",
+      "dark": "Dark",
+      "auto": "System"
+    },
+    "variants": {
+      "title": "Component Shapes",
+      "bookmark": "Bookmark Card",
+      "widget": "Widget",
+      "sidebar": "Sidebar",
+      "search": "Search Box",
+      "followDefault": "Follow default"
+    },
+    "variant": {
+      "glass": "Glass",
+      "solid": "Solid",
+      "minimal": "Minimal",
+      "borderless": "Borderless",
+      "floating": "Floating",
+      "attached": "Attached",
+      "pill": "Pill",
+      "box": "Box",
+      "underline": "Underline"
+    },
+    "iconPack": {
+      "title": "Icon Pack",
+      "default": "Default icon pack"
+    },
+    "meta": {
+      "author": "Author"
+    },
+    "surface": {
+      "web": "Available on Web",
+      "extension": "Available on Extension"
+    },
+    "restoreDefault": "Restore default theme",
+    "saved": "Theme saved",
+    "saveFailed": "Failed to save theme",
+    "saveRejected": "Theme selection failed validation; save blocked",
+    "saveConflict": "Appearance changed during save. The latest local state was preserved; review it and retry after changes settle.",
+    "entry": "Theme Center",
+    "quarantinedNotice": "Unrecognized theme data; rendering with the default theme. Original data is preserved."
+  },
+  "userHubModal": {
+    "revision": "Rev"
   }
 }

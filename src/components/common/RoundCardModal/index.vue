@@ -28,12 +28,12 @@ const bindAttrs = computed(() => {
 })
 const modalClass = computed(() => ['round-card-modal', attrs.class])
 const modalStyle = computed(() => [
-  attrs.style,
   {
     maxWidth: 'calc(100vw - 24px)',
     maxHeight: 'calc(100vh - 24px)',
-    borderRadius: '1rem',
+    borderRadius: '1.25rem',
   } satisfies CSSProperties,
+  attrs.style as CSSProperties,
 ])
 
 const showModal = computed({
@@ -77,13 +77,49 @@ const showModal = computed({
 </template>
 
 <style>
+/* Global Frosted Glass Modal Theme for RoundCardModal */
+.round-card-modal.n-card {
+  border-radius: 20px !important;
+  background: rgba(18, 20, 26, 0.84) !important;
+  backdrop-filter: blur(28px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(190%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.08) inset !important;
+}
+
+html:not(.dark) .round-card-modal.n-card {
+  background: rgba(255, 255, 255, 0.88) !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.8) inset !important;
+}
+
+.round-card-modal .n-card-header {
+  padding: 14px 20px 12px !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background: rgba(255, 255, 255, 0.03) !important;
+}
+
+html:not(.dark) .round-card-modal .n-card-header {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
+  background: rgba(0, 0, 0, 0.02) !important;
+}
+
+.round-card-modal .n-card__footer {
+  padding: 12px 20px 14px !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+html:not(.dark) .round-card-modal .n-card__footer {
+  border-top: 1px solid rgba(0, 0, 0, 0.06) !important;
+}
+
 /* 移动端全屏优化 */
 @media (max-width: 640px) {
-  .round-card-modal {
+  .round-card-modal.n-card {
     max-width: calc(100vw - 12px) !important;
     max-height: calc(100vh - 12px) !important;
     margin: 6px !important;
-    border-radius: 14px !important;
+    border-radius: 16px !important;
   }
 }
 </style>

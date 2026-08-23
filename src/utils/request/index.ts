@@ -87,9 +87,15 @@ function http<T = any>(options: HttpOption, sessionRetry = false): Promise<Respo
       if (await authStore.refreshSession())
         return http<T>(options, true)
       // Preserve a device refresh token after a temporary refresh transport
-      // failure. A later online event/request can recover the same session.
-      if (authStore.authMode === 'device' && authStore.refreshToken)
+      // failure. Give the refresh one delayed second chance (single-flight
+      // dedupes with parallel callers) before surfacing the expired-token
+      // error to the user; a later online event can still recover it.
+      if (authStore.authMode === 'device' && authStore.refreshToken) {
+        await new Promise(resolve => setTimeout(resolve, 1200))
+        if (await authStore.refreshSession())
+          return http<T>(options, true)
         return res.data
+      }
     }
 
     if (res.data.code === 1001 || res.data.code === 1008 || res.data.code === 1009) {

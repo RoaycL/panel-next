@@ -2,6 +2,7 @@ package database
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"net"
 	"net/url"
@@ -248,6 +249,49 @@ func EnsureDefaultSystemSettings(db *gorm.DB) error {
 	for _, setting := range defaults {
 		if err := db.Where("config_name = ?", setting.ConfigName).FirstOrCreate(&setting).Error; err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func EnsureUserSyncStates(db *gorm.DB) error {
+	var users []models.User
+	if err := db.Select("id").Find(&users).Error; err != nil {
+		return err
+	}
+	for _, user := range users {
+		var maximum int64
+		queries := []struct {
+			model any
+			key   string
+		}{
+			{model: &models.UserConfig{}, key: "user_id"},
+			{model: &models.ItemIconGroup{}, key: "user_id"},
+			{model: &models.ItemIcon{}, key: "user_id"},
+		}
+		for _, query := range queries {
+			var candidate int64
+			if err := db.Model(query.model).Where(query.key+" = ?", user.ID).
+				Select("COALESCE(MAX(revision), 0)").Scan(&candidate).Error; err != nil {
+				return err
+			}
+			if candidate > maximum {
+				maximum = candidate
+			}
+		}
+		var state models.UserSyncState
+		if err := db.First(&state, "user_id = ?", user.ID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				if err := db.Create(&models.UserSyncState{UserID: user.ID, Revision: maximum}).Error; err != nil {
+					return err
+				}
+			} else {
+				return err
+			}
+		} else if state.Revision < maximum {
+			if err := db.Model(&models.UserSyncState{}).Where("user_id = ?", user.ID).Update("revision", maximum).Error; err != nil {
+				return err
+			}
 		}
 	}
 	return nil

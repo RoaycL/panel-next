@@ -1,9 +1,9 @@
 import { persistentStorage } from '@/utils/storage'
+import { defaultFooterHtml } from '@/utils/defaultFooter'
+import { migrateLegacyFooterHtml } from '@/utils/branding'
 import { PanelPanelConfigStyleEnum, PanelStateNetworkModeEnum } from '@/enums'
 import defaultBackground from '@/assets/defaultBackground.webp'
 const LOCAL_NAME = 'panelStorage'
-
-const defaultFooterHtml = '<div class="flex justify-center text-slate-300" style="margin-top:100px">Powered By <a href="https://github.com/RoaycL/panel-next" target="_blank" class="ml-[5px]">Panel Next</a></div>'
 
 export function defaultStatePanelConfig(): Panel.panelConfig {
   return {
@@ -36,6 +36,11 @@ export function defaultStatePanelConfig(): Panel.panelConfig {
   }
 }
 
+/** 品牌迁移：命中历史 Sun-Panel 品牌特征的页脚替换为 Panel Next 默认值。 */
+export function migrateLegacyBranding(config: Panel.panelConfig): Panel.panelConfig {
+  return migrateLegacyFooterHtml(config)
+}
+
 export function defaultState(): Panel.State {
   return {
     rightSiderCollapsed: false,
@@ -47,7 +52,9 @@ export function defaultState(): Panel.State {
 
 export function getLocalState(): Panel.State {
   const localState = persistentStorage.get<Partial<Panel.State>>(LOCAL_NAME)
-  return { ...defaultState(), ...localState }
+  const merged = { ...defaultState(), ...localState }
+  merged.panelConfig = migrateLegacyBranding({ ...defaultStatePanelConfig(), ...merged.panelConfig })
+  return merged
 }
 
 export function setLocalState(state: Panel.State) {

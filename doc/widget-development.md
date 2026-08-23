@@ -285,6 +285,8 @@ widgetRegistry.register(defineWidget({
 - [ ] 外部链接使用 `<a target="_blank" rel="noopener noreferrer">`
 - [ ] i18n：文案经 `useI18n().t()`，语言包键已补充 zh-CN/en-US
 - [ ] 根元素自适应容器（`width:100%`，禁用固定像素宽高）
+- [ ] 使用主题 Token 而非硬编码颜色：外壳/文字用 `var(--pn-widget-*)`，图表色板用 `useWidgetTheme().chartColors` 或 `var(--pn-widget-chart-color-N)`；所有变量带原视觉回退值
+- [ ] 通过 `useWidgetContext()` 读取 `themeId / resolvedMode / themeTokens`（只读），不要自行解析主题
 - [ ] 声明了实际使用的 `capabilities`，未声明的能力不得调用
 - [ ] 用 `surfaces` 限制不兼容的宿主；未声明表示双端可用
 - [ ] 改配置结构时提供完整 `migrations`

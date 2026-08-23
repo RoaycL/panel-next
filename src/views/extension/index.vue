@@ -13,13 +13,15 @@ import type { WidgetInstance } from '@/widgets'
 import { WidgetHost, WidgetSettingsModal, generateWidgetInstanceId, resizeInstanceWithinBounds, serializeWidgetLayout, widgetRegistry } from '@/widgets'
 import { useRouter } from 'vue-router'
 import { SvgIcon, ItemIcon, ConflictResolverModal, OfflineQueueManager } from '@/components/common'
-import { useAuthStore, usePanelState, useUserStore } from '@/store'
+import { useAppStore, useAuthStore, usePanelState, useUserStore } from '@/store'
 import { getLocalState as getLocalPanelState } from '@/store/modules/panel/helper'
 import { PanelStateNetworkModeEnum } from '@/enums'
 import { VisitMode } from '@/enums/auth'
 import { getRuntime } from '@/runtime'
 import type { StorageChangeEvent } from '@/runtime/types'
 import { EXTENSION_APPEARANCE_KEY, EXTENSION_WIDGETS_KEY, processPendingWidgetCleanups, readExtensionAppearance, readExtensionWidgets, removeExtensionWidgetFlow, saveExtensionAppearance, saveExtensionWidgets } from '@/runtime/extensionAppearance'
+import { enqueueAppearanceSave } from '@/themes/appearanceSaveQueue'
+import { ThemeIcon } from '@/themes'
 import { BOOTSTRAP_SNAPSHOT_KEY_PREFIX, readBootstrapSnapshot, refreshBootstrapSnapshot } from '@/sync/bootstrapCache'
 import { onSyncConflict, setSyncRevision } from '@/sync/revision'
 import { replayOfflineQueue } from '@/sync/offlineReplay'
@@ -48,6 +50,7 @@ const GallerySelector = defineAsyncComponent(() => import('@/components/common/G
 const router = useRouter()
 const ms = useMessage()
 const dialog = useDialog()
+const appStore = useAppStore()
 const panelState = usePanelState()
 const authStore = useAuthStore()
 const userStore = useUserStore()
@@ -332,19 +335,22 @@ function extensionWidgetCellStyle(instance: WidgetInstance) {
 async function handleWallpaperSelect(url: string) {
   const previousBg = panelState.panelConfig.backgroundImageSrc
   panelState.panelConfig.backgroundImageSrc = url
-  try {
-    await saveExtensionAppearance(panelState.panelConfig)
-    showWallpaperModal.value = false
-    ms.success('已切换背景壁纸')
-  }
-  catch (error) {
-    // Do not overwrite a newer appearance change that happened while this
-    // save was awaiting extension storage.
-    if (panelState.panelConfig.backgroundImageSrc === url)
-      panelState.panelConfig.backgroundImageSrc = previousBg
-    ms.error('保存壁纸设置失败，请重试')
-    console.error('Failed to save wallpaper preference:', error)
-  }
+  // 经统一外观保存队列串行化，避免与主题/墙纸/布局整份写入交错覆盖。
+  await enqueueAppearanceSave(async () => {
+    try {
+      await saveExtensionAppearance(panelState.panelConfig)
+      showWallpaperModal.value = false
+      ms.success('已切换背景壁纸')
+    }
+    catch (error) {
+      // Do not overwrite a newer appearance change that happened while this
+      // save was awaiting extension storage.
+      if (panelState.panelConfig.backgroundImageSrc === url)
+        panelState.panelConfig.backgroundImageSrc = previousBg
+      ms.error('保存壁纸设置失败，请重试')
+      console.error('Failed to save wallpaper preference:', error)
+    }
+  })
 }
 
 // 1. 时钟与日期
@@ -531,27 +537,30 @@ const syncRevision = ref<Sync.Revision>('0')
 const groups = ref<DashboardGroup[]>(defaultPresetGroups)
 let isRefreshing = false
 
-function applyBootstrapData(data: Sync.BootstrapResponseV1) {
+async function applyBootstrapData(data: Sync.BootstrapResponseV1) {
   const dashboard = createDashboardState(data)
   setSyncRevision(dashboard.revision)
   syncRevision.value = dashboard.revision
   const localAppearance = readExtensionAppearance()
+  // 统一外观入口：每个入口只在 store.applyPanelConfig 内部跑一次 preparePanelAppearance，
+  // 并只在 Extension 端把清理/迁移后的配置写回 EXTENSION_APPEARANCE_KEY（自带字节去重）。
+  let writeBack: Promise<boolean> | undefined
   if (localAppearance) {
-    panelState.applyPanelConfig(localAppearance)
+    writeBack = panelState.applyPanelConfig(localAppearance, { surface: 'extension', mode: appStore.theme ?? 'auto', writeBack: true }).writeBack
   }
   else {
     // Use the cloud appearance only as a first-run starting point, then fork it
     // locally so later extension changes cannot overwrite the web appearance.
-    panelState.applyPanelConfig(dashboard.panelConfig)
-    void saveExtensionAppearance(panelState.panelConfig).catch((error) => {
-      console.error('Failed to initialize extension appearance.', error)
-    })
+    writeBack = panelState.applyPanelConfig(dashboard.panelConfig, { surface: 'extension', mode: appStore.theme ?? 'auto', writeBack: true }).writeBack
   }
   authStore.setUserInfo(dashboard.account)
   authStore.setVisitMode(VisitMode.VISIT_MODE_LOGIN)
   userStore.updateUserInfo(dashboard.account)
   refreshPendingMutationsCount()
   groups.value = dashboard.groups || []
+  // 等待 Extension 回写真正持久化完成，失败时不假装同步成功。
+  if (writeBack && (await writeBack) === false)
+    extensionSyncStatus.value = 'offline'
 }
 
 async function refreshBootstrap() {
@@ -563,14 +572,14 @@ async function refreshBootstrap() {
     if (accountId) {
       const result = await refreshBootstrapSnapshot(accountId)
       if (result.data) {
-        applyBootstrapData(result.data)
+        await applyBootstrapData(result.data)
         extensionSyncStatus.value = 'online'
         return
       }
     }
     const bootstrapRes = await getBootstrap()
     if (bootstrapRes.code === 0 && bootstrapRes.data) {
-      applyBootstrapData(bootstrapRes.data)
+      await applyBootstrapData(bootstrapRes.data)
       extensionSyncStatus.value = 'online'
       return
     }
@@ -582,22 +591,23 @@ async function refreshBootstrap() {
     if (await loadDirectFromApi())
       extensionSyncStatus.value = 'online'
     else
-      loadCachedSnapshot()
+      await loadCachedSnapshot()
   }
   catch {
-    loadCachedSnapshot()
+    await loadCachedSnapshot()
   }
   finally {
     isRefreshing = false
   }
 }
 
-function loadCachedSnapshot() {
+async function loadCachedSnapshot() {
   const accountId = authStore.userInfo?.id
   const cached = accountId ? readBootstrapSnapshot(accountId) : null
   if (cached?.data) {
-    applyBootstrapData(cached.data)
-    extensionSyncStatus.value = navigator.onLine ? 'cached' : 'offline'
+    await applyBootstrapData(cached.data)
+    if (extensionSyncStatus.value !== 'offline')
+      extensionSyncStatus.value = navigator.onLine ? 'cached' : 'offline'
   }
   else {
     extensionSyncStatus.value = 'error'
@@ -863,15 +873,19 @@ async function handleBrowserOnline() {
   await refreshBootstrap()
 }
 
-function applyExternalStorageChanges() {
+async function applyExternalStorageChanges() {
   externalStorageTimer = null
   const keys = [...externalStorageKeys]
   externalStorageKeys.clear()
 
   if (keys.includes(EXTENSION_APPEARANCE_KEY)) {
     const appearance = readExtensionAppearance()
-    if (appearance)
-      panelState.applyPanelConfig(appearance)
+    if (appearance) {
+      // 等待回写 promise，失败时同步状态不假装成功。
+      const writeBack = panelState.applyPanelConfig(appearance, { surface: 'extension', mode: appStore.theme ?? 'auto', writeBack: true }).writeBack
+      if (writeBack && (await writeBack) === false)
+        extensionSyncStatus.value = 'offline'
+    }
   }
   if (keys.includes(EXTENSION_WIDGETS_KEY))
     widgetPreferences.value = readExtensionWidgets()
@@ -886,7 +900,7 @@ function applyExternalStorageChanges() {
     })
   }
   if (keys.some(key => key.startsWith(BOOTSTRAP_SNAPSHOT_KEY_PREFIX)))
-    loadCachedSnapshot()
+    await loadCachedSnapshot()
   refreshPendingMutationsCount()
 }
 
@@ -981,13 +995,13 @@ onUnmounted(() => {
       </button>
       <div class="rail-divider" />
       <button type="button" class="rail-button active" title="分组导航" @click="sidePanelOpen = !sidePanelOpen">
-        <SvgIcon icon="material-symbols:folder-outline-rounded" />
+        <ThemeIcon name="folder" />
       </button>
       <button type="button" class="rail-button" title="个人中心" @click="openSettings">
-        <SvgIcon icon="material-symbols:account-circle" />
+        <ThemeIcon name="user" />
       </button>
       <button type="button" class="rail-button" title="壁纸设置" @click="showWallpaperModal = true">
-        <SvgIcon icon="material-symbols:wallpaper" />
+        <ThemeIcon name="wallpaper" />
       </button>
       <button type="button" class="rail-button" :title="t('widgetLayout.manager.title')" @click="showWidgetManager = true">
         <SvgIcon icon="material-symbols:widgets-outline-rounded" />
@@ -998,7 +1012,7 @@ onUnmounted(() => {
         :title="pendingMutationsCount > 0 ? `有 ${pendingMutationsCount} 条离线修改待同步，点击管理队列` : '刷新同步'"
         @click="pendingMutationsCount > 0 ? (queueManagerVisible = true) : refreshBootstrap()"
       >
-        <SvgIcon icon="material-symbols:sync" :class="{ 'animate-spin': extensionSyncStatus === 'syncing' }" />
+        <ThemeIcon name="sync" :class="{ 'animate-spin': extensionSyncStatus === 'syncing' }" />
         <span
           v-if="pendingMutationsCount > 0"
           class="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 text-black text-[9px] font-bold rounded-full flex items-center justify-center"
@@ -1008,7 +1022,7 @@ onUnmounted(() => {
       </button>
       <div class="rail-spacer" />
       <button type="button" class="rail-button" title="系统设置" @click="openSettings">
-        <SvgIcon icon="material-symbols:settings-outline-rounded" />
+        <ThemeIcon name="settings" />
       </button>
     </div>
 
@@ -1225,8 +1239,8 @@ onUnmounted(() => {
       <!-- 居中胶囊全能搜索栏 -->
       <section v-if="widgetPreferences.search" class="search-section w-full max-w-[640px] mb-8">
         <div
-          class="search-bar-capsule flex items-center bg-white/20 dark:bg-black/35 backdrop-blur-xl border border-white/25 dark:border-white/10 rounded-full px-3 py-2 shadow-lg transition-all duration-300"
-          :class="{ 'ring-2 ring-emerald-400/60 shadow-emerald-500/20 bg-white/30 dark:bg-black/50': isSearchFocused }"
+          class="search-bar-capsule flex items-center backdrop-blur-xl px-3 py-2 shadow-lg transition-all duration-300"
+          :class="{ 'is-focused': isSearchFocused }"
         >
           <!-- 搜索引擎下拉切换 -->
           <NDropdown :options="engineDropdownOptions" trigger="click" @select="handleSelectEngine">
@@ -1851,6 +1865,15 @@ onUnmounted(() => {
 /* 搜索栏 */
 .search-bar-capsule {
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.25);
+  background: var(--pn-search-background, var(--pn-widget-background, rgb(255 255 255 / 20%)));
+  border: 1px solid var(--pn-search-border, var(--pn-widget-border, rgb(255 255 255 / 25%)));
+  border-radius: var(--pn-search-radius, var(--pn-radius-large, 999px));
+}
+
+/* 聚焦态：读取搜索 Token，避免写死 --pn-widget-* 或任意硬编码颜色。 */
+.search-bar-capsule.is-focused {
+  box-shadow: 0 0 0 2px var(--pn-color-accent, rgb(52 211 153 / 60%));
+  background: var(--pn-search-background, var(--pn-widget-background, rgb(255 255 255 / 30%)));
 }
 
 .active-group-meta { margin: 0 10px 12px; display: flex; align-items: baseline; gap: 10px; color: rgba(255,255,255,.9); }

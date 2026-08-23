@@ -18,14 +18,14 @@ for (const rule of [
   assert.match(home, rule)
 }
 assert.match(starter, /isSmallScreen/)
-assert.match(starter, /screenWidth\.value < 640/)
+assert.match(starter, /screenWidth\.value < 768/)
 assert.match(starter, /dark:/)
 assert.match(theme, /document\.documentElement\.classList\.(?:add|remove)\('dark'\)/)
 assert.match(theme, /useOsTheme/)
-assert.match(home, /<SvgIcon/g)
+assert.match(home, /<ThemeIcon/g)
 assert.match(login, /width:\s*min\(440px, 100%\)/)
 assert.ok(!/min-width:\s*400px/.test(login), 'login card must not overflow narrow extension windows')
-assert.match(editItem, /width: min\(600px, calc\(100vw - 24px\)\)/)
+assert.match(editItem, /width: min\(620px, calc\(100vw - 24px\)\)/)
 assert.ok(!roundCardModal.includes(':style="$parent"'), 'shared modal must not bind a component proxy as inline CSS')
 assert.match(roundCardModal, /maxWidth: 'calc\(100vw - 24px\)'/)
 

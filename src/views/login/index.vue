@@ -92,7 +92,7 @@ async function loginPost() {
   catch (error) {
     loading.value = false
     ms.error(t('common.networkError'))
-    console.log(error)
+    console.error(error)
   }
 }
 

@@ -86,14 +86,16 @@ export const useAuthStore = defineStore('auth-store', {
           const { getDeviceIdentity } = await import('@/runtime/device')
           const deviceIdentity = getDeviceIdentity()
           const response = await axios.post(
-            `${getRuntime().getApiBaseUrl()}/api/v1/sessions/refresh`,
+            `${getRuntime().getApiBaseUrl()}/v1/sessions/refresh`,
             { refreshToken, ...deviceIdentity },
             { headers: { lang: useAppStore().language } },
           )
           const data = response.data
           if (data.code !== 0 || !data.data) {
-            if ([1000, 1001, 1008, 1009].includes(data.code))
-              this.clearSession()
+            // 刷新端点给出明确业务拒绝：无论具体错误码如何，
+            // 会话都已无法静默续期，必须清理本地会话走重新登录，
+            // 否则页面会陷入「每次请求都报 Access token expired」的僵尸状态。
+            this.clearSession()
             return false
           }
           this.updateDeviceSession(data.data)

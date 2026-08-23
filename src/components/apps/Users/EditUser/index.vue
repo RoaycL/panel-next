@@ -102,7 +102,7 @@ const handleValidateButtonClick = (e: MouseEvent) => {
     if (!errors)
       add()
     else
-      console.log(errors)
+      console.warn(errors)
   })
 }
 </script>

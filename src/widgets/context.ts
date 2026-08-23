@@ -1,6 +1,7 @@
 import type { InjectionKey } from 'vue'
 import { inject } from 'vue'
 import { getRuntime } from '@/runtime'
+import type { ThemeTokens, ResolvedThemeMode } from '@/themes/types'
 import type { WidgetCapability, WidgetSurface } from './types'
 import { assertContextCapability, WidgetPermissionError } from './capabilities'
 
@@ -21,6 +22,12 @@ export interface WidgetContext {
   editMode: boolean
   capabilities: readonly WidgetCapability[]
   surface: WidgetSurface
+  /** 当前主题 ID；无 ThemeProvider 时为默认主题。 */
+  themeId: string
+  /** 实际明暗模式（auto 已解析）。 */
+  resolvedMode: ResolvedThemeMode
+  /** 只读 Widget Token 切片（含图表色板）。 */
+  themeTokens: Readonly<ThemeTokens['widget']>
 }
 
 export const WIDGET_CONTEXT_KEY: InjectionKey<WidgetContext> = Symbol('panel-next-widget-context')

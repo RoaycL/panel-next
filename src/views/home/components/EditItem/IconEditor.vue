@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NButton, NColorPicker, NInput, NModal, NRadio, NUpload } from 'naive-ui'
+import { NButton, NColorPicker, NInput, NModal, NUpload } from 'naive-ui'
 import type { UploadFileInfo } from 'naive-ui'
 import { computed, ref } from 'vue'
 import { ItemIcon } from '@/components/common'
@@ -94,120 +94,219 @@ function handleGallerySelect(url: string) {
 </script>
 
 <template>
-  <div>
-    <div class="mb-[10px]">
-      <NRadio
-        :checked="itemIconInfo.itemType === 1 "
-        :value="1"
-        name="iconType"
-        @change="handleIconTypeRadioChange(1)"
+  <div class="icon-editor-container">
+    <!-- 图标类型选择 (现代胶囊切换) -->
+    <div class="type-selector-bar mb-3">
+      <button
+        type="button"
+        class="type-pill-btn"
+        :class="{ 'active': itemIconInfo.itemType === 1 }"
+        @click="handleIconTypeRadioChange(1)"
       >
-        {{ $t('common.text') }}
-      </NRadio>
+        <SvgIcon icon="tabler:letter-case" class="text-sm" />
+        <span>{{ $t('common.text') }}</span>
+      </button>
 
-      <NRadio
-        :checked="itemIconInfo.itemType === 2"
-        :value="2"
-        name="iconType"
-        @change="handleIconTypeRadioChange(2)"
+      <button
+        type="button"
+        class="type-pill-btn"
+        :class="{ 'active': itemIconInfo.itemType === 2 }"
+        @click="handleIconTypeRadioChange(2)"
       >
-        {{ $t('common.image') }}
-      </NRadio>
+        <SvgIcon icon="tabler:photo" class="text-sm" />
+        <span>{{ $t('common.image') }}</span>
+      </button>
 
-      <NRadio
-        :checked="itemIconInfo.itemType === 3"
-        :value="3"
-        name="iconType"
-        @change="handleIconTypeRadioChange(3)"
+      <button
+        type="button"
+        class="type-pill-btn"
+        :class="{ 'active': itemIconInfo.itemType === 3 }"
+        @click="handleIconTypeRadioChange(3)"
       >
-        {{ $t('iconItem.onlineIcon') }}
-      </NRadio>
+        <SvgIcon icon="tabler:world" class="text-sm" />
+        <span>{{ $t('iconItem.onlineIcon') }}</span>
+      </button>
     </div>
 
-    <div class=" h-[100px]">
-      <div class="flex">
-        <div>
-          <div class="border rounded-2xl bg-slate-200 overflow-hidden rounded-2xl transparent-grid">
-            <ItemIcon :item-icon="itemIconInfo" />
-          </div>
-        </div>
-        <!-- 文字 -->
-        <div class="ml-[20px]">
-          <!-- <NImage :src="model.icon" preview-disabled /> -->
-          <div v-if="itemIconInfo.itemType === 1">
-            <NInput v-model:value="itemIconInfo.text" class="mb-[5px]" size="small" type="text" @input="handleChange" />
-          </div>
-
-          <div v-if="itemIconInfo.itemType === 3">
-            <div>
-              <NInput v-model:value="itemIconInfo.text" class="mb-[5px]" size="small" type="text" :placeholder="$t('iconItem.inputIconName')" @input="handleChange" />
-
-              <NButton quaternary type="info">
-                <a target="_blank" href="https://icon-sets.iconify.design/">{{ $t('iconItem.onlineIconLibrary') }}</a>
-              </NButton>
-            </div>
-          </div>
-
-          <!-- 图片 -->
-          <div v-if="itemIconInfo.itemType === 2">
-            <NInput v-model:value="itemIconInfo.src" class="mb-[5px] w-full" size="small" type="text" :placeholder="$t('iconItem.inputIconUrlOrUpload')" @input="handleChange" />
-            <div class="flex gap-[5px]">
-              <NUpload
-                :action="uploadAction"
-                :show-file-list="false"
-                name="imgfile"
-                :data="{ fileType: 'icon' }"
-                :headers="{
-                  Authorization: `Bearer ${authStore.token}`,
-                  token: authStore.token as string,
-                }"
-                @finish="handleUploadFinish"
-              >
-                <NButton size="small">
-                  {{ $t('iconItem.selectUpload') }}
-                </NButton>
-              </NUpload>
-              <NButton size="small" @click="showGallery = true">
-                {{ $t('iconItem.selectFromGallery') }}
-              </NButton>
-            </div>
-          </div>
-        </div>
+    <!-- 核心编辑区 (预览与表单) -->
+    <div class="icon-editor-body flex gap-4 items-start">
+      <!-- 实时预览区 -->
+      <div class="icon-preview-frame">
+        <ItemIcon :item-icon="itemIconInfo" />
       </div>
 
-      <div class="flex items-center mt-[10px]">
-        <div class="w-auto text-slate-500 mr-[10px]">
-          {{ $t('common.backgroundColor') }}
+      <!-- 右侧表单配置 -->
+      <div class="flex-1 min-w-0">
+        <!-- 文字模式 -->
+        <div v-if="itemIconInfo.itemType === 1">
+          <div class="text-xs text-slate-400 dark:text-zinc-400 mb-1">
+            {{ $t('common.textContent') || '图标显示文字' }}
+          </div>
+          <NInput v-model:value="itemIconInfo.text" size="small" type="text" placeholder="如：GPT" @input="handleChange" />
         </div>
-        <div class="w-[150px] flex items-center mr-[10px]">
-          <NColorPicker
-            v-model:value="itemIconInfo.backgroundColor"
-            size="small"
-            :modes="['hex']"
-            :swatches="defautSwatchesBackground"
-            @complete="handleChange"
-            @update-value="handleChange"
-          />
+
+        <!-- 在线图标模式 (Iconify) -->
+        <div v-if="itemIconInfo.itemType === 3" class="flex flex-col gap-1.5">
+          <div class="flex items-center justify-between text-xs text-slate-400 dark:text-zinc-400">
+            <span>{{ $t('iconItem.onlineIcon') }} (Iconify 名称)</span>
+            <a target="_blank" href="https://icon-sets.iconify.design/" class="text-sky-400 hover:underline flex items-center gap-0.5">
+              <span>{{ $t('iconItem.onlineIconLibrary') }}</span>
+              <SvgIcon icon="tabler:external-link" class="text-[11px]" />
+            </a>
+          </div>
+          <NInput v-model:value="itemIconInfo.text" size="small" type="text" :placeholder="$t('iconItem.inputIconName')" @input="handleChange" />
         </div>
-        <div v-if="itemIconInfo.backgroundColor !== initData.backgroundColor" class="w-auto text-slate-500 mr-[10px] cursor-pointer">
-          <NButton quaternary type="info" @click="handleResetBackgroundColor">
+
+        <!-- 图片模式 (URL / 上传 / 图库) -->
+        <div v-if="itemIconInfo.itemType === 2" class="flex flex-col gap-2">
+          <div class="text-xs text-slate-400 dark:text-zinc-400">
+            {{ $t('iconItem.inputIconUrlOrUpload') }}
+          </div>
+          <NInput v-model:value="itemIconInfo.src" size="small" type="text" placeholder="https://... 或本地上传" @input="handleChange" />
+          <div class="flex gap-2">
+            <NUpload
+              :action="uploadAction"
+              :show-file-list="false"
+              name="imgfile"
+              :data="{ fileType: 'icon' }"
+              :headers="{
+                Authorization: `Bearer ${authStore.token}`,
+                token: authStore.token as string,
+              }"
+              @finish="handleUploadFinish"
+            >
+              <NButton size="small" secondary type="primary">
+                <template #icon>
+                  <SvgIcon icon="tabler:cloud-upload" />
+                </template>
+                {{ $t('iconItem.selectUpload') }}
+              </NButton>
+            </NUpload>
+            <NButton size="small" secondary @click="showGallery = true">
+              <template #icon>
+                <SvgIcon icon="tabler:photo-search" />
+              </template>
+              {{ $t('iconItem.selectFromGallery') }}
+            </NButton>
+          </div>
+        </div>
+
+        <!-- 背景色调节 -->
+        <div class="flex items-center gap-2.5 mt-3 pt-2.5 border-t border-white/10 dark:border-white/10">
+          <span class="text-xs text-slate-400 dark:text-zinc-400 whitespace-nowrap">{{ $t('common.backgroundColor') }}:</span>
+          <div class="w-[120px]">
+            <NColorPicker
+              v-model:value="itemIconInfo.backgroundColor"
+              size="small"
+              :modes="['hex']"
+              :swatches="defautSwatchesBackground"
+              @complete="handleChange"
+              @update-value="handleChange"
+            />
+          </div>
+          <button
+            v-if="itemIconInfo.backgroundColor !== initData.backgroundColor"
+            type="button"
+            class="text-xs text-sky-400 hover:text-sky-300 transition-colors underline cursor-pointer"
+            @click="handleResetBackgroundColor"
+          >
             {{ $t('common.reset') }}
-          </NButton>
+          </button>
         </div>
       </div>
     </div>
 
-    <NModal v-model:show="showGallery" preset="card" size="small" style="width: min(700px, calc(100vw - 24px)); max-height: calc(100vh - 24px);" :title="t('iconItem.selectFromGallery')">
+    <!-- 图库选择模态框 -->
+    <NModal
+      v-model:show="showGallery"
+      preset="card"
+      size="small"
+      class="round-card-modal"
+      style="width: min(720px, calc(100vw - 24px)); max-height: calc(100vh - 24px);"
+      :title="t('iconItem.selectFromGallery')"
+    >
       <GallerySelector type="icon" @select="handleGallerySelect" />
     </NModal>
   </div>
 </template>
 
 <style scoped>
-.transparent-grid {
-    background-image: linear-gradient(45deg, #fff 25%, transparent 25%, transparent 75%, #fff 75%),
-                      linear-gradient(45deg, #fff 25%, transparent 25%, transparent 75%, #fff 75%);
-    background-size: 16px 16px;
-    background-position: 0 0, 8px 8px;
+.icon-editor-container {
+  width: 100%;
+}
+
+.type-selector-bar {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  gap: 3px;
+}
+
+html.dark .type-selector-bar {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.type-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 7px;
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+html.dark .type-pill-btn {
+  color: #94a3b8;
+}
+
+.type-pill-btn:hover {
+  color: #0284c7;
+  background: rgba(2, 132, 199, 0.06);
+}
+
+html.dark .type-pill-btn:hover {
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.08);
+}
+
+.type-pill-btn.active {
+  background: #0284c7;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.25);
+}
+
+html.dark .type-pill-btn.active {
+  background: #38bdf8;
+  color: #0f172a;
+  box-shadow: 0 2px 10px rgba(56, 189, 248, 0.35);
+  font-weight: 600;
+}
+
+.icon-preview-frame {
+  width: 68px;
+  height: 68px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1.5px solid rgba(56, 189, 248, 0.35);
+  background: rgba(56, 189, 248, 0.05);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+}
+
+html:not(.dark) .icon-preview-frame {
+  border-color: rgba(2, 132, 199, 0.25);
+  background: rgba(2, 132, 199, 0.04);
 }
 </style>

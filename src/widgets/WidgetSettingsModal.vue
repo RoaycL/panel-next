@@ -58,7 +58,7 @@ function save() {
 </script>
 
 <template>
-  <NModal v-model:show="visible" preset="card" :title="t('widgetLayout.settings.title')" :style="modalStyle">
+  <NModal v-model:show="visible" preset="card" class="round-card-modal" :title="t('widgetLayout.settings.title')" :style="modalStyle">
     <div v-if="instance && fields.length" class="widget-settings-fields">
       <label v-for="([key, descriptor]) in fields" :key="key" class="widget-settings-field">
         <span>{{ fieldLabel(key, descriptor.label) }}</span>

@@ -1,0 +1,58 @@
+/* Variant 结构层（§13）：只重映射项目内置的稳定 CSS 自定义属性，
+ * 不注入任意 HTML/选择器；第三方主题通过声明 Variant 复用这些内置形态。 */
+
+/* ------------------------------- Bookmark -------------------------------- */
+.pn-theme-root[data-bookmark='solid'] {
+  --pn-bookmark-card-background: var(--pn-color-surface);
+  --pn-bookmark-card-border: var(--pn-color-border);
+}
+
+.pn-theme-root[data-bookmark='minimal'] {
+  --pn-bookmark-card-shadow: none;
+  --pn-bookmark-card-border: transparent;
+}
+
+/* --------------------------------- Widget -------------------------------- */
+.pn-theme-root[data-widget='solid'] {
+  --pn-widget-background: var(--pn-color-surface);
+  --pn-widget-border: var(--pn-color-border);
+}
+
+.pn-theme-root[data-widget='borderless'] {
+  --pn-widget-background: transparent;
+  --pn-widget-border: transparent;
+  --pn-widget-shadow: none;
+}
+
+.pn-widget-shell[data-widget='borderless'] .widget-shell-frame {
+  backdrop-filter: none;
+}
+
+/* --------------------------------- Sidebar ------------------------------- */
+.pn-theme-root[data-sidebar='attached'] {
+  --pn-sidebar-background: var(--pn-color-surface);
+}
+
+.pn-theme-root[data-sidebar='minimal'] {
+  --pn-sidebar-background: transparent;
+  --pn-sidebar-border: transparent;
+}
+
+/* --------------------------------- Search -------------------------------- */
+.pn-theme-root[data-search='box'] {
+  --pn-search-radius: var(--pn-radius-medium);
+  --pn-search-background: var(--pn-color-surface);
+  --pn-search-border: var(--pn-color-border);
+}
+
+.pn-theme-root[data-search='underline'] {
+  --pn-search-radius: 0;
+  --pn-search-background: transparent;
+  --pn-search-border: transparent;
+  --pn-search-underline: var(--pn-color-accent);
+}
+
+.pn-theme-root[data-search='underline'] .search-container {
+  border-width: 0 0 2px !important;
+  border-bottom-color: var(--pn-search-underline) !important;
+}

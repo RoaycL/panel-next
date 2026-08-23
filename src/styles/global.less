@@ -8,3 +8,143 @@ body {
 	padding-bottom: constant(safe-area-inset-bottom);
 	padding-bottom: env(safe-area-inset-bottom);
 }
+
+/* ==========================================================================
+   Global Frosted Glass UI Components (Acrylic Glassmorphism)
+   ========================================================================== */
+
+/* 1. Frosted Glass Dropdown Menu (Right Click & Action Menus) */
+.n-dropdown-menu {
+	background: rgba(20, 23, 31, 0.84) !important;
+	backdrop-filter: blur(24px) saturate(190%) !important;
+	-webkit-backdrop-filter: blur(24px) saturate(190%) !important;
+	border: 1px solid rgba(255, 255, 255, 0.12) !important;
+	border-radius: 14px !important;
+	padding: 6px !important;
+	box-shadow: 0 20px 45px -10px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.06) inset !important;
+}
+
+html:not(.dark) .n-dropdown-menu {
+	background: rgba(255, 255, 255, 0.90) !important;
+	border: 1px solid rgba(0, 0, 0, 0.08) !important;
+	box-shadow: 0 20px 45px -10px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(255, 255, 255, 0.8) inset !important;
+}
+
+.n-dropdown-option {
+	border-radius: 9px !important;
+	margin-bottom: 2px !important;
+	transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.n-dropdown-option:last-child {
+	margin-bottom: 0 !important;
+}
+
+.n-dropdown-option .n-dropdown-option-body {
+	padding: 8px 12px !important;
+	font-size: 13px !important;
+	font-weight: 500 !important;
+	border-radius: 9px !important;
+}
+
+.n-dropdown-option .n-dropdown-option-body:hover,
+.n-dropdown-option .n-dropdown-option-body--pending {
+	background: rgba(56, 189, 248, 0.16) !important;
+	color: #38bdf8 !important;
+}
+
+html:not(.dark) .n-dropdown-option .n-dropdown-option-body:hover,
+html:not(.dark) .n-dropdown-option .n-dropdown-option-body--pending {
+	background: rgba(2, 132, 199, 0.10) !important;
+	color: #0284c7 !important;
+}
+
+.n-dropdown-divider {
+	background-color: rgba(255, 255, 255, 0.08) !important;
+	margin: 4px 0 !important;
+}
+
+html:not(.dark) .n-dropdown-divider {
+	background-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+/* 2. Frosted Glass Popconfirm & Popover */
+.n-popover:not(.n-popover--raw) {
+	background: rgba(20, 23, 31, 0.88) !important;
+	backdrop-filter: blur(24px) saturate(190%) !important;
+	-webkit-backdrop-filter: blur(24px) saturate(190%) !important;
+	border: 1px solid rgba(255, 255, 255, 0.12) !important;
+	border-radius: 14px !important;
+	box-shadow: 0 20px 45px -10px rgba(0, 0, 0, 0.6) !important;
+}
+
+html:not(.dark) .n-popover:not(.n-popover--raw) {
+	background: rgba(255, 255, 255, 0.92) !important;
+	border: 1px solid rgba(0, 0, 0, 0.08) !important;
+	box-shadow: 0 20px 45px -10px rgba(0, 0, 0, 0.12) !important;
+}
+
+/* 3. Global Modal Preset Card Styling */
+.n-modal.n-card {
+	border-radius: 18px !important;
+	background: rgba(18, 20, 26, 0.84) !important;
+	backdrop-filter: blur(28px) saturate(190%) !important;
+	-webkit-backdrop-filter: blur(28px) saturate(190%) !important;
+	border: 1px solid rgba(255, 255, 255, 0.12) !important;
+	box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.08) inset !important;
+}
+
+html:not(.dark) .n-modal.n-card {
+	background: rgba(255, 255, 255, 0.90) !important;
+	border: 1px solid rgba(0, 0, 0, 0.08) !important;
+	box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.8) inset !important;
+}
+
+/* 4. Global Centered Footer */
+.home-footer {
+	width: 100%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	text-align: center;
+}
+
+.home-footer .footer-inner {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	text-align: center;
+}
+
+.home-footer .footer-badge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	padding: 4px 14px;
+	border-radius: 9999px;
+	background: rgba(0, 0, 0, 0.25);
+	backdrop-filter: blur(12px);
+	-webkit-backdrop-filter: blur(12px);
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+}
+
+html:not(.dark) .home-footer .footer-badge {
+	background: rgba(255, 255, 255, 0.65);
+	border: 1px solid rgba(0, 0, 0, 0.06);
+	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+}
+
+.home-footer .footer-link {
+	color: #38bdf8;
+	text-decoration: none;
+}
+
+html:not(.dark) .home-footer .footer-link {
+	color: #0284c7;
+}
+
+.home-footer .footer-link:hover {
+	text-decoration: underline;
+}

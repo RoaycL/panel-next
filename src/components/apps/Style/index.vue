@@ -8,6 +8,7 @@ import { PanelPanelConfigStyleEnum } from '@/enums/panel'
 import { t } from '@/locales'
 import { getRuntime } from '@/runtime'
 import { saveExtensionAppearance } from '@/runtime/extensionAppearance'
+import { enqueueAppearanceSave } from '@/themes/appearanceSaveQueue'
 import GallerySelector from '@/components/common/GallerySelector/index.vue'
 
 const showWallpaperGallery = ref(false)
@@ -80,24 +81,29 @@ function handleUploadBackgroundFinish({
 
 async function uploadCloud() {
   if (isExtension) {
-    const attempted = clonePanelConfig(panelState.panelConfig)
-    const attemptedBytes = JSON.stringify(attempted)
-    try {
-      await saveExtensionAppearance(attempted)
-      lastConfirmedExtensionAppearance = attempted
-      ms.success('扩展外观已独立保存')
-    }
-    catch (err) {
-      // A newer edit may already be visible and queued. Only roll the UI back
-      // when it still represents the exact snapshot that failed.
-      if (lastConfirmedExtensionAppearance && JSON.stringify(panelState.panelConfig) === attemptedBytes)
-        panelState.applyPanelConfig(clonePanelConfig(lastConfirmedExtensionAppearance))
-      ms.error('扩展外观保存失败，请重试')
-      console.error('Failed to save extension appearance:', err)
-    }
+    // 经统一外观保存队列串行化，避免整份外观写入跨调用点（主题/墙纸/widget）互相覆盖；
+    // 快照在任务真正开始那刻读取，Payload 反映最新的整份配置而非调用瞬间的旧值。
+    await enqueueAppearanceSave(async () => {
+      const attempted = clonePanelConfig(panelState.panelConfig)
+      const attemptedBytes = JSON.stringify(attempted)
+      try {
+        await saveExtensionAppearance(attempted)
+        lastConfirmedExtensionAppearance = attempted
+        ms.success(t('apps.baseSettings.extensionAppearanceSaved'))
+      }
+      catch (err) {
+        // A newer edit may already be visible and queued. Only roll the UI back
+        // when it still represents the exact snapshot that failed.
+        if (lastConfirmedExtensionAppearance && JSON.stringify(panelState.panelConfig) === attemptedBytes)
+          panelState.applyPanelConfig(clonePanelConfig(lastConfirmedExtensionAppearance))
+        ms.error(t('apps.baseSettings.extensionAppearanceSaveFailed'))
+        console.error('Failed to save extension appearance:', err)
+      }
+    })
     return
   }
-  setUserConfig({ panel: panelState.panelConfig }).then((res) => {
+  await enqueueAppearanceSave(async () => {
+    const res = await setUserConfig({ panel: panelState.panelConfig })
     if (res.code === 0)
       ms.success(t('apps.baseSettings.configSaved'))
     else
@@ -112,9 +118,9 @@ function resetPanelConfig() {
 </script>
 
 <template>
-  <div class="bg-slate-200 dark:bg-zinc-900 rounded-[10px] p-[8px] overflow-auto">
-    <NCard style="border-radius:10px" size="small">
-      <div class="text-slate-500 mb-[5px] font-bold">
+  <div class="flex flex-col gap-2.5 overflow-auto">
+    <NCard class="glass-sub-card" size="small">
+      <div class="text-sky-500 dark:text-sky-400 mb-[5px] font-semibold text-xs uppercase tracking-wider">
         LOGO
       </div>
 
@@ -123,7 +129,7 @@ function resetPanelConfig() {
           {{ $t('apps.baseSettings.textContent') }}
         </div>
         <div class="flex items-center mt-[5px]">
-          <NInput v-model:value="panelState.panelConfig.logoText" type="text" show-count :maxlength="20" placeholder="请输入文字" />
+          <NInput v-model:value="panelState.panelConfig.logoText" type="text" show-count :maxlength="20" :placeholder="t('apps.baseSettings.logoTextPlaceholder')" />
         </div>
       </div>
       <div class="flex items-center mt-[10px]">
@@ -246,13 +252,26 @@ function resetPanelConfig() {
         :directory-dnd="true"
         @finish="handleUploadBackgroundFinish"
       >
-        <NUploadDragger style="width: 100%;">
+        <NUploadDragger class="dropzone-dragger" style="width: 100%; background: transparent; border: none; padding: 0;">
           <div
-            class="h-[200px] w-full border bg-slate-100 flex justify-center items-center cursor-pointer rounded-[10px]"
-            :style="{ background: `url(${panelState.panelConfig.backgroundImageSrc}) no-repeat`, backgroundSize: 'cover' }"
+            class="dropzone-box group"
+            :style="{
+              backgroundImage: panelState.panelConfig.backgroundImageSrc ? `url(${panelState.panelConfig.backgroundImageSrc})` : undefined,
+              backgroundSize: 'cover',
+              backgroundRepeat: 'no-repeat',
+              backgroundPosition: 'center',
+            }"
           >
-            <div class="text-shadow text-white">
-              {{ $t('apps.baseSettings.uploadOrDragText') }}
+            <div v-if="panelState.panelConfig.backgroundImageSrc" class="dropzone-hover-overlay">
+              <span class="text-sm font-medium">点击更换壁纸</span>
+            </div>
+            <div v-else class="dropzone-empty-prompt">
+              <div class="text-xs font-semibold text-slate-700 dark:text-zinc-200">
+                {{ $t('apps.baseSettings.uploadOrDragText') }}
+              </div>
+              <div class="text-[11px] text-slate-400 dark:text-zinc-400">
+                支持 .webp, .png, .jpg, .jpeg, .gif, .avif 格式
+              </div>
             </div>
           </div>
         </NUploadDragger>
@@ -354,7 +373,7 @@ function resetPanelConfig() {
       </NButton>
     </NCard>
 
-    <NModal v-model:show="showWallpaperGallery" preset="card" size="small" style="width: min(700px, calc(100vw - 24px)); max-height: calc(100vh - 24px);" :title="t('apps.baseSettings.selectFromGallery')">
+    <NModal v-model:show="showWallpaperGallery" preset="card" size="small" class="round-card-modal" style="width: min(700px, calc(100vw - 24px)); max-height: calc(100vh - 24px);" :title="t('apps.baseSettings.selectFromGallery')">
       <GallerySelector type="wallpaper" @select="handleWallpaperGallerySelect" />
     </NModal>
   </div>
@@ -363,5 +382,68 @@ function resetPanelConfig() {
 <style scoped>
 .text-shadow{
   text-shadow: 0px 0px 5px gray;
+}
+
+:deep(.n-card) {
+  border-radius: 12px !important;
+  background: rgba(255, 255, 255, 0.035) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+html:not(.dark) :deep(.n-card) {
+  background: rgba(255, 255, 255, 0.7) !important;
+  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+}
+
+.dropzone-box {
+  height: 160px;
+  width: 100%;
+  border-radius: 12px;
+  border: 1.5px dashed rgba(56, 189, 248, 0.35);
+  background: rgba(56, 189, 248, 0.04);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+html:not(.dark) .dropzone-box {
+  border-color: rgba(2, 132, 199, 0.35);
+  background: rgba(2, 132, 199, 0.03);
+}
+
+.dropzone-box:hover {
+  border-color: rgba(56, 189, 248, 0.7);
+  background: rgba(56, 189, 248, 0.08);
+}
+
+.dropzone-empty-prompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px;
+  text-align: center;
+}
+
+.dropzone-hover-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+}
+
+.dropzone-box:hover .dropzone-hover-overlay {
+  opacity: 1;
 }
 </style>

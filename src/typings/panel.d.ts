@@ -64,6 +64,8 @@ declare namespace Panel {
         systemMonitorPublicVisitModeShow?:boolean
         netModeChangeButtonShow?:boolean
         widgets?:import('@/widgets').WidgetLayout
+        /** 主题选择信封（Theme SDK v1）；Web 随 panelConfig 同步服务端，Extension 仅本地保存。 */
+        theme?:import('@/themes').ThemeSelection
     }
 
     interface userConfig{

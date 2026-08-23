@@ -7,11 +7,16 @@ import { useLanguage } from '@/hooks/useLanguage'
 import { handleRuntimeLink } from '@/runtime/navigation'
 import { getRuntime } from '@/runtime'
 import { extensionThemeOverrides } from '@/theme/extensionTheme'
+import { usePanelState } from '@/store/modules/panel'
+import { ThemeProvider, registerThemeStoreAccessor } from '@/themes'
 
 const { theme } = useTheme()
 const { language } = useLanguage()
 const runtime = getRuntime()
 const themeOverrides = computed(() => runtime.kind === 'extension' ? extensionThemeOverrides : undefined)
+const panelStore = usePanelState()
+registerThemeStoreAccessor(() => panelStore)
+const themeSelection = computed(() => panelStore.panelConfig.theme ?? null)
 </script>
 
 <template>
@@ -20,10 +25,12 @@ const themeOverrides = computed(() => runtime.kind === 'extension' ? extensionTh
     :locale="language"
     :theme-overrides="themeOverrides"
   >
-    <div class="h-full" @click.capture="handleRuntimeLink" @auxclick.capture="handleRuntimeLink">
-      <NaiveProvider>
-        <RouterView />
-      </NaiveProvider>
-    </div>
+    <ThemeProvider :surface="runtime.kind" :selection="themeSelection">
+      <div class="h-full" @click.capture="handleRuntimeLink" @auxclick.capture="handleRuntimeLink">
+        <NaiveProvider>
+          <RouterView />
+        </NaiveProvider>
+      </div>
+    </ThemeProvider>
   </NConfigProvider>
 </template>

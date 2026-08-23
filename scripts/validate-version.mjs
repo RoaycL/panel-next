@@ -6,6 +6,8 @@ const source = fs.readFileSync(path.resolve(policy.source), 'utf8').trim()
 const [rawCode, version] = source.split('|')
 const packageJson = JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf8'))
 const manifest = JSON.parse(fs.readFileSync(path.resolve('extension/manifest.json'), 'utf8'))
+const envContent = fs.readFileSync(path.resolve('.env'), 'utf8')
+const envVersion = /^VITE_APP_VERSION=(.+)$/m.exec(envContent)?.[1]?.trim()
 const versionPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
 const match = versionPattern.exec(version || '')
 
@@ -17,8 +19,8 @@ if (policy.stage !== 'testing' || policy.series !== '0.0' || policy.firstVersion
   throw new Error('Testing version policy was changed. Review version-policy.json explicitly before packaging.')
 if (`${match[1]}.${match[2]}` !== policy.series || Number(match[3]) < 1)
   throw new Error(`Testing packages must use ${policy.series}.x starting at ${policy.firstVersion}; received ${version}.`)
-if (packageJson.version !== version || manifest.version !== version)
-  throw new Error(`Version mismatch: source=${version}, package=${packageJson.version}, manifest=${manifest.version}`)
+if (packageJson.version !== version || manifest.version !== version || envVersion !== version)
+  throw new Error(`Version mismatch: source=${version}, package=${packageJson.version}, manifest=${manifest.version}, env=${envVersion || '(missing)'}`)
 if (manifest.version_name !== `${version} ${policy.label}`)
   throw new Error(`Manifest version_name must identify the testing package as "${version} ${policy.label}".`)
 

@@ -10,13 +10,15 @@ import {
   NSpin,
   useMessage,
 } from 'naive-ui'
-import { useAuthStore } from '@/store'
+import { useAuthStore, usePanelState } from '@/store/modules'
+import { ThemeSettingsModal } from '@/themes'
 import { getRuntime } from '@/runtime'
 import { SvgIcon } from '@/components/common'
 import { logout } from '@/api'
 import { updateInfo } from '@/api/system/user'
 import { updateLocalUserInfo } from '@/utils/cmn'
 import defaultBackground from '@/assets/defaultBackground.webp'
+import { t } from '@/locales'
 
 const props = defineProps<{
   show: boolean
@@ -51,6 +53,15 @@ const ImportExportApp = defineAsyncComponent(() => import('@/components/apps/Imp
 
 type NavKey = 'profile' | 'style' | 'gallery' | 'docker' | 'system' | 'server' | 'about'
 const currentTab = ref<NavKey>('profile')
+
+// 主题中心（Theme SDK）：预览不落盘，确认后才写入本地外观。
+const themeCenterVisible = ref(false)
+const panelStore = usePanelState()
+const panelConfig = computed(() => panelStore.panelConfig)
+
+function onThemeSaved(selection: import('@/themes').ThemeSelection) {
+  panelStore.panelConfig = { ...panelStore.panelConfig, theme: selection }
+}
 
 // 个人资料配置表单
 const editName = ref(authStore.userInfo?.name || authStore.userInfo?.username || '')
@@ -252,7 +263,7 @@ async function handleLogout() {
                   <span>PANEL NEXT 控制中心</span>
                 </span>
                 <span class="text-[10px] text-white/70 bg-white/10 px-2 py-0.5 rounded-full backdrop-blur-md">
-                  Rev: {{ syncRevision }}
+                  {{ t('userHubModal.revision') }}: {{ syncRevision }}
                 </span>
               </div>
             </div>
@@ -506,6 +517,18 @@ async function handleLogout() {
 
           <!-- 1. 界面与风格定制 -->
           <div v-else-if="currentTab === 'style'" class="view-panel">
+            <div class="mb-4 flex justify-end">
+              <NButton size="small" @click="themeCenterVisible = true">
+                主题中心
+              </NButton>
+            </div>
+            <ThemeSettingsModal
+              :show="themeCenterVisible"
+              surface="extension"
+              :current-selection="panelConfig?.theme ?? null"
+              @update:show="(value: boolean) => themeCenterVisible = value"
+              @saved="onThemeSaved"
+            />
             <Suspense>
               <template #default>
                 <StyleApp />

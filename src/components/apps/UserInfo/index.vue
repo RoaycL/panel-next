@@ -95,7 +95,7 @@ function handleUpdatePassword(e: MouseEvent) {
   e.preventDefault()
   formRef.value?.validate((errors) => {
     if (errors) {
-      console.log(errors)
+      console.warn(errors)
       return
     }
 

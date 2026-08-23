@@ -1,6 +1,6 @@
 {
   "name": "panel-next",
-  "version": "0.0.6",
+  "version": "0.0.10",
   "packageManager": "pnpm@11.20.0",
   "engines": {
     "node": ">=22.13"
@@ -33,10 +33,12 @@
     "validate:status-ui": "node ./scripts/validate-status-ui.mjs",
     "validate:responsive-ui": "node ./scripts/validate-responsive-ui.mjs",
     "validate:widget-registry": "node ./scripts/validate-widget-registry.mjs",
+    "validate:theme-registry": "node ./scripts/validate-theme-registry.mjs",
     "test:widget-network": "node ./scripts/test-widget-network.mjs",
     "test:widget-capabilities": "node ./scripts/test-widget-capabilities.mjs",
     "test:extension-persistence": "node ./scripts/test-extension-persistence.mjs",
     "test:request-security": "node ./scripts/test-request-security.mjs",
+    "test:branding": "node ./scripts/test-branding-migration.mjs",
     "validate:offline-sync": "node ./scripts/validate-offline-sync.mjs",
     "validate:repository": "node ./scripts/validate-repository-hygiene.mjs",
     "build:all": "node ./scripts/build-all.mjs",

@@ -15,18 +15,18 @@ catch {
   appVersion = moment().utc().format('YYYYMMDD')
 }
 
-const contentToAppend = `\nVITE_APP_VERSION=${appVersion}`
+const versionLine = `VITE_APP_VERSION=${appVersion}`
 const envFilePath = '.env'
 let envContent = fs.readFileSync(envFilePath, 'utf-8')
 
 const versionRegex = /^VITE_APP_VERSION=.*$/m
 if (versionRegex.test(envContent)) {
-  envContent = envContent.replace(versionRegex, contentToAppend)
+  envContent = envContent.replace(versionRegex, versionLine)
 }
 else {
-  envContent = envContent + contentToAppend
+  envContent = `${envContent.replace(/\s*$/, '')}\n\n${versionLine}\n`
 }
 
 fs.writeFileSync(envFilePath, envContent)
 
-console.log('update to .env file.', contentToAppend)
+console.log('update to .env file.', versionLine)

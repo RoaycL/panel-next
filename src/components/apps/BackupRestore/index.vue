@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import type { UploadFileInfo } from 'naive-ui'
-import { NAlert, NButton, NCard, NSpace, NText, NUpload, useDialog, useMessage } from 'naive-ui'
+import { NAlert, NButton, NCard, NText, NUpload, useDialog, useMessage } from 'naive-ui'
 import { exportBackup, restoreBackup } from '@/api/system/backup'
 import { SvgIcon } from '@/components/common'
 import { t } from '@/locales'
@@ -68,16 +68,19 @@ async function handleRestore(file: File) {
 </script>
 
 <template>
-  <div class="p-3 h-full bg-slate-100 dark:bg-zinc-900">
-    <NAlert type="warning" :bordered="false" class="mb-3">
+  <div class="backup-restore-container flex flex-col gap-3 h-full overflow-auto p-1">
+    <NAlert type="warning" :bordered="false">
       {{ $t('apps.backupRestore.warning') }}
     </NAlert>
-    <NSpace vertical size="large">
-      <NCard :title="$t('apps.backupRestore.exportTitle')" size="small">
-        <NText depth="3">
+    <div class="flex flex-col gap-3.5 mt-1">
+      <NCard class="glass-sub-card" size="small">
+        <div class="text-sm font-semibold text-sky-500 dark:text-sky-400 mb-1">
+          {{ $t('apps.backupRestore.exportTitle') }}
+        </div>
+        <NText depth="3" class="text-xs">
           {{ $t('apps.backupRestore.exportDescription') }}
         </NText>
-        <div class="mt-4">
+        <div class="mt-3">
           <NButton type="primary" :loading="exporting" @click="handleExport">
             <template #icon>
               <SvgIcon icon="fa6-solid-file-export" />
@@ -87,11 +90,14 @@ async function handleRestore(file: File) {
         </div>
       </NCard>
 
-      <NCard :title="$t('apps.backupRestore.restoreTitle')" size="small">
-        <NText depth="3">
+      <NCard class="glass-sub-card" size="small">
+        <div class="text-sm font-semibold text-amber-500 dark:text-amber-400 mb-1">
+          {{ $t('apps.backupRestore.restoreTitle') }}
+        </div>
+        <NText depth="3" class="text-xs">
           {{ $t('apps.backupRestore.restoreDescription') }}
         </NText>
-        <div class="mt-4">
+        <div class="mt-3">
           <NUpload
             accept=".zip,application/zip"
             :default-upload="false"
@@ -108,6 +114,19 @@ async function handleRestore(file: File) {
           </NUpload>
         </div>
       </NCard>
-    </NSpace>
+    </div>
   </div>
 </template>
+
+<style scoped>
+:deep(.n-card.glass-sub-card) {
+  border-radius: 12px !important;
+  background: rgba(255, 255, 255, 0.035) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+html:not(.dark) :deep(.n-card.glass-sub-card) {
+  background: rgba(255, 255, 255, 0.7) !important;
+  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+}
+</style>

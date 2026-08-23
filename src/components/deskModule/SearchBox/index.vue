@@ -16,8 +16,10 @@ withDefaults(defineProps<{
   background?: string
   textColor?: string
 }>(), {
-  background: '#2a2a2a6b',
-  textColor: 'white',
+  // 默认值跟随主题 Search/Widget Token（无 ThemeProvider 时回退原视觉）；
+  // Search Variant 通过 --pn-search-* 变量重映射形态。
+  background: 'var(--pn-search-background, var(--pn-widget-background, #2a2a2a6b))',
+  textColor: 'var(--pn-search-text-color, var(--pn-widget-text-color, white))',
 })
 
 const emits = defineEmits(['itemSearch'])
@@ -219,7 +221,8 @@ function handleSlashKey(e: KeyboardEvent) {
 
 <style scoped>
 .search-container {
-  border: 1px solid #ccc;
+  border: 1px solid var(--pn-search-border, var(--pn-widget-border, rgb(204 204 204 / 60%)));
+  border-radius: var(--pn-search-radius, var(--pn-radius-large, 16px));
   transition: box-shadow 0.5s,backdrop-filter 0.5s;
   padding: 2px 10px;
   backdrop-filter:blur(2px)

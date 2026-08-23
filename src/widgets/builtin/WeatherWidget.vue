@@ -125,12 +125,12 @@ onUnmounted(() => {
   position: relative;
   min-width: 190px;
   padding: 10px 34px 15px 13px;
-  border: 1px solid rgb(255 255 255 / 16%);
+  border: 1px solid var(--pn-widget-border, rgb(255 255 255 / 16%));
   border-radius: 16px;
   color: white;
-  background: rgb(18 25 39 / 42%);
-  box-shadow: 0 10px 30px rgb(0 0 0 / 14%);
-  backdrop-filter: blur(14px);
+  background: var(--pn-widget-background, rgb(18 25 39 / 42%));
+  box-shadow: var(--pn-widget-shadow, 0 10px 30px rgb(0 0 0 / 14%));
+  backdrop-filter: blur(var(--pn-effect-blur, 14px));
   text-shadow: none;
 }
 
@@ -168,7 +168,7 @@ onUnmounted(() => {
 
 .weather-details {
   margin-left: 3px;
-  color: rgb(255 255 255 / 78%);
+  color: var(--pn-widget-text-color, rgb(255 255 255 / 78%));
 }
 
 .weather-details span:first-child {
@@ -178,7 +178,7 @@ onUnmounted(() => {
 }
 
 .weather-stale {
-  color: #fcd34d;
+  color: var(--pn-notification-warning-color, #fcd34d);
 }
 
 .weather-refresh {
@@ -186,7 +186,7 @@ onUnmounted(() => {
   top: 7px;
   right: 8px;
   padding: 2px 4px;
-  color: rgb(255 255 255 / 72%);
+  color: var(--pn-widget-muted-text, rgb(255 255 255 / 72%));
   border: 0;
   background: transparent;
   cursor: pointer;
@@ -201,7 +201,7 @@ onUnmounted(() => {
   position: absolute;
   right: 8px;
   bottom: 3px;
-  color: rgb(255 255 255 / 55%);
+  color: var(--pn-widget-muted-text, rgb(255 255 255 / 55%));
   font-size: 8px;
   line-height: 1;
   text-decoration: none;

@@ -53,6 +53,12 @@ func (a *UserConfig) Set(c *gin.Context) {
 		apiReturn.ErrorParamFomat(c, err.Error())
 		return
 	}
+	// 主题选择信封独立校验：一条无效主题不允许阻塞其他 panel 字段的写入判断，
+	// 但必须在持久化前整体拒绝，避免脏数据进入存储。
+	if err := validatePanelTheme(req.Panel); err != nil {
+		apiReturn.ErrorParamFomat(c, err.Error())
+		return
+	}
 
 	// 处理字段
 	if jb, err := json.Marshal(req.Panel); err != nil {

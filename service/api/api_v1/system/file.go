@@ -199,6 +199,47 @@ func (a *FileApi) Deletes(c *gin.Context) {
 
 }
 
+// DeleteInvalid 一键清理失效文件：删除数据库中磁盘上物理文件已不存在（失效）的文件记录。
+func (a *FileApi) DeleteInvalid(c *gin.Context) {
+	userInfo, _ := base.GetCurrentUserInfo(c)
+
+	files := []models.File{}
+	if err := global.Db.Model(&models.File{}).Where("user_id=?", userInfo.ID).Find(&files).Error; err != nil {
+		apiReturn.ErrorDatabase(c, err.Error())
+		return
+	}
+
+	invalidIds := []uint{}
+	invalidList := []map[string]interface{}{}
+	for _, v := range files {
+		// 磁盘上的实际文件路径与 Deletes 保持一致，直接使用库中存储的 Src
+		if _, err := os.Stat(v.Src); err != nil {
+			// 只有文件确实不存在才算失效；权限等其他错误跳过，避免误删
+			if !os.IsNotExist(err) {
+				continue
+			}
+			invalidIds = append(invalidIds, v.ID)
+			invalidList = append(invalidList, map[string]interface{}{
+				"id":       v.ID,
+				"fileName": v.FileName,
+				"src":      v.Src,
+			})
+		}
+	}
+
+	if len(invalidIds) > 0 {
+		if err := global.Db.Where("id IN ? AND user_id = ?", invalidIds, userInfo.ID).Delete(&models.File{}).Error; err != nil {
+			apiReturn.ErrorDatabase(c, err.Error())
+			return
+		}
+	}
+
+	apiReturn.SuccessData(c, gin.H{
+		"deletedCount": len(invalidList),
+		"deleted":      invalidList,
+	})
+}
+
 // UpdateType 修改图片类型分类
 func (a *FileApi) UpdateType(c *gin.Context) {
 	userInfo, _ := base.GetCurrentUserInfo(c)

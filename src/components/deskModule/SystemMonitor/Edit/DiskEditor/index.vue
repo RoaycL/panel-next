@@ -72,7 +72,7 @@ defineExpose({
         return Promise.resolve(true)
       }
       else {
-        console.log(errors)
+        console.warn(errors)
         return Promise.resolve(false)
       }
     }

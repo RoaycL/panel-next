@@ -96,12 +96,12 @@ onUnmounted(() => {
   box-sizing: border-box;
   width: 100%;
   padding: 14px 16px 12px;
-  border: 1px solid rgb(255 255 255 / 16%);
-  border-radius: 16px;
-  color: white;
-  background: rgb(18 25 39 / 42%);
-  box-shadow: 0 10px 30px rgb(0 0 0 / 14%);
-  backdrop-filter: blur(14px);
+  border: 1px solid var(--pn-widget-border, rgb(255 255 255 / 16%));
+  border-radius: var(--pn-radius-large, 16px);
+  color: var(--pn-widget-text-color, white);
+  background: var(--pn-widget-background, rgb(18 25 39 / 42%));
+  box-shadow: var(--pn-widget-shadow, 0 10px 30px rgb(0 0 0 / 14%));
+  backdrop-filter: blur(var(--pn-effect-blur, 14px));
   text-shadow: none;
 }
 
@@ -122,7 +122,7 @@ onUnmounted(() => {
 .trending-stale {
   padding: 2px 7px;
   border-radius: 999px;
-  color: #fcd34d;
+  color: var(--pn-notification-warning-color, #fcd34d);
   background: rgb(252 211 77 / 14%);
   font-size: 10px;
   line-height: 1.2;
@@ -131,7 +131,7 @@ onUnmounted(() => {
 .trending-refresh {
   margin-left: auto;
   padding: 2px 4px;
-  color: rgb(255 255 255 / 72%);
+  color: var(--pn-widget-muted-text, rgb(255 255 255 / 72%));
   border: 0;
   background: transparent;
   cursor: pointer;
@@ -162,7 +162,7 @@ onUnmounted(() => {
 .trending-rank {
   flex: none;
   width: 17px;
-  color: rgb(255 255 255 / 55%);
+  color: var(--pn-widget-muted-text, rgb(255 255 255 / 55%));
   font-size: 12px;
   font-style: italic;
   font-weight: 700;
@@ -170,13 +170,13 @@ onUnmounted(() => {
 }
 
 .trending-rank-top {
-  color: #fca5a5;
+  color: var(--pn-widget-chart-color-0, var(--pn-color-danger, #fca5a5));
 }
 
 .trending-item {
   flex: 1;
   overflow: hidden;
-  color: rgb(255 255 255 / 92%);
+  color: var(--pn-widget-text-color, rgb(255 255 255 / 92%));
   font-size: 13px;
   line-height: 1.45;
   text-decoration: none;
@@ -185,13 +185,13 @@ onUnmounted(() => {
 }
 
 .trending-item:hover {
-  color: white;
+  color: var(--pn-color-accent, white);
   text-decoration: underline;
 }
 
 .trending-score {
   flex: none;
-  color: rgb(255 255 255 / 45%);
+  color: var(--pn-widget-muted-text, rgb(255 255 255 / 45%));
   font-size: 11px;
 }
 
@@ -201,7 +201,7 @@ onUnmounted(() => {
   justify-content: center;
   gap: 8px;
   padding: 12px 0 6px;
-  color: rgb(255 255 255 / 75%);
+  color: var(--pn-widget-error-color, rgb(255 255 255 / 75%));
   font-size: 12px;
 }
 

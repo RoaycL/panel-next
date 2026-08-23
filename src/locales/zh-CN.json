@@ -53,7 +53,13 @@
     "1502": "面板已在其他设备更新，正在加载最新版本"
   },
   "appLauncher": {
-    "title": "系统应用"
+    "title": "控制中心",
+    "categoryPersonal": "个性与设置",
+    "categoryResources": "资源与数据",
+    "categoryAdmin": "系统与管理",
+    "categoryAbout": "关于与帮助",
+    "expandMenu": "展开菜单",
+    "collapseMenu": "折叠菜单"
   },
   "apps": {
     "about": {
@@ -61,6 +67,7 @@
       "QR": "二维码(推荐)",
       "addQQGroupUrl": "点击添加",
       "appName": "关于",
+      "description": "一个开源、自托管的书签与小组件导航面板",
       "author": "作者：",
       "checkUpdate": "检查新版本",
       "discussions": "交流社区：",
@@ -78,6 +85,9 @@
       "clockSecondShow": "显示秒",
       "configFailed": "配置保存失败,{message}",
       "configSaved": "配置已保存",
+      "extensionAppearanceSaved": "扩展外观已独立保存",
+      "extensionAppearanceSaveFailed": "扩展外观保存失败，请重试",
+      "logoTextPlaceholder": "请输入文字",
       "contentArea": "内容区域",
       "customFooter": "自定义页脚",
       "logoShow": "显示 Logo",
@@ -94,6 +104,7 @@
       "searchBar": "搜索栏组件",
       "searchBarSearchItem": "允许搜索栏搜索项目",
       "searchBarShow": "配置已保存",
+      "selectFromGallery": "从图库选择",
       "show": "显示",
       "showTitle": "显示标题",
       "smallIcon": "小图标",
@@ -159,7 +170,11 @@
       "changeType": "修改类型",
       "typeLabel": "类型",
     "selectFromGallery": "从图库选择",
-    "multipleIconsFound": "找到 {count} 个候选图标，已使用第一个"
+    "multipleIconsFound": "找到 {count} 个候选图标，已使用第一个",
+    "clickChangeIcon": "点击更换图标",
+    "supportIconFormats": "支持 .ico, .png, .svg, .jpg, .avif 格式",
+    "clickChangeWallpaper": "点击更换背景壁纸",
+    "supportWallpaperFormats": "支持 .webp, .png, .jpg, .jpeg, .gif, .avif 格式"
 	},
 	"publicGallery": {
 		"appName": "公共图库",
@@ -181,7 +196,8 @@
 		"stopConfirm": "确定停止容器 {name} 吗？",
 		"restartConfirm": "确定重启容器 {name} 吗？",
 		"createCard": "创建卡片",
-		"createCardHint": "容器 {name} 的卡片创建功能将在卡片编辑器中完成"
+		"createCardHint": "容器 {name} 的卡片创建功能将在卡片编辑器中完成",
+		"action": "操作"
 	},
     "exportImport": {
       "appName": "导出导入",
@@ -207,6 +223,12 @@
     "uploadsFileManager": {
       "alertText": "你可以在这里管理你上传过的壁纸和图标",
       "appName": "上传文件管理",
+      "changeType": "修改类型",
+      "cleanInvalid": "一键清理失效文件",
+      "cleanInvalidConfirm": "将清理磁盘文件已不存在的失效记录，是否继续？",
+      "cleanInvalidEmpty": "未发现失效文件",
+      "cleanInvalidSuccess": "已清理 {count} 个失效文件",
+      "cleanInvalidTitle": "清理失效文件",
       "copyFailed": "复制失败",
       "copyLink": "复制链接",
       "copySuccess": "链接复制成功，可以在图标地址栏",
@@ -216,7 +238,15 @@
       "nothingText": "你还没有上传过任何图片",
       "path": "文件路径",
       "setWallpaper": "设置为壁纸",
-      "uploadTime": "上传时间"
+      "typeAll": "全部",
+      "typeIcon": "图标",
+      "typeLabel": "文件类型",
+      "typeOther": "其他",
+      "typeWallpaper": "壁纸",
+      "upload": "上传",
+      "uploadTime": "上传时间",
+      "wallpaperSaveFailedExtension": "扩展壁纸保存失败，请重试",
+      "wallpaperSavedExtension": "扩展壁纸已独立保存"
     },
     "userInfo": {
       "appName": "我的信息",
@@ -269,6 +299,7 @@
     "no": "否",
     "noData": "暂无数据",
     "password": "密码",
+    "refresh": "刷新",
     "refreshPage": "请刷新页面",
     "repeatLater": "请稍后重试",
     "reset": "重置",
@@ -338,6 +369,7 @@
     "inputIconUrlOrUpload": "输入图标地址或上传",
     "lanUrl": "内网地址",
     "lanUrlInputPlaceholder": "http(s)://（内网模式，会跳转该地址）",
+    "multipleIconsFound": "检测到 {count} 个候选图标，请从图标列表中选择",
     "newWindowOpen": "新窗口打开",
     "queuedOffline": "当前离线，修改已加入待同步队列",
     "queuedWithConflict": "检测到云端更新，请在冲突弹窗中选择保留版本",
@@ -349,6 +381,7 @@
     "url": "地址"
   },
   "login": {
+    "captchaPlaceholder": "请输入验证码",
     "loginButton": "登录",
     "passwordPlaceholder": "密码",
     "usernamePlaceholder": "账号",
@@ -502,5 +535,58 @@
   },
   "widgetActions": {
     "confirmTitle": "确认操作"
+  },
+  "theme": {
+    "center": {
+      "title": "主题中心",
+      "themes": "主题",
+      "config": "主题配置"
+    },
+    "mode": {
+      "title": "显示模式",
+      "light": "浅色",
+      "dark": "深色",
+      "auto": "跟随系统"
+    },
+    "variants": {
+      "title": "组件形态",
+      "bookmark": "书签卡片",
+      "widget": "小组件",
+      "sidebar": "侧边栏",
+      "search": "搜索框",
+      "followDefault": "跟随默认"
+    },
+    "variant": {
+      "glass": "玻璃",
+      "solid": "实底",
+      "minimal": "极简",
+      "borderless": "无边框",
+      "floating": "悬浮",
+      "attached": "贴合",
+      "pill": "胶囊",
+      "box": "方框",
+      "underline": "下划线"
+    },
+    "iconPack": {
+      "title": "图标包",
+      "default": "默认图标包"
+    },
+    "meta": {
+      "author": "作者"
+    },
+    "surface": {
+      "web": "Web 端可用",
+      "extension": "扩展端可用"
+    },
+    "restoreDefault": "恢复默认主题",
+    "saved": "主题已保存",
+    "saveFailed": "主题保存失败",
+    "saveRejected": "主题选择未通过校验，已阻止保存",
+    "saveConflict": "保存期间外观仍在变化，已保留最新本地状态。请确认当前设置，待修改停止后重试。",
+    "entry": "主题中心",
+    "quarantinedNotice": "当前主题数据无法识别，已临时使用默认主题渲染；原始数据已保留。"
+  },
+  "userHubModal": {
+    "revision": "版本"
   }
 }

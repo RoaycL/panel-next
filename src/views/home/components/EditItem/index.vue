@@ -185,61 +185,151 @@ async function getGroupListOptions() {
 </script>
 
 <template>
-  <NModal v-model:show="show" preset="card" size="small" style="width: min(600px, calc(100vw - 24px)); max-height: calc(100vh - 24px); border-radius: 1rem;" :title="itemInfo ? t('iconItem.edit') : t('iconItem.add')">
-    <div class="edit-item-content overflow-auto p-[5px]">
-      <NForm ref="formRef" :model="model" :rules="rules">
-        <NGrid cols="2" :x-gap="10" item-responsive>
-          <NGridItem span="2 500:1">
-            <NFormItem path="itemIconGroupId" :label="t('iconItem.iconGroup')">
-              <NSelect v-model:value="model.itemIconGroupId" :options="itemIconGroupOptions" />
-            </NFormItem>
-          </NGridItem>
-          <NGridItem span="2 500:1">
-            <NFormItem path="title" :label="$t('common.title')">
-              <NInput v-model:value="model.title" type="text" show-count :maxlength="20" />
-            </NFormItem>
-          </NGridItem>
-        </NGrid>
+  <NModal
+    v-model:show="show"
+    preset="card"
+    size="small"
+    class="edit-item-glass-modal"
+    style="width: min(620px, calc(100vw - 24px)); max-height: min(720px, calc(100vh - 32px)); display: flex; flex-direction: column; overflow: hidden;"
+    header-style="padding: 14px 20px 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); flex-shrink: 0;"
+    content-style="padding: 16px 20px; flex: 1 1 0%; min-height: 0; overflow-y: auto; overscroll-behavior: contain;"
+    footer-style="padding: 12px 20px 14px; border-top: 1px solid rgba(255, 255, 255, 0.08); flex-shrink: 0;"
+    :bordered="false"
+    :title="itemInfo ? t('iconItem.edit') : t('iconItem.add')"
+  >
+    <div class="edit-item-content">
+      <NForm ref="formRef" :model="model" :rules="rules" size="small">
+        <!-- 基础信息 (分组 & 标题) -->
+        <div class="form-glass-card mb-3.5">
+          <div class="card-section-title">
+            {{ t('common.basicInfo') || '基础信息' }}
+          </div>
+          <NGrid cols="2" :x-gap="12" item-responsive class="mt-2">
+            <NGridItem span="2 500:1">
+              <NFormItem path="itemIconGroupId" :label="t('iconItem.iconGroup')" :show-feedback="false">
+                <NSelect v-model:value="model.itemIconGroupId" :options="itemIconGroupOptions" />
+              </NFormItem>
+            </NGridItem>
+            <NGridItem span="2 500:1">
+              <NFormItem path="title" :label="$t('common.title')" :show-feedback="false">
+                <NInput v-model:value="model.title" type="text" show-count :maxlength="20" placeholder="请输入名称" />
+              </NFormItem>
+            </NGridItem>
+          </NGrid>
+        </div>
 
-        <NFormItem path="icon" :label="$t('common.icon')">
-          <IconEditor v-model:item-icon="model.icon" />
-        </NFormItem>
-        <NFormItem path="url" :label="$t('iconItem.url')">
-          <!-- <NSelect :style="{ width: '100px' }" :options="urlProtocolOptions" /> -->
-          <NInputGroup>
-            <NInput v-model:value="model.url" type="text" :maxlength="1000" placeholder="http(s)://" />
-            <NButton :disabled="!model.url" :loading="getIconLoading[0]" @click="getIconByUrl(model.url, 0)">
-              {{ $t('iconItem.getIcon') }}
-            </NButton>
-          </NInputGroup>
-        </NFormItem>
-        <NFormItem path="lanUrl" :label="$t('iconItem.lanUrl')">
-          <NInputGroup>
-            <NInput v-model:value="model.lanUrl" type="text" :maxlength="1000" :placeholder="$t('iconItem.lanUrlInputPlaceholder')" />
-            <NButton :disabled="!model.lanUrl" :loading="getIconLoading[1]" @click="getIconByUrl(model.lanUrl || '', 1)">
-              {{ $t('iconItem.getIcon') }}
-            </NButton>
-          </NInputGroup>
-        </NFormItem>
-        <NFormItem path="description" :label="$t('common.description')">
-          <NInput v-model:value="model.description" type="text" show-count :maxlength="100" />
-        </NFormItem>
-        <NFormItem path="openMethod" :label="$t('iconItem.openMethod')">
-          <NSelect v-model:value="model.openMethod" :options="options" />
-        </NFormItem>
+        <!-- 图标定制区 -->
+        <div class="form-glass-card mb-3.5">
+          <div class="card-section-title">
+            {{ $t('common.icon') }}
+          </div>
+          <div class="mt-2">
+            <IconEditor v-model:item-icon="model.icon" />
+          </div>
+        </div>
+
+        <!-- 链接配置区 -->
+        <div class="form-glass-card mb-3.5">
+          <div class="card-section-title">
+            {{ t('iconItem.url') }}
+          </div>
+          <div class="flex flex-col gap-2.5 mt-2">
+            <NFormItem path="url" :label="$t('iconItem.url')" :show-feedback="false">
+              <NInputGroup>
+                <NInput v-model:value="model.url" type="text" :maxlength="1000" placeholder="外网链接 (如 https://...)" />
+                <NButton :disabled="!model.url" :loading="getIconLoading[0]" type="primary" secondary @click="getIconByUrl(model.url, 0)">
+                  {{ $t('iconItem.getIcon') }}
+                </NButton>
+              </NInputGroup>
+            </NFormItem>
+            <NFormItem path="lanUrl" :label="$t('iconItem.lanUrl')" :show-feedback="false">
+              <NInputGroup>
+                <NInput v-model:value="model.lanUrl" type="text" :maxlength="1000" :placeholder="$t('iconItem.lanUrlInputPlaceholder')" />
+                <NButton :disabled="!model.lanUrl" :loading="getIconLoading[1]" type="primary" secondary @click="getIconByUrl(model.lanUrl || '', 1)">
+                  {{ $t('iconItem.getIcon') }}
+                </NButton>
+              </NInputGroup>
+            </NFormItem>
+          </div>
+        </div>
+
+        <!-- 详细选项区 -->
+        <div class="form-glass-card">
+          <div class="card-section-title">
+            {{ t('apps.baseSettings.other') || '其他设置' }}
+          </div>
+          <div class="flex flex-col gap-2.5 mt-2">
+            <NFormItem path="description" :label="$t('common.description')" :show-feedback="false">
+              <NInput v-model:value="model.description" type="text" show-count :maxlength="100" placeholder="项目简短描述" />
+            </NFormItem>
+            <NFormItem path="openMethod" :label="$t('iconItem.openMethod')" :show-feedback="false">
+              <NSelect v-model:value="model.openMethod" :options="options" />
+            </NFormItem>
+          </div>
+        </div>
       </NForm>
     </div>
 
     <template #footer>
-      <NButton type="success" :loading="submitLoading" style="float: right;" @click="handleValidateButtonClick">
-        {{ $t('common.save') }}
-      </NButton>
+      <div class="flex items-center justify-end gap-2.5 w-full">
+        <NButton @click="show = false">
+          {{ t('common.cancel') }}
+        </NButton>
+        <NButton type="primary" :loading="submitLoading" @click="handleValidateButtonClick">
+          {{ $t('common.save') }}
+        </NButton>
+      </div>
     </template>
   </NModal>
 </template>
 
-<style scoped>
-.edit-item-content {
-  height: min(600px, calc(100vh - 180px));
+<style>
+/* Edit Item Frosted Glass Modal */
+.edit-item-glass-modal.n-card {
+  margin: auto !important;
+  border-radius: 20px !important;
+  background: rgba(18, 20, 26, 0.84) !important;
+  backdrop-filter: blur(28px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(190%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.08) inset !important;
+}
+
+html:not(.dark) .edit-item-glass-modal.n-card {
+  background: rgba(255, 255, 255, 0.88) !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.8) inset !important;
+}
+
+.edit-item-glass-modal .form-glass-card {
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+html:not(.dark) .edit-item-glass-modal .form-glass-card {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.edit-item-glass-modal .card-section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #38bdf8;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+html:not(.dark) .edit-item-glass-modal .card-section-title {
+  color: #0284c7;
+}
+
+.edit-item-glass-modal .n-form-item {
+  margin-bottom: 8px;
+}
+
+.edit-item-glass-modal .n-form-item:last-child {
+  margin-bottom: 0;
 }
 </style>

@@ -197,6 +197,9 @@ func DatabaseConnect() {
 	if _, err := database.EnsureInstanceMetadata(global.Db); err != nil {
 		log.Panicln("Instance metadata initialization error", err)
 	}
+	if err := database.EnsureUserSyncStates(global.Db); err != nil {
+		log.Panicln("User sync state initialization error", err)
+	}
 
 	if err := database.NotFoundAndCreateUser(global.Db); err != nil {
 		log.Panicln("Default user initialization error", err)

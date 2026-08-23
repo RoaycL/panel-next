@@ -85,3 +85,17 @@ const textColor = computed(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.app-icon-info {
+  border-radius: var(--pn-radius-large, 16px);
+}
+
+.app-icon-info:hover {
+  box-shadow: var(--pn-bookmark-card-shadow, 0 0 20px 10px rgb(0 0 0 / 20%));
+}
+
+.app-icon-small-icon {
+  border-radius: var(--pn-bookmark-icon-radius, 16px);
+}
+</style>

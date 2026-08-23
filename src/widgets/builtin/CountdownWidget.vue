@@ -124,12 +124,12 @@ function clampToMonthEnd(year: number, month: number, day: number) {
   width: 100%;
   min-height: 92px;
   padding: 12px 16px;
-  border: 1px solid rgb(255 255 255 / 16%);
+  border: 1px solid var(--pn-widget-border, rgb(255 255 255 / 16%));
   border-radius: 16px;
   color: white;
-  background: rgb(18 25 39 / 42%);
-  box-shadow: 0 10px 30px rgb(0 0 0 / 14%);
-  backdrop-filter: blur(14px);
+  background: var(--pn-widget-background, rgb(18 25 39 / 42%));
+  box-shadow: var(--pn-widget-shadow, 0 10px 30px rgb(0 0 0 / 14%));
+  backdrop-filter: blur(var(--pn-effect-blur, 14px));
   text-shadow: none;
 }
 
@@ -176,12 +176,12 @@ function clampToMonthEnd(year: number, month: number, day: number) {
 }
 
 .countdown-unit {
-  color: rgb(255 255 255 / 70%);
+  color: var(--pn-widget-muted-text, rgb(255 255 255 / 70%));
   font-size: 12px;
 }
 
 .countdown-today {
-  color: #fde68a;
+  color: var(--pn-notification-warning-color, #fde68a);
   font-size: 18px;
   font-weight: 700;
   line-height: 1.2;
@@ -189,14 +189,14 @@ function clampToMonthEnd(year: number, month: number, day: number) {
 
 .countdown-date {
   width: 100%;
-  color: rgb(255 255 255 / 55%);
+  color: var(--pn-widget-muted-text, rgb(255 255 255 / 55%));
   font-size: 11px;
   line-height: 1.2;
   white-space: nowrap;
 }
 
 .countdown-invalid {
-  color: rgb(255 255 255 / 75%);
+  color: var(--pn-widget-error-color, rgb(255 255 255 / 75%));
   font-size: 12px;
 }
 

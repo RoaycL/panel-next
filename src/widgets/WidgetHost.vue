@@ -6,6 +6,7 @@ import { widgetRegistry } from './registry'
 import { WIDGET_CONTEXT_KEY } from './context'
 import { getRuntime } from '@/runtime'
 import { t } from '@/locales'
+import { useTheme } from '@/themes/context'
 
 defineOptions({ inheritAttrs: false })
 const props = defineProps<{ instance: WidgetInstance; editMode?: boolean }>()
@@ -19,6 +20,9 @@ const componentProps = computed(() => ({
   ...attrs,
 }))
 
+// 主题切片：无 ThemeProvider（独立预览）时自动回退默认主题。
+const theme = useTheme()
+
 // 标准化上下文：任何组件实例内都可通过 useWidgetContext() 读取
 const widgetContext = reactive({
   instanceId: props.instance.id,
@@ -26,6 +30,15 @@ const widgetContext = reactive({
   editMode: props.editMode === true,
   capabilities: widgetRegistry.get(props.instance.type)?.capabilities ?? [],
   surface: getRuntime().kind,
+  get themeId() {
+    return theme.themeId
+  },
+  get resolvedMode() {
+    return theme.resolvedMode
+  },
+  get themeTokens() {
+    return theme.tokens.widget
+  },
 })
 watch(() => props.editMode, (editMode) => {
   widgetContext.editMode = editMode === true
@@ -83,49 +96,82 @@ function retryLoad() {
 </script>
 
 <template>
-  <div v-if="renderError" class="widget-error-boundary" role="alert">
-    <span class="widget-error-icon" aria-hidden="true">⚠️</span>
-    <span class="widget-error-text">{{ t('widgetLayout.host.error') }}</span>
-    <code class="widget-error-detail">{{ instance.type }}</code>
-    <button type="button" class="widget-error-retry" @click="retryLoad">
-      {{ t('widgetLayout.host.retry') }}
-    </button>
+  <div
+    class="pn-widget-shell widget-shell-frame"
+    :data-widget="theme.variants.widget"
+    :data-instance-id="instance.id"
+  >
+    <div v-if="renderError" class="widget-error-boundary" role="alert">
+      <span class="widget-error-icon" aria-hidden="true">⚠️</span>
+      <span class="widget-error-text">{{ t('widgetLayout.host.error') }}</span>
+      <code class="widget-error-detail">{{ instance.type }}</code>
+      <button type="button" class="widget-error-retry" @click="retryLoad">
+        {{ t('widgetLayout.host.retry') }}
+      </button>
+    </div>
+    <div v-else-if="loading" class="widget-loading" role="status">
+      {{ t('widgetLayout.host.loading') }}
+    </div>
+    <component :is="component" v-else-if="component && !instance.hidden" v-bind="componentProps" />
   </div>
-  <div v-else-if="loading" class="widget-loading" role="status">
-    {{ t('widgetLayout.host.loading') }}
-  </div>
-  <component :is="component" v-else-if="component && !instance.hidden" v-bind="componentProps" />
 </template>
 
 <style scoped>
+.pn-widget-shell {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  color: var(--pn-widget-text-color, inherit);
+}
+
+/* Widget Variant（§13）：glass 默认；solid 用表面色；borderless 去壳。 */
+.pn-widget-shell[data-widget='solid'] {
+  --pn-widget-background: var(--pn-color-surface);
+  --pn-widget-border: var(--pn-color-border);
+}
+
+.pn-widget-shell[data-widget='borderless'] {
+  --pn-widget-background: transparent;
+  --pn-widget-border: transparent;
+  --pn-widget-shadow: none;
+}
+
+.pn-widget-shell[data-widget='borderless'] :deep(.trending-card),
+.pn-widget-shell[data-widget='borderless'] :deep(.weather-card),
+.pn-widget-shell[data-widget='borderless'] :deep(.countdown-card) {
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
 .widget-error-boundary {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--pn-spacing-compact, 8px);
   width: 100%;
   min-height: 56px;
-  padding: 12px;
-  border: 1px dashed rgb(255 255 255 / 25%);
-  border-radius: 16px;
-  color: rgb(255 255 255 / 75%);
+  padding: var(--pn-spacing-normal, 12px);
+  border: 1px dashed var(--pn-widget-error-border, rgb(255 255 255 / 25%));
+  border-radius: var(--pn-radius-large, 16px);
+  color: var(--pn-widget-error-color, rgb(255 255 255 / 75%));
   font-size: 12px;
 }
 
 .widget-error-detail {
   padding: 1px 6px;
-  border-radius: 6px;
-  background: rgb(255 255 255 / 10%);
+  border-radius: var(--pn-radius-small, 6px);
+  background: var(--pn-widget-retry-background, rgb(255 255 255 / 10%));
   font-size: 11px;
 }
 
 .widget-error-retry {
   padding: 3px 8px;
-  border: 1px solid rgb(255 255 255 / 22%);
-  border-radius: 7px;
+  border: 1px solid var(--pn-widget-retry-border, rgb(255 255 255 / 22%));
+  border-radius: var(--pn-radius-small, 7px);
   color: inherit;
-  background: rgb(255 255 255 / 8%);
+  background: var(--pn-widget-retry-background, rgb(255 255 255 / 8%));
   cursor: pointer;
+  transition: background var(--pn-effect-duration-fast, 120ms) ease;
 }
 
 .widget-loading {
@@ -133,7 +179,7 @@ function retryLoad() {
   width: 100%;
   min-height: 56px;
   place-items: center;
-  color: rgb(255 255 255 / 58%);
+  color: var(--pn-widget-loading-color, rgb(255 255 255 / 58%));
   font-size: 12px;
 }
 </style>

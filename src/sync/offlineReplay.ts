@@ -2,6 +2,7 @@ import { getBootstrap } from '@/api/sync'
 import { edit as editItem, deletes as deleteItems, saveSort as saveItemSort } from '@/api/panel/itemIcon'
 import { edit as editGroup, deletes as deleteGroups, saveSort as saveGroupSort } from '@/api/panel/itemIconGroup'
 import { set as setUserConfig } from '@/api/panel/userConfig'
+import { enqueueAppearanceSave } from '@/themes/appearanceSaveQueue'
 import { HttpRequestError } from '@/utils/request'
 import { getSyncRevision, setSyncRevision } from './revision'
 import {
@@ -330,7 +331,9 @@ async function executeMutationAction(mutation: OfflineMutation): Promise<Mutatio
       }
 
       case 'panel.set': {
-        const res = await setUserConfig(payload as Panel.userConfig, false)
+        // panel.set 是整份 panelConfig 写入，必须与实时主题/壁纸/布局保存共用进程内队列；
+        // navigator.locks 继续负责跨 Extension 标签页的重放互斥。
+        const res = await enqueueAppearanceSave(() => setUserConfig(payload as Panel.userConfig, false))
         return toOutcome(res)
       }
 

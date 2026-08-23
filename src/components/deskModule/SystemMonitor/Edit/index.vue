@@ -119,7 +119,7 @@ async function handleSubmit() {
 </script>
 
 <template>
-  <NModal v-model:show="show" preset="card" size="small" style="width: 600px;border-radius: 1rem;" :title="monitorData ? t('common.edit') : t('common.add')">
+  <NModal v-model:show="show" preset="card" size="small" class="round-card-modal" style="width: min(600px, calc(100vw - 24px)); border-radius: 18px;" :title="monitorData ? t('common.edit') : t('common.add')">
     <!-- 选择监视器 -->
     <!-- <div>
       {{ JSON.stringify(currentGenericProgressStyleExtendParam) }}
