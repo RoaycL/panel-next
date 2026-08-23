@@ -8,11 +8,13 @@ export function executePackageExtensionTransaction({ dryRun = false, customRunne
   const versionFile = path.resolve(policy.source)
   const packageFile = path.resolve('package.json')
   const manifestFile = path.resolve('extension/manifest.json')
+  const envFile = path.resolve('.env')
   const artifactRoot = path.resolve('artifacts')
 
   const originalVersionSource = fs.readFileSync(versionFile, 'utf8')
   const originalPackageJson = fs.readFileSync(packageFile, 'utf8')
   const originalManifest = fs.readFileSync(manifestFile, 'utf8')
+  const originalEnv = fs.readFileSync(envFile, 'utf8')
 
   const source = originalVersionSource.trim()
   const [rawCode, currentVersion] = source.split('|')
@@ -51,6 +53,9 @@ export function executePackageExtensionTransaction({ dryRun = false, customRunne
   parsedPackageJson.version = nextVersion
   parsedManifest.version = nextVersion
   parsedManifest.version_name = `${nextVersion} ${policy.label}`
+  if (!/^VITE_APP_VERSION=.+$/m.test(originalEnv))
+    throw new Error('Missing VITE_APP_VERSION in .env')
+  const nextEnv = originalEnv.replace(/^VITE_APP_VERSION=.+$/m, `VITE_APP_VERSION=${nextVersion}`)
 
   const node = process.execPath
   const viteBin = path.resolve('node_modules/vite/bin/vite.js')
@@ -72,6 +77,7 @@ export function executePackageExtensionTransaction({ dryRun = false, customRunne
     fs.writeFileSync(versionFile, `${nextCode}|${nextVersion}\n`)
     fs.writeFileSync(packageFile, `${JSON.stringify(parsedPackageJson, null, 2)}\n`)
     fs.writeFileSync(manifestFile, `${JSON.stringify(parsedManifest, null, 2)}\n`)
+    fs.writeFileSync(envFile, nextEnv)
 
     // 1. Validate version
     let res = runner('validate-version', node, [path.resolve('scripts/validate-version.mjs')])
@@ -115,6 +121,7 @@ export function executePackageExtensionTransaction({ dryRun = false, customRunne
     fs.writeFileSync(versionFile, originalVersionSource)
     fs.writeFileSync(packageFile, originalPackageJson)
     fs.writeFileSync(manifestFile, originalManifest)
+    fs.writeFileSync(envFile, originalEnv)
     fs.rmSync(temporaryBuildRoot, { recursive: true, force: true })
 
     // 清理可能产生的未完成产物

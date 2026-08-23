@@ -26,7 +26,7 @@ export function deepFreezeTokens<T>(value: T): Readonly<T> {
 
 export const DEFAULT_LIGHT_TOKENS: Readonly<ThemeTokens> = deepFreezeTokens({
   color: {
-    pageBackground: '#0f172a',
+    pageBackground: '#eef8ff',
     surface: 'rgba(255,255,255,0.92)',
     surfaceOverlay: 'rgba(15,23,42,0.55)',
     surfaceHover: 'rgba(148,163,184,0.14)',
@@ -75,25 +75,25 @@ export const DEFAULT_LIGHT_TOKENS: Readonly<ThemeTokens> = deepFreezeTokens({
     iconRadius: '12px',
   },
   widget: {
-    background: 'rgba(15,23,42,0.55)',
-    border: 'rgba(255,255,255,0.18)',
-    shadow: '0 10px 30px rgba(2,6,23,0.25)',
-    textColor: '#f8fafc',
-    mutedText: 'rgba(248,250,252,0.62)',
-    loadingColor: 'rgba(248,250,252,0.58)',
-    errorColor: 'rgba(255,255,255,0.75)',
-    errorBorder: 'rgba(255,255,255,0.25)',
-    retryBackground: 'rgba(255,255,255,0.08)',
-    retryBorder: 'rgba(255,255,255,0.22)',
+    background: 'rgba(255,255,255,0.9)',
+    border: 'rgba(148,163,184,0.26)',
+    shadow: '0 10px 30px rgba(71,85,105,0.16)',
+    textColor: '#1e293b',
+    mutedText: '#64748b',
+    loadingColor: '#64748b',
+    errorColor: '#b91c1c',
+    errorBorder: 'rgba(185,28,28,0.3)',
+    retryBackground: 'rgba(226,232,240,0.72)',
+    retryBorder: 'rgba(100,116,139,0.28)',
     chartColors: ['#34d399', '#38bdf8', '#f59e0b', '#a78bfa', '#f87171', '#4ade80', '#fbbf24', '#60a5fa'],
   },
   sidebar: {
-    background: 'rgba(15,23,42,0.55)',
-    border: 'rgba(255,255,255,0.16)',
-    hoverBackground: 'rgba(255,255,255,0.12)',
-    activeBackground: 'rgba(16,185,129,0.28)',
-    textColor: 'rgba(248,250,252,0.82)',
-    activeTextColor: '#ffffff',
+    background: 'rgba(248,250,252,0.94)',
+    border: 'rgba(148,163,184,0.24)',
+    hoverBackground: 'rgba(226,232,240,0.72)',
+    activeBackground: 'rgba(14,165,233,0.14)',
+    textColor: '#475569',
+    activeTextColor: '#0369a1',
   },
   modal: {
     background: 'rgba(255,255,255,0.98)',
@@ -112,8 +112,8 @@ export const DEFAULT_LIGHT_TOKENS: Readonly<ThemeTokens> = deepFreezeTokens({
     boxShadow: '0 22px 60px rgba(2,6,23,0.48)',
   },
   icon: {
-    defaultColor: '#ffffff',
-    activeColor: '#10b981',
+    defaultColor: '#1e293b',
+    activeColor: '#0284c7',
   },
 })
 
@@ -134,6 +134,26 @@ const DARK_OVERRIDES = Object.freeze(completeTokens(DEFAULT_LIGHT_TOKENS, {
     descriptionColor: '#94a3b8',
     iconBackground: 'rgba(30,41,59,0.9)',
   },
+  widget: {
+    background: 'rgba(15,23,42,0.78)',
+    border: 'rgba(255,255,255,0.16)',
+    shadow: '0 10px 30px rgba(2,6,23,0.25)',
+    textColor: '#f8fafc',
+    mutedText: 'rgba(248,250,252,0.62)',
+    loadingColor: 'rgba(248,250,252,0.58)',
+    errorColor: '#fecaca',
+    errorBorder: 'rgba(248,113,113,0.32)',
+    retryBackground: 'rgba(255,255,255,0.08)',
+    retryBorder: 'rgba(255,255,255,0.22)',
+  },
+  sidebar: {
+    background: 'rgba(15,23,42,0.78)',
+    border: 'rgba(255,255,255,0.16)',
+    hoverBackground: 'rgba(255,255,255,0.12)',
+    activeBackground: 'rgba(14,165,233,0.22)',
+    textColor: 'rgba(248,250,252,0.82)',
+    activeTextColor: '#ffffff',
+  },
   modal: {
     background: 'rgba(15,23,42,0.98)',
     titleTextColor: '#f8fafc',
@@ -143,6 +163,10 @@ const DARK_OVERRIDES = Object.freeze(completeTokens(DEFAULT_LIGHT_TOKENS, {
     background: 'rgba(15,23,42,0.97)',
     titleTextColor: '#f8fafc',
     contentTextColor: '#cbd5e1',
+  },
+  icon: {
+    defaultColor: '#ffffff',
+    activeColor: '#38bdf8',
   },
 }))
 

@@ -23,11 +23,13 @@ console.log('--- Running Extension Package Transactional Unit Tests ---')
 const versionFilePath = path.resolve('service/assets/version')
 const packageFilePath = path.resolve('package.json')
 const manifestFilePath = path.resolve('extension/manifest.json')
+const envFilePath = path.resolve('.env')
 const artifactDirPath = path.resolve('artifacts')
 
 const initialVersionContent = fs.readFileSync(versionFilePath, 'utf8')
 const initialPackageContent = fs.readFileSync(packageFilePath, 'utf8')
 const initialManifestContent = fs.readFileSync(manifestFilePath, 'utf8')
+const initialEnvContent = fs.readFileSync(envFilePath, 'utf8')
 const initialTemporaryBuilds = fs.existsSync(path.resolve('dist'))
   ? fs.readdirSync(path.resolve('dist')).filter(name => name.startsWith('.extension-package-')).sort()
   : []
@@ -45,6 +47,7 @@ assert.equal(dryRunResult.archiveName, `panel-next-extension-v${dryRunResult.nex
 assert.equal(fs.readFileSync(versionFilePath, 'utf8'), initialVersionContent)
 assert.equal(fs.readFileSync(packageFilePath, 'utf8'), initialPackageContent)
 assert.equal(fs.readFileSync(manifestFilePath, 'utf8'), initialManifestContent)
+assert.equal(fs.readFileSync(envFilePath, 'utf8'), initialEnvContent)
 
 console.log(`Dry run verified: ${dryRunResult.currentVersion} -> ${dryRunResult.nextVersion} (artifact: ${dryRunResult.archiveName})`)
 
@@ -60,6 +63,7 @@ await withMutedConsole(async () => {
 assert.equal(fs.readFileSync(versionFilePath, 'utf8'), initialVersionContent)
 assert.equal(fs.readFileSync(packageFilePath, 'utf8'), initialPackageContent)
 assert.equal(fs.readFileSync(manifestFilePath, 'utf8'), initialManifestContent)
+assert.equal(fs.readFileSync(envFilePath, 'utf8'), initialEnvContent)
 
 // 3. Simulated failure at validate-version phase
 await withMutedConsole(async () => {
@@ -78,6 +82,7 @@ await withMutedConsole(async () => {
 assert.equal(fs.readFileSync(versionFilePath, 'utf8'), initialVersionContent)
 assert.equal(fs.readFileSync(packageFilePath, 'utf8'), initialPackageContent)
 assert.equal(fs.readFileSync(manifestFilePath, 'utf8'), initialManifestContent)
+assert.equal(fs.readFileSync(envFilePath, 'utf8'), initialEnvContent)
 assert.equal(fs.existsSync(path.join(artifactDirPath, dryRunResult.archiveName)), false)
 
 // 4. Simulated failure at build-extension phase
@@ -97,6 +102,7 @@ await withMutedConsole(async () => {
 assert.equal(fs.readFileSync(versionFilePath, 'utf8'), initialVersionContent)
 assert.equal(fs.readFileSync(packageFilePath, 'utf8'), initialPackageContent)
 assert.equal(fs.readFileSync(manifestFilePath, 'utf8'), initialManifestContent)
+assert.equal(fs.readFileSync(envFilePath, 'utf8'), initialEnvContent)
 assert.equal(fs.existsSync(path.join(artifactDirPath, dryRunResult.archiveName)), false)
 
 // 5. Simulated failure at validate-extension phase
@@ -116,6 +122,7 @@ await withMutedConsole(async () => {
 assert.equal(fs.readFileSync(versionFilePath, 'utf8'), initialVersionContent)
 assert.equal(fs.readFileSync(packageFilePath, 'utf8'), initialPackageContent)
 assert.equal(fs.readFileSync(manifestFilePath, 'utf8'), initialManifestContent)
+assert.equal(fs.readFileSync(envFilePath, 'utf8'), initialEnvContent)
 assert.equal(fs.existsSync(path.join(artifactDirPath, dryRunResult.archiveName)), false)
 
 // 6. Simulated failure at package-extension zip phase
@@ -135,6 +142,7 @@ await withMutedConsole(async () => {
 assert.equal(fs.readFileSync(versionFilePath, 'utf8'), initialVersionContent)
 assert.equal(fs.readFileSync(packageFilePath, 'utf8'), initialPackageContent)
 assert.equal(fs.readFileSync(manifestFilePath, 'utf8'), initialManifestContent)
+assert.equal(fs.readFileSync(envFilePath, 'utf8'), initialEnvContent)
 assert.equal(fs.existsSync(path.join(artifactDirPath, dryRunResult.archiveName)), false)
 const finalTemporaryBuilds = fs.existsSync(path.resolve('dist'))
   ? fs.readdirSync(path.resolve('dist')).filter(name => name.startsWith('.extension-package-')).sort()

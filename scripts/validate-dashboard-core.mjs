@@ -75,6 +75,9 @@ assert.equal(selectItemUrl(dashboard.groups[0].items[0], true), 'http://example.
 assert.equal(selectItemUrl({ ...dashboard.groups[0].items[0], lanUrl: '' }, true), 'https://example.com')
 assert.match(extensionView, /groups\.value = dashboard\.groups \|\| \[\]/)
 assert.match(extensionView, /if \(authStore\.visitMode !== VisitMode\.VISIT_MODE_LOGIN\)\s+return/)
-assert.match(extensionView, /v-if="!sidePanelOpen" type="button" class="rail-avatar"/)
+assert.match(extensionView, /type="button" class="rail-avatar"[\s\S]*@click="handleAvatarClick"/)
+assert.match(extensionView, /v-for="\(group, index\) in groupTabs"/)
+assert.match(extensionView, /function openGroupManager\(\)[\s\S]*VisitMode\.VISIT_MODE_LOGIN/)
+assert.match(extensionView, /if \(!authStore\.token\) \{[\s\S]*VisitMode\.VISIT_MODE_PUBLIC[\s\S]*groups\.value = defaultPresetGroups/)
 
-console.log('Validated shared dashboard state, empty-group clearing, guest interactions, sorting, and URL selection')
+console.log('Validated shared dashboard state, compact group rail, guest interactions, sorting, and URL selection')

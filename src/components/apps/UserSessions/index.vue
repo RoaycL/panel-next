@@ -1,16 +1,21 @@
 <script setup lang="ts">
-import { NAlert, NButton, NDataTable, NTag, useDialog, useMessage } from 'naive-ui'
+import { NAlert, NButton, NDataTable, NEmpty, NTag, useDialog, useMessage } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
-import { h, onMounted, ref } from 'vue'
+import { computed, h, onMounted, ref } from 'vue'
 import { getSessionList, revokeSession, revokeAllSessions } from '@/api/system/userSession'
 import type { SessionInfo } from '@/api/system/userSession'
 import { t } from '@/locales'
 import { timeFormat } from '@/utils/cmn'
 
+const { embedded = false } = defineProps<{ embedded?: boolean }>()
+
 const message = useMessage()
 const dialog = useDialog()
 const loading = ref(false)
 const sessions = ref<SessionInfo[]>([])
+const lastUpdatedAt = ref<Date | null>(null)
+const revocableSessionCount = computed(() => sessions.value.filter(session => !session.current).length)
+const extensionSessionCount = computed(() => sessions.value.filter(session => session.clientType === 'chrome_extension').length)
 
 const columns: DataTableColumns<SessionInfo> = [
   {
@@ -80,8 +85,16 @@ async function fetchSessions() {
   loading.value = true
   try {
     const { code, data } = await getSessionList<{ list: SessionInfo[] }>()
-    if (code === 0 && data?.list)
+    if (code === 0 && data?.list) {
       sessions.value = data.list
+      lastUpdatedAt.value = new Date()
+    }
+    else {
+      message.error('加载设备会话失败')
+    }
+  }
+  catch (error) {
+    message.error(error instanceof Error ? error.message : t('common.serverError'))
   }
   finally {
     loading.value = false
@@ -124,24 +137,72 @@ onMounted(fetchSessions)
 </script>
 
 <template>
-  <div class="overflow-auto pt-2">
+  <div :class="embedded ? 'embedded-session-center' : 'overflow-auto pt-2'">
     <NAlert type="info" :bordered="false">
       {{ $t('adminSettingUsers.sessionsAlertText') }}
     </NAlert>
-    <div class="my-[10px] flex gap-[10px]">
-      <NButton size="small" type="primary" ghost @click="fetchSessions">
+    <div class="session-summary-grid">
+      <div><b>{{ sessions.length }}</b><span>全部会话</span></div>
+      <div><b>{{ extensionSessionCount }}</b><span>扩展设备</span></div>
+      <div><b>{{ revocableSessionCount }}</b><span>可撤销会话</span></div>
+    </div>
+    <div class="my-[10px] flex flex-wrap items-center gap-[10px]">
+      <NButton size="small" type="primary" ghost :loading="loading" @click="fetchSessions">
         {{ $t('common.refresh') }}
       </NButton>
-      <NButton size="small" type="error" ghost @click="handleRevokeAll">
+      <NButton size="small" type="error" ghost :disabled="revocableSessionCount === 0" @click="handleRevokeAll">
         {{ $t('adminSettingUsers.revokeAll') }}
       </NButton>
+      <small v-if="lastUpdatedAt" class="ml-auto text-slate-400">更新于 {{ lastUpdatedAt.toLocaleTimeString() }}</small>
     </div>
     <NDataTable
+      v-if="sessions.length || loading"
       :columns="columns"
       :data="sessions"
       :bordered="false"
       :loading="loading"
+      :scroll-x="860"
       size="small"
     />
+    <NEmpty v-else size="small" description="暂无设备会话" class="py-8" />
   </div>
 </template>
+
+<style scoped>
+.embedded-session-center {
+  min-width: 0;
+  padding-top: 12px;
+  overflow: hidden;
+}
+
+.session-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.session-summary-grid > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  padding: 10px 12px;
+  border: 1px solid rgba(100, 116, 139, .16);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .66);
+}
+
+.session-summary-grid b { color: #0f172a; font-size: 16px; }
+.session-summary-grid span { margin-top: 2px; color: #64748b; font-size: 10px; }
+
+:global(html.dark) .session-summary-grid > div {
+  border-color: rgba(148, 163, 184, .14);
+  background: rgba(15, 23, 42, .48);
+}
+
+:global(html.dark) .session-summary-grid b { color: #f8fafc; }
+
+@media (max-width: 560px) {
+  .session-summary-grid { grid-template-columns: 1fr; }
+}
+</style>

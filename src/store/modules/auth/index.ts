@@ -51,6 +51,7 @@ export const useAuthStore = defineStore('auth-store', {
       this.authMode = 'legacy'
       this.accessExpiresAt = null
       this.refreshExpiresAt = null
+      this.visitMode = VisitMode.VISIT_MODE_LOGIN
       this.saveStorage()
       clearWidgetNetworkState()
     },
@@ -62,6 +63,7 @@ export const useAuthStore = defineStore('auth-store', {
       this.accessExpiresAt = session.accessExpiresAt
       this.refreshExpiresAt = session.refreshExpiresAt
       this.userInfo = session.user
+      this.visitMode = VisitMode.VISIT_MODE_LOGIN
       this.saveStorage()
       clearWidgetNetworkState()
     },

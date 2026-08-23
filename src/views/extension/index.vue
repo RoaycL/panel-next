@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, h, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, h, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   NAvatar,
   NDropdown,
@@ -9,10 +9,16 @@ import {
   useMessage,
 } from 'naive-ui'
 import { t } from '@/locales'
-import type { WidgetInstance } from '@/widgets'
-import { WidgetHost, WidgetSettingsModal, generateWidgetInstanceId, resizeInstanceWithinBounds, serializeWidgetLayout, widgetRegistry } from '@/widgets'
+import type { WidgetDisplayGroup } from '@/widgets/stack'
+import type { WidgetInstance, WidgetSize } from '@/widgets/types'
+import WidgetStackHost from '@/widgets/WidgetStackHost.vue'
+import { generateWidgetInstanceId } from '@/widgets/builtins'
+import { resizeInstanceToWithinBounds, resolveWidgetSize, serializeWidgetLayout, widgetRegistry } from '@/widgets/registry'
+import { applyWidgetDisplayOrder, buildWidgetDisplayGroups, canStackWidgets, normalizeWidgetStacks, stackWidgets, unstackWidget } from '@/widgets/stack'
+import { useWidgetGridResize } from '@/widgets/useGridResize'
 import { useRouter } from 'vue-router'
-import { SvgIcon, ItemIcon, ConflictResolverModal, OfflineQueueManager } from '@/components/common'
+import SvgIcon from '@/components/common/SvgIcon/index.vue'
+import ItemIcon from '@/components/common/ItemIcon/index.vue'
 import { useAppStore, useAuthStore, usePanelState, useUserStore } from '@/store'
 import { getLocalState as getLocalPanelState } from '@/store/modules/panel/helper'
 import { PanelStateNetworkModeEnum } from '@/enums'
@@ -20,8 +26,9 @@ import { VisitMode } from '@/enums/auth'
 import { getRuntime } from '@/runtime'
 import type { StorageChangeEvent } from '@/runtime/types'
 import { EXTENSION_APPEARANCE_KEY, EXTENSION_WIDGETS_KEY, processPendingWidgetCleanups, readExtensionAppearance, readExtensionWidgets, removeExtensionWidgetFlow, saveExtensionAppearance, saveExtensionWidgets } from '@/runtime/extensionAppearance'
+import type { ExtensionBookmarkLayout, ExtensionPageLayout, ExtensionSearchEngineId } from '@/runtime/extensionAppearance'
 import { enqueueAppearanceSave } from '@/themes/appearanceSaveQueue'
-import { ThemeIcon } from '@/themes'
+import ThemeIcon from '@/themes/ThemeIcon.vue'
 import { BOOTSTRAP_SNAPSHOT_KEY_PREFIX, readBootstrapSnapshot, refreshBootstrapSnapshot } from '@/sync/bootstrapCache'
 import { onSyncConflict, setSyncRevision } from '@/sync/revision'
 import { replayOfflineQueue } from '@/sync/offlineReplay'
@@ -29,15 +36,10 @@ import { getPendingMutationCount, OFFLINE_QUEUE_KEY_PREFIX, onOfflineQueueChange
 import type { ConflictDescriptor, ConflictResolutionChoice } from '@/sync/conflictResolver'
 import { getBootstrap } from '@/api/sync'
 import { getList as getGroupList } from '@/api/panel/itemIconGroup'
-import { getListByGroupId } from '@/api/panel/itemIcon'
+import { deletes as deleteItems, getListByGroupId, saveSort as saveItemSort } from '@/api/panel/itemIcon'
 import type { DashboardGroup } from '@/dashboard/core'
-import { createDashboardState, selectItemUrl } from '@/dashboard/core'
-import { getWeather } from '@/api/weather'
-import type { WeatherResponse } from '@/api/weather'
-import { getTrending } from '@/api/trending'
-import type { TrendingItem, TrendingSource } from '@/api/trending'
+import { createDashboardState, createItemSortRequest, selectItemUrl } from '@/dashboard/core'
 import { VueDraggable } from 'vue-draggable-plus'
-import defaultBackground from '@/assets/defaultBackground.webp'
 
 import SvgSrcBaidu from '@/assets/search_engine_svg/baidu.svg'
 import SvgSrcBing from '@/assets/search_engine_svg/bing.svg'
@@ -45,7 +47,11 @@ import SvgSrcGoogle from '@/assets/search_engine_svg/google.svg'
 
 const UserHubModal = defineAsyncComponent(() => import('./components/UserHubModal.vue'))
 const EditItem = defineAsyncComponent(() => import('@/views/home/components/EditItem/index.vue'))
+const ItemGroupManage = defineAsyncComponent(() => import('@/components/apps/ItemGroupManage/index.vue'))
 const GallerySelector = defineAsyncComponent(() => import('@/components/common/GallerySelector/index.vue'))
+const WidgetSettingsModal = defineAsyncComponent(() => import('@/widgets/WidgetSettingsModal.vue'))
+const ConflictResolverModal = defineAsyncComponent(() => import('@/components/common/ConflictResolverModal/index.vue'))
+const OfflineQueueManager = defineAsyncComponent(() => import('@/components/common/OfflineQueueManager/index.vue'))
 
 const router = useRouter()
 const ms = useMessage()
@@ -55,6 +61,10 @@ const panelState = usePanelState()
 const authStore = useAuthStore()
 const userStore = useUserStore()
 const runtime = getRuntime()
+const extensionProfileName = computed(() => authStore.userInfo?.name?.trim() || authStore.userInfo?.username?.trim() || '访客')
+const extensionAvatarUrl = computed(() => runtime.resolveUrl(authStore.userInfo?.headImage?.trim() || ''))
+if (!authStore.token && authStore.visitMode !== VisitMode.VISIT_MODE_PUBLIC)
+  authStore.setVisitMode(VisitMode.VISIT_MODE_PUBLIC)
 
 // 离线队列与冲突解决
 const conflictModalVisible = ref(false)
@@ -102,7 +112,52 @@ async function triggerOfflineReplay() {
 
 const showWallpaperModal = ref(false)
 const showWidgetManager = ref(false)
+const showGroupManager = ref(false)
 const widgetPreferences = ref(readExtensionWidgets())
+const sidebarPosition = computed({
+  get: () => widgetPreferences.value.sidebarPosition,
+  set: (value: 'left' | 'right') => { widgetPreferences.value.sidebarPosition = value },
+})
+const sidebarAutoHide = computed({
+  get: () => widgetPreferences.value.sidebarAutoHide,
+  set: (value: boolean) => { widgetPreferences.value.sidebarAutoHide = value },
+})
+const sidebarWheelSwitch = computed({
+  get: () => widgetPreferences.value.sidebarWheelSwitch,
+  set: (value: boolean) => { widgetPreferences.value.sidebarWheelSwitch = value },
+})
+const sidebarDensity = computed({
+  get: () => widgetPreferences.value.sidebarDensity,
+  set: (value: 'compact' | 'comfortable') => { widgetPreferences.value.sidebarDensity = value },
+})
+const extensionClockEnabled = computed({
+  get: () => widgetPreferences.value.clock,
+  set: (value: boolean) => { widgetPreferences.value.clock = value },
+})
+const extensionClockSeconds = computed({
+  get: () => widgetPreferences.value.clockSeconds,
+  set: (value: boolean) => { widgetPreferences.value.clockSeconds = value },
+})
+const extensionClockDate = computed({
+  get: () => widgetPreferences.value.clockDate,
+  set: (value: boolean) => { widgetPreferences.value.clockDate = value },
+})
+const extensionClockHourCycle = computed({
+  get: () => widgetPreferences.value.clockHourCycle,
+  set: (value: '12' | '24') => { widgetPreferences.value.clockHourCycle = value },
+})
+const extensionSearchEnabled = computed({
+  get: () => widgetPreferences.value.search,
+  set: (value: boolean) => { widgetPreferences.value.search = value },
+})
+const extensionSearchOpenMode = computed({
+  get: () => widgetPreferences.value.searchOpenMode,
+  set: (value: 'current' | 'tab') => { widgetPreferences.value.searchOpenMode = value },
+})
+const extensionSearchHistoryEnabled = computed({
+  get: () => widgetPreferences.value.searchHistoryEnabled,
+  set: (value: boolean) => { widgetPreferences.value.searchHistoryEnabled = value },
+})
 const extensionWidgetInstances = ref<WidgetInstance[]>([])
 const extensionQuarantinedWidgets = ref<unknown[]>([])
 const extensionWidgetSettingsVisible = ref(false)
@@ -110,6 +165,29 @@ const extensionWidgetSettingsInstance = ref<WidgetInstance | null>(null)
 const isRemovingWidget = ref(false)
 const isWidgetLayoutDirty = ref(false)
 let saveTimer: ReturnType<typeof setTimeout> | null = null
+let loadedWidgetPageKey: string | null = null
+let isLoadingWidgetPage = false
+let widgetSaveGeneration = 0
+const dirtyPageLayoutKeys = new Set<string>()
+
+function emptyPageLayout(): ExtensionPageLayout {
+  return { contentLayout: { schemaVersion: 1, widgets: [] }, itemOrder: [] }
+}
+
+function syncLoadedWidgetPageLayout(pageKey = loadedWidgetPageKey, markDirty = false) {
+  if (!pageKey)
+    return
+  const current = widgetPreferences.value.pageLayouts[pageKey] ?? emptyPageLayout()
+  widgetPreferences.value.pageLayouts = {
+    ...widgetPreferences.value.pageLayouts,
+    [pageKey]: {
+      contentLayout: serializeWidgetLayout(extensionWidgetInstances.value, extensionQuarantinedWidgets.value),
+      itemOrder: [...current.itemOrder],
+    },
+  }
+  if (markDirty)
+    dirtyPageLayoutKeys.add(pageKey)
+}
 
 async function persistExtensionWidgets(): Promise<boolean> {
   if (saveTimer) {
@@ -117,11 +195,15 @@ async function persistExtensionWidgets(): Promise<boolean> {
     saveTimer = null
   }
   try {
-    const layout = serializeWidgetLayout(extensionWidgetInstances.value, extensionQuarantinedWidgets.value)
-    widgetPreferences.value.contentLayout = layout
-    const success = await saveExtensionWidgets(widgetPreferences.value)
+    syncLoadedWidgetPageLayout()
+    const generation = widgetSaveGeneration
+    const changedPageKeys = [...dirtyPageLayoutKeys]
+    const success = await saveExtensionWidgets(widgetPreferences.value, changedPageKeys)
     if (success) {
-      isWidgetLayoutDirty.value = false
+      if (generation === widgetSaveGeneration) {
+        dirtyPageLayoutKeys.clear()
+        isWidgetLayoutDirty.value = false
+      }
       return true
     }
     return false
@@ -135,17 +217,13 @@ async function persistExtensionWidgets(): Promise<boolean> {
 }
 
 function scheduleSaveExtensionWidgets(delay = 300) {
+  widgetSaveGeneration += 1
   isWidgetLayoutDirty.value = true
   if (saveTimer)
     clearTimeout(saveTimer)
   saveTimer = setTimeout(() => {
     void persistExtensionWidgets()
   }, delay)
-}
-
-function onExtensionWidgetDragEnd() {
-  isWidgetLayoutDirty.value = true
-  void persistExtensionWidgets()
 }
 
 function flushPendingLayoutIfDirty() {
@@ -158,41 +236,57 @@ function flushPendingLayoutIfDirty() {
   }
 }
 
-function loadExtensionWidgetLayout(layout: unknown) {
+function loadExtensionWidgetLayout(layout: unknown, pageKey: string) {
+  isLoadingWidgetPage = true
   try {
     const result = widgetRegistry.loadLayout(layout)
     extensionWidgetInstances.value = result.layout.widgets
     extensionQuarantinedWidgets.value = result.quarantinedWidgets
+    loadedWidgetPageKey = pageKey
+    isWidgetLayoutDirty.value = false
     if (result.issues.length)
       console.warn('Quarantined incompatible extension widgets.', result.issues)
   }
   catch (error) {
     extensionWidgetInstances.value = []
     extensionQuarantinedWidgets.value = []
+    loadedWidgetPageKey = pageKey
+    isWidgetLayoutDirty.value = false
     console.warn('Invalid extension widget layout was ignored.', error)
+  }
+  finally {
+    isLoadingWidgetPage = false
   }
 }
 
-loadExtensionWidgetLayout(widgetPreferences.value.contentLayout)
-
 // 防抖保存实例拖拽/缩放/隐藏/设置修改
 watch(extensionWidgetInstances, () => {
-  if (!isRemovingWidget.value) {
+  if (!isRemovingWidget.value && !isLoadingWidgetPage) {
+    syncLoadedWidgetPageLayout(loadedWidgetPageKey, true)
     scheduleSaveExtensionWidgets(300)
   }
-}, { deep: true })
+}, { deep: true, flush: 'sync' })
 
 // 监听固定组件偏好开关
 watch([
   () => widgetPreferences.value.clock,
+  () => widgetPreferences.value.clockSeconds,
+  () => widgetPreferences.value.clockDate,
+  () => widgetPreferences.value.clockHourCycle,
   () => widgetPreferences.value.search,
-  () => widgetPreferences.value.weather,
-  () => widgetPreferences.value.trending,
+  () => widgetPreferences.value.searchEngineId,
+  () => widgetPreferences.value.searchOpenMode,
+  () => widgetPreferences.value.searchHistoryEnabled,
+  () => JSON.stringify(widgetPreferences.value.searchHistory),
+  () => widgetPreferences.value.sidebarPosition,
+  () => widgetPreferences.value.sidebarAutoHide,
+  () => widgetPreferences.value.sidebarWheelSwitch,
+  () => widgetPreferences.value.sidebarDensity,
 ], () => {
   scheduleSaveExtensionWidgets(150)
 })
 
-const fixedExtensionWidgetTypes = new Set(['core.clock', 'core.search', 'core.weather', 'core.trending'])
+const fixedExtensionWidgetTypes = new Set(['core.clock', 'core.search'])
 const extensionWidgetAddOptions = computed(() => widgetRegistry.list()
   .filter(definition => (!definition.surfaces || definition.surfaces.includes('extension')) && !fixedExtensionWidgetTypes.has(definition.type))
   .map(definition => ({ label: widgetDefinitionTitle(definition), key: definition.type })))
@@ -244,14 +338,83 @@ watch(extensionWidgetEditMode, (isEditing) => {
   }
 })
 
-function resizeExtensionWidget(instance: WidgetInstance, axis: 'columns' | 'rows', delta: number) {
-  resizeInstanceWithinBounds(instance, axis, delta)
+const extensionWidgetGridRef = ref<HTMLElement | null>(null)
+const {
+  activeWidgetId: resizingExtensionWidgetId,
+  startWidgetResize: startExtensionWidgetResize,
+} = useWidgetGridResize({
+  onPreview: () => {
+    isWidgetLayoutDirty.value = true
+  },
+  async onCommit(instance, previous) {
+    isWidgetLayoutDirty.value = true
+    if (!await persistExtensionWidgets()) {
+      instance.size = { ...previous }
+      isWidgetLayoutDirty.value = true
+    }
+  },
+})
+
+function toggleExtensionWidgetHidden(instance: WidgetInstance) {
+  instance.hidden = !instance.hidden
   isWidgetLayoutDirty.value = true
   void persistExtensionWidgets()
 }
 
-function toggleExtensionWidgetHidden(instance: WidgetInstance) {
-  instance.hidden = !instance.hidden
+function extensionWidgetStackTargetOptions(instance: WidgetInstance) {
+  const seen = new Set<string>()
+  return extensionWidgetInstances.value.flatMap((target) => {
+    const key = target.stack?.id ?? target.id
+    if (seen.has(key) || !canStackWidgets(extensionWidgetInstances.value, instance.id, target.id))
+      return []
+    seen.add(key)
+    const count = target.stack ? extensionWidgetInstances.value.filter(candidate => candidate.stack?.id === target.stack?.id).length : 1
+    return [{
+      key: target.id,
+      label: count > 1 ? `${widgetDefinitionTitle(widgetRegistry.get(target.type) ?? { type: target.type })} (${count})` : widgetDefinitionTitle(widgetRegistry.get(target.type) ?? { type: target.type }),
+    }]
+  })
+}
+
+function replaceActivePageOrderKeys(removedKeys: readonly string[], replacementKeys: readonly string[]) {
+  const pageKey = loadedWidgetPageKey
+  if (!pageKey)
+    return
+  const page = widgetPreferences.value.pageLayouts[pageKey] ?? emptyPageLayout()
+  const removed = new Set(removedKeys)
+  const insertionIndex = page.itemOrder.findIndex(key => removed.has(key))
+  const nextOrder = page.itemOrder.filter(key => !removed.has(key) && !replacementKeys.includes(key))
+  nextOrder.splice(insertionIndex < 0 ? nextOrder.length : insertionIndex, 0, ...replacementKeys)
+  widgetPreferences.value.pageLayouts = {
+    ...widgetPreferences.value.pageLayouts,
+    [pageKey]: { ...page, itemOrder: nextOrder },
+  }
+}
+
+function stackExtensionWidgetWith(instance: WidgetInstance, targetId: string | number) {
+  const target = extensionWidgetInstances.value.find(candidate => candidate.id === String(targetId))
+  if (!target)
+    return
+  const sourceKey = `widget:${instance.stack?.id ?? instance.id}`
+  const targetKey = `widget:${target.stack?.id ?? target.id}`
+  const stackId = stackWidgets(extensionWidgetInstances.value, instance.id, target.id)
+  if (!stackId)
+    return
+  replaceActivePageOrderKeys([sourceKey, targetKey], [`widget:${stackId}`])
+  extensionWidgetInstances.value = [...extensionWidgetInstances.value]
+  isWidgetLayoutDirty.value = true
+  void persistExtensionWidgets()
+}
+
+function removeExtensionWidgetFromStack(instance: WidgetInstance) {
+  const previousStackId = instance.stack?.id
+  if (!previousStackId || !unstackWidget(extensionWidgetInstances.value, instance.id))
+    return
+  const replacementKeys = buildWidgetDisplayGroups(extensionWidgetInstances.value, true)
+    .filter(group => group.key === instance.id || group.members.some(member => member.stack?.id === previousStackId))
+    .map(widgetCanvasKey)
+  replaceActivePageOrderKeys([`widget:${previousStackId}`], replacementKeys)
+  extensionWidgetInstances.value = [...extensionWidgetInstances.value]
   isWidgetLayoutDirty.value = true
   void persistExtensionWidgets()
 }
@@ -293,6 +456,7 @@ async function executeRemoveExtensionWidget(instanceId: string) {
       instanceId,
       extensionQuarantinedWidgets.value,
       widgetPreferences.value,
+      loadedWidgetPageKey ?? undefined,
     )
 
     if (!result.success) {
@@ -303,11 +467,19 @@ async function executeRemoveExtensionWidget(instanceId: string) {
     }
 
     // 布局保存成功：更新组件状态
+    normalizeWidgetStacks(result.updatedInstances)
     extensionWidgetInstances.value = result.updatedInstances
-    widgetPreferences.value.contentLayout = serializeWidgetLayout(
-      result.updatedInstances,
-      extensionQuarantinedWidgets.value,
-    )
+    if (loadedWidgetPageKey) {
+      const currentPage = widgetPreferences.value.pageLayouts[loadedWidgetPageKey] ?? emptyPageLayout()
+      const knownWidgetKeys = new Set(buildWidgetDisplayGroups(result.updatedInstances, true).map(widgetCanvasKey))
+      widgetPreferences.value.pageLayouts = {
+        ...widgetPreferences.value.pageLayouts,
+        [loadedWidgetPageKey]: {
+          contentLayout: serializeWidgetLayout(result.updatedInstances, extensionQuarantinedWidgets.value),
+          itemOrder: currentPage.itemOrder.filter(key => !key.startsWith('widget:') || knownWidgetKeys.has(key)),
+        },
+      }
+    }
 
     if (result.storageCleanupFailed) {
       ms.warning(t('widgetLayout.storageCleanupFail'))
@@ -325,7 +497,7 @@ async function executeRemoveExtensionWidget(instanceId: string) {
   }
 }
 
-function extensionWidgetCellStyle(instance: WidgetInstance) {
+function extensionWidgetCellStyle(instance: { size: WidgetInstance['size'] }) {
   return {
     gridColumn: `span ${Math.min(12, Math.max(1, instance.size.columns))}`,
     gridRow: `span ${Math.max(1, instance.size.rows)}`,
@@ -357,17 +529,20 @@ async function handleWallpaperSelect(url: string) {
 const currentTime = ref('')
 const currentSeconds = ref('')
 const currentDate = ref('')
-const greeting = ref('')
+const currentPeriod = ref('')
 
 let clockTimer: number | null = null
 
 function updateClock() {
   const now = new Date()
-  const hours = String(now.getHours()).padStart(2, '0')
+  const rawHours = now.getHours()
+  const displayHours = widgetPreferences.value.clockHourCycle === '12' ? rawHours % 12 || 12 : rawHours
+  const hours = String(displayHours).padStart(2, '0')
   const minutes = String(now.getMinutes()).padStart(2, '0')
   const seconds = String(now.getSeconds()).padStart(2, '0')
   currentTime.value = `${hours}:${minutes}`
   currentSeconds.value = seconds
+  currentPeriod.value = widgetPreferences.value.clockHourCycle === '12' ? (rawHours >= 12 ? '下午' : '上午') : ''
 
   const weekDays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
   const year = now.getFullYear()
@@ -376,24 +551,11 @@ function updateClock() {
   const day = weekDays[now.getDay()]
   currentDate.value = `${year}年${month}月${date}日 · ${day}`
 
-  const hVal = now.getHours()
-  const username = userStore.userInfo?.name || userStore.userInfo?.username || authStore.userInfo?.name || ''
-  const nameSuffix = username ? `，${username}` : ''
-  if (hVal >= 5 && hVal < 12)
-    greeting.value = `早上好${nameSuffix}`
-  else if (hVal >= 12 && hVal < 14)
-    greeting.value = `中午好${nameSuffix}`
-  else if (hVal >= 14 && hVal < 18)
-    greeting.value = `下午好${nameSuffix}`
-  else if (hVal >= 18 && hVal < 23)
-    greeting.value = `晚上好${nameSuffix}`
-  else
-    greeting.value = `夜深了${nameSuffix}`
 }
 
 // 2. 聚合搜索引擎
 interface SearchEngine {
-  id: string
+  id: ExtensionSearchEngineId
   title: string
   url: string
   icon: string
@@ -409,7 +571,7 @@ const searchEngines: SearchEngine[] = [
   { id: 'duckduckgo', title: 'DuckDuckGo', url: 'https://duckduckgo.com/?q=%s', icon: 'simple-icons:duckduckgo' },
 ]
 
-const currentEngine = ref<SearchEngine>(searchEngines[0])
+const currentEngine = computed<SearchEngine>(() => searchEngines.find(engine => engine.id === widgetPreferences.value.searchEngineId) ?? searchEngines[0])
 const searchQuery = ref('')
 const isSearchFocused = ref(false)
 
@@ -426,91 +588,25 @@ const engineDropdownOptions = computed(() => {
 function handleSelectEngine(key: string) {
   const found = searchEngines.find(e => e.id === key)
   if (found)
-    currentEngine.value = found
+    widgetPreferences.value.searchEngineId = found.id
+}
+
+function clearSearchHistory() {
+  widgetPreferences.value.searchHistory = []
 }
 
 function handleSearchSubmit() {
   const query = searchQuery.value.trim()
   if (!query)
     return
+  if (widgetPreferences.value.searchHistoryEnabled) {
+    widgetPreferences.value.searchHistory = [
+      query,
+      ...widgetPreferences.value.searchHistory.filter(item => item !== query),
+    ].slice(0, 10)
+  }
   const targetUrl = currentEngine.value.url.replace('%s', encodeURIComponent(query))
-  runtime.openUrl(targetUrl, 'tab')
-}
-
-// 3. 天气与热搜
-const weatherData = ref<WeatherResponse | null>(null)
-const weatherCity = ref('北京')
-const weatherUnavailable = ref(false)
-
-async function fetchWeather() {
-  try {
-    const res = await getWeather(weatherCity.value, 'metric')
-    if (res.code === 0) {
-      weatherData.value = res.data
-      weatherUnavailable.value = false
-    }
-    else {
-      weatherUnavailable.value = true
-    }
-  }
-  catch {
-    weatherUnavailable.value = true
-  }
-}
-
-const weatherEmoji = computed(() => {
-  const code = weatherData.value?.current?.weatherCode
-  if (code === undefined) return '🌤️'
-  if (code === 0) return weatherData.value?.current?.isDay ? '☀️' : '🌙'
-  if ([1, 2].includes(code)) return '🌤️'
-  if (code === 3) return '☁️'
-  if ([45, 48].includes(code)) return '🌫️'
-  if ([51, 53, 55, 56, 57].includes(code)) return '🌦️'
-  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return '🌧️'
-  if ([71, 73, 75, 77, 85, 86].includes(code)) return '🌨️'
-  if ([95, 96, 99].includes(code)) return '⛈️'
-  return '🌡️'
-})
-
-// 微博/热搜
-const trendingItems = ref<TrendingItem[]>([])
-const trendingIndex = ref(0)
-const trendingSource = ref<TrendingSource>('weibo')
-const trendingUnavailable = ref(false)
-let trendingTimer: number | null = null
-
-async function fetchTrending() {
-  try {
-    const res = await getTrending(trendingSource.value, 15)
-    if (res.code === 0 && res.data?.items?.length) {
-      trendingItems.value = res.data.items
-      trendingUnavailable.value = false
-    }
-    else {
-      trendingUnavailable.value = true
-    }
-  }
-  catch {
-    trendingUnavailable.value = true
-  }
-}
-
-const currentTrending = computed(() => {
-  if (!trendingItems.value.length) return null
-  return trendingItems.value[trendingIndex.value % trendingItems.value.length]
-})
-
-function startTrendingRoll() {
-  if (trendingTimer) clearInterval(trendingTimer)
-  trendingTimer = window.setInterval(() => {
-    if (trendingItems.value.length > 1)
-      trendingIndex.value = (trendingIndex.value + 1) % trendingItems.value.length
-  }, 4000)
-}
-
-function openTrending(item: TrendingItem) {
-  if (item?.url)
-    runtime.openUrl(item.url, 'tab')
+  runtime.openUrl(targetUrl, widgetPreferences.value.searchOpenMode)
 }
 
 const defaultPresetGroups: DashboardGroup[] = [
@@ -534,7 +630,19 @@ const defaultPresetGroups: DashboardGroup[] = [
 type ExtensionSyncStatus = 'idle' | 'syncing' | 'online' | 'cached' | 'offline' | 'error'
 const extensionSyncStatus = ref<ExtensionSyncStatus>('syncing')
 const syncRevision = ref<Sync.Revision>('0')
+const extensionSyncPresentation = computed(() => {
+  const states: Record<ExtensionSyncStatus, { label: string, tone: string }> = {
+    idle: { label: '等待同步', tone: 'idle' },
+    syncing: { label: '正在同步', tone: 'syncing' },
+    online: { label: '已同步', tone: 'online' },
+    cached: { label: '使用缓存', tone: 'cached' },
+    offline: { label: '当前离线', tone: 'offline' },
+    error: { label: '同步异常', tone: 'error' },
+  }
+  return states[extensionSyncStatus.value]
+})
 const groups = ref<DashboardGroup[]>(defaultPresetGroups)
+const groupsReady = ref(!authStore.token)
 let isRefreshing = false
 
 async function applyBootstrapData(data: Sync.BootstrapResponseV1) {
@@ -558,6 +666,7 @@ async function applyBootstrapData(data: Sync.BootstrapResponseV1) {
   userStore.updateUserInfo(dashboard.account)
   refreshPendingMutationsCount()
   groups.value = dashboard.groups || []
+  groupsReady.value = true
   // 等待 Extension 回写真正持久化完成，失败时不假装同步成功。
   if (writeBack && (await writeBack) === false)
     extensionSyncStatus.value = 'offline'
@@ -565,6 +674,13 @@ async function applyBootstrapData(data: Sync.BootstrapResponseV1) {
 
 async function refreshBootstrap() {
   if (isRefreshing) return
+  if (!authStore.token) {
+    authStore.setVisitMode(VisitMode.VISIT_MODE_PUBLIC)
+    extensionSyncStatus.value = navigator.onLine ? 'idle' : 'offline'
+    groups.value = defaultPresetGroups.map(group => ({ ...group, items: [...(group.items ?? [])] }))
+    groupsReady.value = true
+    return
+  }
   isRefreshing = true
   extensionSyncStatus.value = 'syncing'
   try {
@@ -585,7 +701,10 @@ async function refreshBootstrap() {
     }
     // 降级使用普通 API 获取
     if (!authStore.token) {
-      await router.push('/login')
+      authStore.setVisitMode(VisitMode.VISIT_MODE_PUBLIC)
+      groups.value = defaultPresetGroups.map(group => ({ ...group, items: [...(group.items ?? [])] }))
+      groupsReady.value = true
+      extensionSyncStatus.value = navigator.onLine ? 'idle' : 'offline'
       return
     }
     if (await loadDirectFromApi())
@@ -635,22 +754,65 @@ async function loadDirectFromApi() {
   if (results.some(group => group === null))
     return false
   groups.value = results as DashboardGroup[]
+  groupsReady.value = true
   return true
 }
 
 // 5. 分组 Tab 切换与卡片过滤（告别堆叠）
 const activeTabId = ref<number | null>(null)
-const sidePanelOpen = ref(false)
+const sideRailRevealed = ref(!sidebarAutoHide.value)
 const wheelHintVisible = ref(false)
 const settingsModalVisible = ref(false)
 const editCardModalVisible = ref(false)
 const editCardData = ref<Panel.ItemInfo | null>(null)
 const editCardGroupId = ref<number | undefined>(undefined)
-const longPressActive = ref<number | null>(null)
 let wheelLocked = false
 let wheelHintTimer: number | null = null
-let longPressTimer: number | null = null
 let suppressNextCardClick = false
+let suppressCardClickTimer: number | null = null
+let bookmarkSortSnapshot: Panel.ItemInfo[] | null = null
+let dashboardOrderSnapshot: string[] | null = null
+let sideHideTimer: number | null = null
+
+const sideRailVisible = computed(() => !sidebarAutoHide.value || sideRailRevealed.value)
+
+function clearSideHideTimer() {
+  if (sideHideTimer) {
+    window.clearTimeout(sideHideTimer)
+    sideHideTimer = null
+  }
+}
+
+function revealSideArea() {
+  clearSideHideTimer()
+  sideRailRevealed.value = true
+}
+
+function scheduleSideAreaHide() {
+  clearSideHideTimer()
+  sideHideTimer = window.setTimeout(() => {
+    if (sidebarAutoHide.value)
+      sideRailRevealed.value = false
+    sideHideTimer = null
+  }, sidebarAutoHide.value ? 3000 : 220)
+}
+
+function closeSideArea() {
+  clearSideHideTimer()
+  if (sidebarAutoHide.value)
+    sideRailRevealed.value = false
+}
+
+watch(sidebarAutoHide, (hidden) => {
+  clearSideHideTimer()
+  sideRailRevealed.value = !hidden
+  if (hidden)
+    scheduleSideAreaHide()
+})
+
+watch(sidebarPosition, () => {
+  closeSideArea()
+})
 
 const groupTabs = computed(() => {
   return groups.value.map(g => ({
@@ -661,37 +823,124 @@ const groupTabs = computed(() => {
   }))
 })
 
-const displayedCards = computed(() => {
-  const query = searchQuery.value.trim().toLowerCase()
-  const allGroups = groups.value
-
-  const filteredGroups = activeTabId.value === null
-    ? allGroups.slice(0, 1)
-    : allGroups.filter(g => g.id === activeTabId.value)
-
-  const cards: Array<Panel.ItemInfo & { groupTitle: string; groupId: number }> = []
-
-  for (const group of filteredGroups) {
-    for (const item of group.items || []) {
-      if (query) {
-        const titleMatch = item.title?.toLowerCase().includes(query)
-        const descMatch = item.description?.toLowerCase().includes(query)
-        const urlMatch = item.url?.toLowerCase().includes(query)
-        if (!titleMatch && !descMatch && !urlMatch)
-          continue
-      }
-      cards.push({
-        ...item,
-        groupTitle: group.title || '',
-        groupId: group.id || 0,
-      })
-    }
-  }
-
-  return cards
-})
-
 const activeGroup = computed(() => groupTabs.value.find(group => group.id === activeTabId.value) || groupTabs.value[0])
+const activeGroupRecord = computed(() => groups.value.find(group => group.id === activeTabId.value) ?? groups.value[0] ?? null)
+const activeGroupItems = computed<Panel.ItemInfo[]>({
+  get: () => activeGroupRecord.value?.items ?? [],
+  set: (items) => {
+    const group = activeGroupRecord.value
+    if (!group)
+      return
+    group.items = items
+    groups.value = [...groups.value]
+  },
+})
+const activePageLayoutKey = computed(() => {
+  const groupId = activeGroupRecord.value?.id
+  if (!Number.isSafeInteger(Number(groupId)) || Number(groupId) < 0)
+    return null
+  return `${authStore.userInfo?.id ?? 'guest'}:${groupId}`
+})
+const readyPageLayoutKey = computed(() => groupsReady.value ? activePageLayoutKey.value : null)
+
+type ExtensionCanvasItem =
+  | { key: string, kind: 'bookmark', card: Panel.ItemInfo }
+  | { key: string, kind: 'widget', group: WidgetDisplayGroup }
+
+function bookmarkCanvasKey(card: Panel.ItemInfo) {
+  return `bookmark:${card.id}`
+}
+
+function widgetCanvasKey(group: WidgetDisplayGroup) {
+  return `widget:${group.key}`
+}
+
+function orderedCanvasItems(items: ExtensionCanvasItem[], savedOrder: readonly string[]) {
+  const byKey = new Map(items.map(item => [item.key, item]))
+  const ordered = savedOrder.flatMap(key => byKey.get(key) ?? [])
+  const seen = new Set(ordered.map(item => item.key))
+  return [...ordered, ...items.filter(item => !seen.has(item.key))]
+}
+
+const activeCanvasItems = computed<ExtensionCanvasItem[]>({
+  get: () => {
+    const pageKey = readyPageLayoutKey.value
+    const widgetGroups = buildWidgetDisplayGroups(extensionWidgetInstances.value, extensionWidgetEditMode.value)
+      .map(group => ({ key: widgetCanvasKey(group), kind: 'widget' as const, group }))
+    const query = searchQuery.value.trim().toLowerCase()
+    const bookmarks = activeGroupItems.value
+      .filter(card => !query
+        || card.title?.toLowerCase().includes(query)
+        || card.description?.toLowerCase().includes(query)
+        || card.url?.toLowerCase().includes(query))
+      .map(card => ({ key: bookmarkCanvasKey(card), kind: 'bookmark' as const, card }))
+    const savedOrder = pageKey ? widgetPreferences.value.pageLayouts[pageKey]?.itemOrder ?? [] : []
+    return orderedCanvasItems([...widgetGroups, ...bookmarks], savedOrder)
+  },
+  set: (items) => {
+    const pageKey = readyPageLayoutKey.value
+    if (!pageKey)
+      return
+    const visibleKeys = items.map(item => item.key)
+    const allWidgetKeys = buildWidgetDisplayGroups(extensionWidgetInstances.value, true).map(widgetCanvasKey)
+    const preservedKeys = (widgetPreferences.value.pageLayouts[pageKey]?.itemOrder ?? [])
+      .filter(key => !visibleKeys.includes(key) && allWidgetKeys.includes(key))
+    widgetPreferences.value.pageLayouts = {
+      ...widgetPreferences.value.pageLayouts,
+      [pageKey]: {
+        contentLayout: widgetPreferences.value.pageLayouts[pageKey]?.contentLayout ?? { schemaVersion: 1, widgets: [] },
+        itemOrder: [...visibleKeys, ...preservedKeys],
+      },
+    }
+
+    const orderedBookmarks = items.flatMap(item => item.kind === 'bookmark' ? [item.card] : [])
+    if (orderedBookmarks.length === activeGroupItems.value.length)
+      activeGroupItems.value = orderedBookmarks
+    const orderedWidgetKeys = items.flatMap(item => item.kind === 'widget' ? [item.group.key] : [])
+    if (orderedWidgetKeys.length)
+      applyWidgetDisplayOrder(extensionWidgetInstances.value, orderedWidgetKeys)
+    extensionWidgetInstances.value = [...extensionWidgetInstances.value]
+    syncLoadedWidgetPageLayout(pageKey, true)
+    isWidgetLayoutDirty.value = true
+  },
+})
+const bookmarkLayoutChoices: readonly ExtensionBookmarkLayout[] = [
+  { columns: 1, rows: 1 },
+  { columns: 1, rows: 2 },
+  { columns: 2, rows: 1 },
+  { columns: 2, rows: 2 },
+  { columns: 2, rows: 4 },
+]
+
+function bookmarkLayoutKey(card: Panel.ItemInfo) {
+  if (!Number.isSafeInteger(card.id) || Number(card.id) <= 0)
+    return null
+  return `${authStore.userInfo?.id ?? 'guest'}:${card.id}`
+}
+
+function bookmarkLayout(card: Panel.ItemInfo): ExtensionBookmarkLayout {
+  const key = bookmarkLayoutKey(card)
+  return key ? widgetPreferences.value.bookmarkLayouts[key] ?? { columns: 1, rows: 1 } : { columns: 1, rows: 1 }
+}
+
+function bookmarkCardStyle(card: Panel.ItemInfo) {
+  const layout = bookmarkLayout(card)
+  return {
+    gridColumn: `span ${layout.columns}`,
+    gridRow: `span ${layout.rows}`,
+  }
+}
+
+function setBookmarkLayout(card: Panel.ItemInfo, layout: ExtensionBookmarkLayout) {
+  const key = bookmarkLayoutKey(card)
+  if (!key)
+    return
+  widgetPreferences.value.bookmarkLayouts = {
+    ...widgetPreferences.value.bookmarkLayouts,
+    [key]: { ...layout },
+  }
+  scheduleSaveExtensionWidgets(0)
+}
 
 watch(groupTabs, (tabs) => {
   if (!tabs.length) {
@@ -702,12 +951,50 @@ watch(groupTabs, (tabs) => {
     activeTabId.value = tabs[0].id
 }, { immediate: true })
 
+watch(readyPageLayoutKey, (pageKey) => {
+  if (!pageKey)
+    return
+  if (loadedWidgetPageKey && loadedWidgetPageKey !== pageKey)
+    syncLoadedWidgetPageLayout(loadedWidgetPageKey)
+
+  let pageLayout = widgetPreferences.value.pageLayouts[pageKey]
+  const legacyLayout = widgetPreferences.value.contentLayout
+  const shouldMigrateLegacy = !pageLayout && legacyLayout.widgets.length > 0
+  if (shouldMigrateLegacy) {
+    pageLayout = { contentLayout: legacyLayout, itemOrder: [] }
+    widgetPreferences.value.pageLayouts = {
+      ...widgetPreferences.value.pageLayouts,
+      [pageKey]: pageLayout,
+    }
+    widgetPreferences.value.contentLayout = { schemaVersion: 1, widgets: [] }
+    dirtyPageLayoutKeys.add(pageKey)
+  }
+
+  loadExtensionWidgetLayout(pageLayout?.contentLayout ?? emptyPageLayout().contentLayout, pageKey)
+  if (shouldMigrateLegacy)
+    scheduleSaveExtensionWidgets(0)
+}, { immediate: true })
+
 function selectGroup(id: number) {
   activeTabId.value = id
-  sidePanelOpen.value = false
+}
+
+function openGroupManager() {
+  if (authStore.visitMode !== VisitMode.VISIT_MODE_LOGIN) {
+    ms.info('登录后可新增和管理分组')
+    return
+  }
+  showGroupManager.value = true
+}
+
+function closeGroupManager() {
+  showGroupManager.value = false
+  void refreshBootstrap()
 }
 
 function handleGroupWheel(event: WheelEvent) {
+  if (!widgetPreferences.value.sidebarWheelSwitch)
+    return
   if (settingsModalVisible.value || showWallpaperModal.value || showWidgetManager.value || editCardModalVisible.value || conflictModalVisible.value)
     return
   const target = event.target as HTMLElement | null
@@ -756,58 +1043,228 @@ function openCardEditor(card: Panel.ItemInfo) {
   editCardModalVisible.value = true
 }
 
-function startCardLongPress(event: PointerEvent, card: Panel.ItemInfo) {
-  if (authStore.visitMode !== VisitMode.VISIT_MODE_LOGIN)
-    return
-  if (event.pointerType === 'mouse' && event.button !== 0)
-    return
-  cancelCardLongPress()
-  longPressActive.value = card.id || null
-  longPressTimer = window.setTimeout(() => {
-    suppressNextCardClick = true
-    longPressActive.value = null
-    longPressTimer = null
-    openCardEditor(card)
-  }, 620)
+function handleBookmarkDragStart() {
+  bookmarkSortSnapshot = activeGroupItems.value.map(item => ({ ...item }))
+  dashboardOrderSnapshot = activeCanvasItems.value.map(item => item.key)
+  suppressCardClickAfterDrag()
 }
 
-function cancelCardLongPress() {
-  if (longPressTimer)
-    window.clearTimeout(longPressTimer)
-  longPressTimer = null
-  longPressActive.value = null
+function suppressCardClickAfterDrag() {
+  suppressNextCardClick = true
+  if (suppressCardClickTimer)
+    window.clearTimeout(suppressCardClickTimer)
+  suppressCardClickTimer = window.setTimeout(() => {
+    suppressNextCardClick = false
+  }, 400)
+}
+
+async function handleBookmarkDragEnd() {
+  suppressCardClickAfterDrag()
+  const group = activeGroupRecord.value
+  const snapshot = bookmarkSortSnapshot
+  const orderSnapshot = dashboardOrderSnapshot
+  bookmarkSortSnapshot = null
+  dashboardOrderSnapshot = null
+  if (!group || !snapshot)
+    return
+
+  const restoreDashboardOrder = () => {
+    group.items = snapshot
+    if (orderSnapshot && readyPageLayoutKey.value) {
+      const pageKey = readyPageLayoutKey.value
+      const page = widgetPreferences.value.pageLayouts[pageKey] ?? emptyPageLayout()
+      widgetPreferences.value.pageLayouts = {
+        ...widgetPreferences.value.pageLayouts,
+        [pageKey]: { ...page, itemOrder: orderSnapshot },
+      }
+    }
+    groups.value = [...groups.value]
+  }
+
+  if (!await persistExtensionWidgets()) {
+    restoreDashboardOrder()
+    return
+  }
+
+  const bookmarkOrderChanged = snapshot.some((item, index) => item.id !== group.items[index]?.id)
+  if (!bookmarkOrderChanged)
+    return
+  group.items.forEach((item, index) => { item.sort = index + 1 })
+  const request = createItemSortRequest(group)
+  if (!request) {
+    restoreDashboardOrder()
+    return
+  }
+  try {
+    const response = await saveItemSort(request)
+    if (response.code !== 0) {
+      restoreDashboardOrder()
+      void persistExtensionWidgets()
+      ms.error(`${t('common.saveFail')}: ${response.msg}`)
+    }
+    else if (response.queued) {
+      ms.info(response.msg)
+    }
+  }
+  catch (error) {
+    restoreDashboardOrder()
+    void persistExtensionWidgets()
+    ms.error(`${t('common.saveFail')}: ${error instanceof Error ? error.message : String(error)}`)
+  }
 }
 
 // 6. 右键菜单与快捷操作
 const activeRightCard = ref<Panel.ItemInfo | null>(null)
 const rightMenuShow = ref(false)
+const activeRightWidget = ref<WidgetInstance | null>(null)
+const widgetRightMenuShow = ref(false)
 const rightMenuX = ref(0)
 const rightMenuY = ref(0)
+const bookmarkContextMenuRef = ref<HTMLElement | null>(null)
+const widgetContextMenuRef = ref<HTMLElement | null>(null)
+let contextMenuReturnFocus: HTMLElement | null = null
 
-const cardDropdownOptions = computed(() => {
-  const options = [
-    { label: '在新标签页打开', key: 'open_tab', icon: () => h(SvgIcon, { icon: 'mdi:open-in-new' }) },
-    { label: '复制链接', key: 'copy_link', icon: () => h(SvgIcon, { icon: 'mdi:content-copy' }) },
-  ]
-  if (activeRightCard.value?.lanUrl) {
-    options.push({ label: '打开内网(LAN)地址', key: 'open_lan', icon: () => h(SvgIcon, { icon: 'mdi:lan' }) })
-  }
-  if (authStore.visitMode === VisitMode.VISIT_MODE_LOGIN) {
-    options.push({ label: '编辑此书签', key: 'edit', icon: () => h(SvgIcon, { icon: 'mdi:pencil' }) })
-  }
-  return options
-})
+function positionContextMenu(event: MouseEvent, estimatedWidth = 252, estimatedHeight = 340) {
+  rightMenuX.value = Math.max(10, Math.min(event.clientX, window.innerWidth - estimatedWidth - 10))
+  rightMenuY.value = Math.max(10, Math.min(event.clientY, window.innerHeight - estimatedHeight - 10))
+}
 
 function handleCardContextMenu(event: MouseEvent, card: Panel.ItemInfo) {
   event.preventDefault()
+  contextMenuReturnFocus = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
   activeRightCard.value = card
-  rightMenuX.value = event.clientX
-  rightMenuY.value = event.clientY
+  activeRightWidget.value = null
+  widgetRightMenuShow.value = false
+  positionContextMenu(event)
   rightMenuShow.value = true
+  void nextTick(() => bookmarkContextMenuRef.value?.querySelector<HTMLElement>('[role="menuitem"]')?.focus())
+}
+
+function handleWidgetContextMenu(event: MouseEvent, instance: WidgetInstance) {
+  event.preventDefault()
+  contextMenuReturnFocus = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  activeRightWidget.value = instance
+  activeRightCard.value = null
+  rightMenuShow.value = false
+  positionContextMenu(event, 280, 360)
+  widgetRightMenuShow.value = true
+  void nextTick(() => widgetContextMenuRef.value?.querySelector<HTMLElement>('[role="menuitem"]')?.focus())
+}
+
+function openCardContextMenuFromKeyboard(event: KeyboardEvent, card: Panel.ItemInfo) {
+  if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10'))
+    return
+  event.preventDefault()
+  const target = event.currentTarget as HTMLElement
+  const rect = target.getBoundingClientRect()
+  handleCardContextMenu(new MouseEvent('contextmenu', { clientX: rect.left + Math.min(rect.width / 2, 48), clientY: rect.top + Math.min(rect.height / 2, 48) }), card)
+  contextMenuReturnFocus = target
+}
+
+function openWidgetContextMenuFromKeyboard(event: KeyboardEvent, instance: WidgetInstance) {
+  if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10'))
+    return
+  event.preventDefault()
+  const target = event.currentTarget as HTMLElement
+  const rect = target.getBoundingClientRect()
+  handleWidgetContextMenu(new MouseEvent('contextmenu', { clientX: rect.left + Math.min(rect.width / 2, 48), clientY: rect.top + Math.min(rect.height / 2, 48) }), instance)
+  contextMenuReturnFocus = target
+}
+
+function handleContextMenuKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeContextMenus()
+    return
+  }
+  if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key))
+    return
+  const menu = event.currentTarget as HTMLElement
+  const items = [...menu.querySelectorAll<HTMLElement>('[role="menuitem"]:not([disabled])')]
+  if (!items.length)
+    return
+  event.preventDefault()
+  const currentIndex = items.indexOf(document.activeElement as HTMLElement)
+  const nextIndex = event.key === 'Home'
+    ? 0
+    : event.key === 'End'
+      ? items.length - 1
+      : (currentIndex + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length
+  items[nextIndex]?.focus()
+}
+
+function closeContextMenus(restoreFocus = true) {
+  rightMenuShow.value = false
+  widgetRightMenuShow.value = false
+  if (restoreFocus && contextMenuReturnFocus) {
+    const target = contextMenuReturnFocus
+    contextMenuReturnFocus = null
+    void nextTick(() => target.focus())
+  }
+}
+
+const activeWidgetSizeChoices = computed<WidgetSize[]>(() => {
+  const instance = activeRightWidget.value
+  const definition = instance ? widgetRegistry.get(instance.type) : null
+  if (!instance || !definition || instance.stack || definition.size.resize === 'none')
+    return []
+  const requested = [
+    instance.size,
+    definition.size.min,
+    definition.size.default,
+    definition.size.max,
+    { columns: 1, rows: 1 },
+    { columns: 1, rows: 2 },
+    { columns: 2, rows: 1 },
+    { columns: 2, rows: 2 },
+    { columns: 2, rows: 4 },
+    { columns: 3, rows: 1 },
+    { columns: 3, rows: 2 },
+    { columns: 4, rows: 2 },
+    { columns: 6, rows: 2 },
+    { columns: 12, rows: 2 },
+  ]
+  const candidates = definition.size.supportedSizes?.length ? definition.size.supportedSizes : requested
+  const unique = new Map<string, WidgetSize>()
+  for (const candidate of candidates) {
+    const resolved = resolveWidgetSize(instance.type, candidate)
+    if (!resolved)
+      continue
+    const trial: WidgetInstance = { ...instance, size: { ...instance.size }, config: instance.config }
+    resizeInstanceToWithinBounds(trial, resolved)
+    unique.set(`${trial.size.columns}x${trial.size.rows}`, { ...trial.size })
+  }
+  return [...unique.values()]
+    .sort((left, right) => left.columns * left.rows - right.columns * right.rows || left.columns - right.columns)
+    .slice(0, 10)
+})
+
+function setActiveWidgetSize(size: WidgetSize) {
+  const instance = activeRightWidget.value
+  if (!instance)
+    return
+  if (resizeInstanceToWithinBounds(instance, size)) {
+    extensionWidgetInstances.value = [...extensionWidgetInstances.value]
+    scheduleSaveExtensionWidgets(0)
+  }
+}
+
+function openActiveWidgetSettings() {
+  const instance = activeRightWidget.value
+  closeContextMenus()
+  if (instance && hasExtensionWidgetSettings(instance))
+    openExtensionWidgetSettings(instance)
+}
+
+function removeActiveWidgetFromMenu() {
+  const instance = activeRightWidget.value
+  closeContextMenus()
+  if (instance)
+    void confirmRemoveExtensionWidget(extensionWidgetInstances.value.indexOf(instance))
 }
 
 async function handleRightMenuSelect(key: string) {
-  rightMenuShow.value = false
+  closeContextMenus()
   const card = activeRightCard.value
   if (!card) return
 
@@ -817,27 +1274,47 @@ async function handleRightMenuSelect(key: string) {
   else if (key === 'open_lan' && card.lanUrl) {
     runtime.openUrl(card.lanUrl, 'tab')
   }
-  else if (key === 'copy_link') {
-    const isLan = panelState.networkMode === PanelStateNetworkModeEnum.lan
-    const url = selectItemUrl(card, isLan)
-    if (url) {
-      try {
-        await navigator.clipboard.writeText(url)
-        ms.success('已复制链接到剪贴板')
-      }
-      catch {
-        ms.error('复制失败，请检查浏览器剪贴板权限')
-      }
-    }
-  }
   else if (key === 'edit') {
     openCardEditor(card)
+  }
+  else if (key === 'edit_home') {
+    openGroupManager()
+  }
+  else if (key === 'delete' && card.id) {
+    dialog.warning({
+      title: '删除书签',
+      content: `确定删除“${card.title}”吗？`,
+      positiveText: t('common.confirm'),
+      negativeText: t('common.cancel'),
+      onPositiveClick: async () => {
+        const response = await deleteItems([card.id as number])
+        if (response.code !== 0) {
+          ms.error(`${t('common.deleteFail')}: ${response.msg}`)
+          return
+        }
+        for (const group of groups.value)
+          group.items = (group.items ?? []).filter(item => item.id !== card.id)
+        groups.value = [...groups.value]
+        if (response.queued)
+          ms.info(response.msg)
+        else
+          ms.success(t('common.deleteSuccess'))
+      },
+    })
   }
 }
 
 // 7. 内置系统与扩展设置模态框（In-Extension Settings Modal，无需跳出）
 function openSettings() {
   settingsModalVisible.value = true
+}
+
+function handleAvatarClick() {
+  if (!authStore.token) {
+    void router.push('/login')
+    return
+  }
+  openSettings()
 }
 
 function handleEditSuccess(updated: Panel.Info, meta: { queued: boolean } = { queued: false }) {
@@ -852,15 +1329,6 @@ function handleEditSuccess(updated: Panel.Info, meta: { queued: boolean } = { qu
   // queue. A replay or remote storage update will refresh the snapshot later.
   if (!meta.queued)
     void refreshBootstrap()
-}
-
-// 切换网络模式
-function toggleNetworkMode() {
-  const nextMode = panelState.networkMode === PanelStateNetworkModeEnum.lan
-    ? PanelStateNetworkModeEnum.wan
-    : PanelStateNetworkModeEnum.lan
-  panelState.setNetworkMode(nextMode)
-  ms.info(nextMode === PanelStateNetworkModeEnum.lan ? '已切换至局域网 (LAN) 优先模式' : '已切换至公网 (WAN) 模式')
 }
 
 function handleBrowserOffline() {
@@ -887,10 +1355,12 @@ async function applyExternalStorageChanges() {
         extensionSyncStatus.value = 'offline'
     }
   }
-  if (keys.includes(EXTENSION_WIDGETS_KEY))
+  if (keys.includes(EXTENSION_WIDGETS_KEY)) {
     widgetPreferences.value = readExtensionWidgets()
-  if (keys.includes(EXTENSION_WIDGETS_KEY))
-    loadExtensionWidgetLayout(widgetPreferences.value.contentLayout)
+    const pageKey = readyPageLayoutKey.value
+    if (pageKey)
+      loadExtensionWidgetLayout(widgetPreferences.value.pageLayouts[pageKey]?.contentLayout ?? emptyPageLayout().contentLayout, pageKey)
+  }
   if (keys.includes('panelStorage')) {
     const localPanelState = getLocalPanelState()
     panelState.$patch({
@@ -948,19 +1418,15 @@ onMounted(async () => {
   await refreshBootstrap()
   if (isDisposed) return
   await triggerOfflineReplay()
-  if (isDisposed) return
-  await Promise.all([fetchWeather(), fetchTrending()])
-  if (isDisposed) return
-  startTrendingRoll()
 })
 
 onUnmounted(() => {
   isDisposed = true
   flushPendingLayoutIfDirty()
   if (clockTimer) clearInterval(clockTimer)
-  if (trendingTimer) clearInterval(trendingTimer)
+  if (sideHideTimer) clearTimeout(sideHideTimer)
   if (wheelHintTimer) clearTimeout(wheelHintTimer)
-  if (longPressTimer) clearTimeout(longPressTimer)
+  if (suppressCardClickTimer) clearTimeout(suppressCardClickTimer)
   if (externalStorageTimer) clearTimeout(externalStorageTimer)
   removeSyncConflictListener?.()
   removeStorageListener?.()
@@ -974,7 +1440,14 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="extension-tab-container select-none">
+  <div
+    class="extension-tab-container select-none"
+    :class="{
+      'sidebar-right': sidebarPosition === 'right',
+      'sidebar-auto-hide': sidebarAutoHide,
+      'sidebar-compact': sidebarDensity === 'compact',
+    }"
+  >
     <!-- 用户自定义壁纸层 -->
     <div
       v-if="panelState.panelConfig.backgroundImageSrc"
@@ -985,259 +1458,99 @@ onUnmounted(() => {
       }"
     />
 
-    <!-- 最左侧热区：鼠标靠近屏幕边缘时展开功能区 -->
-    <div class="edge-trigger" @mouseenter="sidePanelOpen = true" />
-    <div class="side-rail" @mouseenter="sidePanelOpen = true">
-      <button v-if="!sidePanelOpen" type="button" class="rail-avatar" title="个人中心" @click="openSettings">
-        <NAvatar round :size="30" :src="authStore.userInfo?.headImage || undefined" fallback-src="/favicon.svg">
-          {{ (authStore.userInfo?.name || authStore.userInfo?.username || 'U')[0].toUpperCase() }}
-        </NAvatar>
+    <!-- 侧边热区：自动隐藏时，靠近用户指定的屏幕边缘重新显示。 -->
+    <button
+      v-if="sidebarAutoHide"
+      type="button"
+      class="edge-trigger"
+      :aria-label="sidebarPosition === 'left' ? '展开左侧功能区' : '展开右侧功能区'"
+      @mouseenter="revealSideArea"
+      @focus="revealSideArea"
+      @click="revealSideArea"
+    />
+    <div
+      class="side-rail"
+      :class="{ revealed: sideRailVisible }"
+      @mouseenter="revealSideArea"
+      @mouseleave="scheduleSideAreaHide"
+      @focusin="revealSideArea"
+      @focusout="scheduleSideAreaHide"
+    >
+      <button type="button" class="rail-avatar" :title="authStore.token ? `${extensionProfileName} · 打开我的设置` : '点击头像登录'" @click="handleAvatarClick">
+        <span class="rail-avatar-frame">
+          <NAvatar :key="extensionAvatarUrl" round :size="42" :src="extensionAvatarUrl || undefined" fallback-src="/favicon.svg">
+            {{ extensionProfileName[0].toUpperCase() }}
+          </NAvatar>
+          <span
+            class="rail-avatar-status"
+            :class="`is-${extensionSyncPresentation.tone}`"
+            :title="extensionSyncPresentation.label"
+          />
+        </span>
+        <span class="rail-avatar-label">{{ authStore.token ? extensionProfileName : '登录' }}</span>
       </button>
       <div class="rail-divider" />
-      <button type="button" class="rail-button active" title="分组导航" @click="sidePanelOpen = !sidePanelOpen">
-        <ThemeIcon name="folder" />
-      </button>
-      <button type="button" class="rail-button" title="个人中心" @click="openSettings">
-        <ThemeIcon name="user" />
-      </button>
-      <button type="button" class="rail-button" title="壁纸设置" @click="showWallpaperModal = true">
-        <ThemeIcon name="wallpaper" />
-      </button>
-      <button type="button" class="rail-button" :title="t('widgetLayout.manager.title')" @click="showWidgetManager = true">
-        <SvgIcon icon="material-symbols:widgets-outline-rounded" />
-      </button>
-      <button
-        type="button"
-        class="rail-button relative"
-        :title="pendingMutationsCount > 0 ? `有 ${pendingMutationsCount} 条离线修改待同步，点击管理队列` : '刷新同步'"
-        @click="pendingMutationsCount > 0 ? (queueManagerVisible = true) : refreshBootstrap()"
-      >
-        <ThemeIcon name="sync" :class="{ 'animate-spin': extensionSyncStatus === 'syncing' }" />
-        <span
-          v-if="pendingMutationsCount > 0"
-          class="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 text-black text-[9px] font-bold rounded-full flex items-center justify-center"
-        >
-          {{ pendingMutationsCount }}
-        </span>
-      </button>
-      <div class="rail-spacer" />
-      <button type="button" class="rail-button" title="系统设置" @click="openSettings">
-        <ThemeIcon name="settings" />
-      </button>
-    </div>
-
-    <aside
-      class="function-panel"
-      :class="{ open: sidePanelOpen }"
-      @mouseenter="sidePanelOpen = true"
-      @mouseleave="sidePanelOpen = false"
-    >
-      <div class="function-panel-head">
-        <div>
-          <p class="function-eyebrow">
-            PANEL NEXT
-          </p>
-          <h2>功能区</h2>
-        </div>
-        <button type="button" class="panel-close" aria-label="收起功能区" @click="sidePanelOpen = false">
-          <SvgIcon icon="material-symbols:chevron-left-rounded" />
-        </button>
-      </div>
-
-      <!-- 功能区精美封面图 Banner -->
-      <div class="function-banner relative h-20 rounded-2xl overflow-hidden mb-3 shadow-md border border-white/10 group cursor-pointer shrink-0" @click="openSettings">
-        <img
-          :src="defaultBackground"
-          alt="Banner"
-          class="w-full h-full object-cover brightness-90 group-hover:scale-105 transition-transform duration-300"
-        >
-        <div class="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-900/30 to-transparent flex items-end p-2.5">
-          <div class="flex items-center justify-between w-full">
-            <span class="text-xs font-bold text-white tracking-wide flex items-center space-x-1">
-              <SvgIcon icon="material-symbols:space-dashboard-outline" class="text-emerald-400" />
-              <span>新标签页工作台</span>
-            </span>
-            <span class="text-[10px] text-white/80 bg-white/10 px-2 py-0.5 rounded-full backdrop-blur-sm">快捷控制</span>
-          </div>
-        </div>
-      </div>
-      <button type="button" class="profile-card" @click="openSettings">
-        <NAvatar round :size="42" :src="authStore.userInfo?.headImage || undefined" fallback-src="/favicon.svg" />
-        <span class="profile-copy">
-          <strong>{{ authStore.userInfo?.name || authStore.userInfo?.username || '访客模式' }}</strong>
-          <small>{{ authStore.token ? '配置已连接并同步' : '登录后同步个人配置' }}</small>
-        </span>
-        <SvgIcon icon="material-symbols:chevron-right-rounded" />
-      </button>
-      <div class="panel-section-title">
-        <span>我的分组</span>
-      </div>
-      <div class="side-panel-scroll">
+      <div class="rail-groups" aria-label="书签分组">
         <button
           v-for="(group, index) in groupTabs"
           :key="group.id"
           type="button"
-          class="group-nav-item"
+          class="rail-group-button"
           :class="{ active: activeTabId === group.id }"
+          :aria-current="activeTabId === group.id ? 'page' : undefined"
+          :title="`${group.title}（${group.count} 项）`"
           @click="selectGroup(group.id)"
         >
-          <span class="group-number">{{ String(index + 1).padStart(2, '0') }}</span>
-          <span class="group-nav-copy">
-            <strong>{{ group.title }}</strong>
-          </span>
-          <span class="group-dot" />
+          <span class="rail-group-icon" aria-hidden="true">{{ group.title.trim().slice(0, 1) || index + 1 }}</span>
+          <span class="rail-group-label">{{ group.title }}</span>
+        </button>
+        <button type="button" class="rail-group-button rail-group-add" title="新增或管理分组" @click="openGroupManager">
+          <ThemeIcon name="add" class="rail-icon" />
+          <span class="rail-group-label">新增</span>
         </button>
       </div>
-      <div class="quick-actions">
-        <button type="button" class="quick-action-wide" @click="showWidgetManager = true">
-          <SvgIcon icon="material-symbols:add-box-outline-rounded" />{{ t('widgetLayout.add') }}
-        </button>
-        <button type="button" @click="toggleNetworkMode">
-          <SvgIcon :icon="panelState.networkMode === PanelStateNetworkModeEnum.lan ? 'material-symbols:lan-outline-rounded' : 'mdi:wan'" />
-          {{ panelState.networkMode === PanelStateNetworkModeEnum.lan ? '局域网模式' : '公网模式' }}
-        </button>
-        <button type="button" @click="openSettings">
-          <SvgIcon icon="material-symbols:tune-rounded" />偏好设置
-        </button>
-      </div>
-    </aside>
+      <div class="rail-spacer" />
+      <button type="button" class="rail-button rail-settings" title="打开我的设置" @click="openSettings">
+        <ThemeIcon name="settings" class="rail-icon" />
+        <span>设置</span>
+      </button>
+    </div>
     <div
       v-if="panelState.panelConfig.backgroundImageSrc"
       class="bg-overlay"
       :style="{ backgroundColor: `rgba(0,0,0,${panelState.panelConfig.backgroundMaskNumber ?? 0.35})` }"
     />
 
-    <!-- 顶栏：极简状态与快捷控制 -->
-    <header class="top-nav-bar">
-      <div class="nav-left flex items-center space-x-3 pl-10">
-        <div class="brand-pill flex items-center space-x-2 px-3 py-1.5 rounded-full bg-white/10 dark:bg-black/20 backdrop-blur-md border border-white/10 text-white shadow-sm">
-          <img src="/favicon.svg" class="w-4 h-4 object-contain" alt="Logo">
-          <span class="font-bold text-xs tracking-wider uppercase">Panel Next</span>
-        </div>
-        <span class="greeting-text text-xs text-white/80 font-medium hidden sm:inline-block">
-          {{ greeting }}
-        </span>
-      </div>
-
-      <div class="nav-right flex items-center space-x-2">
-        <!-- 实时热搜条 -->
-        <div
-          v-if="widgetPreferences.trending && currentTrending"
-          class="trending-pill hidden md:flex items-center space-x-2 px-3 py-1 rounded-full bg-white/10 dark:bg-black/20 backdrop-blur-md border border-white/10 text-white text-xs cursor-pointer hover:bg-white/20 transition-all"
-          @click="openTrending(currentTrending)"
-        >
-          <span class="text-amber-400 font-bold">🔥 热搜</span>
-          <span class="truncate max-w-[160px]">{{ currentTrending.title }}</span>
-        </div>
-        <button
-          v-else-if="widgetPreferences.trending && trendingUnavailable"
-          type="button"
-          class="status-retry-pill hidden md:flex"
-          title="热搜暂不可用，点击重试"
-          @click="fetchTrending"
-        >
-          <SvgIcon icon="material-symbols:refresh-rounded" />
-          <span>热搜重试</span>
-        </button>
-
-        <!-- 实时天气微胶囊 -->
-        <div
-          v-if="widgetPreferences.weather && weatherData"
-          class="weather-pill flex items-center space-x-1.5 px-3 py-1 rounded-full bg-white/10 dark:bg-black/20 backdrop-blur-md border border-white/10 text-white text-xs cursor-pointer hover:bg-white/20 transition-all"
-          :title="`${weatherData.location.name} · ${weatherData.current.temperature}°C · 湿度 ${weatherData.current.relativeHumidity}%`"
-          @click="fetchWeather"
-        >
-          <span class="text-sm">{{ weatherEmoji }}</span>
-          <span class="font-semibold">{{ Math.round(weatherData.current.temperature) }}°C</span>
-          <span class="text-white/70 text-[11px] hidden sm:inline-block">{{ weatherData.location.name }}</span>
-        </div>
-        <button
-          v-else-if="widgetPreferences.weather && weatherUnavailable"
-          type="button"
-          class="status-retry-pill"
-          title="天气暂不可用，点击重试"
-          @click="fetchWeather"
-        >
-          <SvgIcon icon="material-symbols:cloud-off-outline-rounded" />
-          <span>天气重试</span>
-        </button>
-
-        <!-- 网络模式切换 -->
-        <button
-          type="button"
-          class="icon-btn"
-          :title="panelState.networkMode === PanelStateNetworkModeEnum.lan ? '当前: 内网(LAN)模式，点击切换' : '当前: 公网(WAN)模式，点击切换'"
-          @click="toggleNetworkMode"
-        >
-          <SvgIcon
-            :icon="panelState.networkMode === PanelStateNetworkModeEnum.lan ? 'material-symbols:lan-outline-rounded' : 'mdi:wan'"
-            class="text-base text-white"
-          />
-        </button>
-
-        <!-- 同步状态指示器 -->
-        <button
-          type="button"
-          class="icon-btn"
-          :title="`同步状态: ${extensionSyncStatus} · 点击重新拉取数据`"
-          :disabled="extensionSyncStatus === 'syncing'"
-          @click="refreshBootstrap"
-        >
-          <SvgIcon
-            icon="material-symbols:sync"
-            class="text-base text-white"
-            :class="{ 'animate-spin': extensionSyncStatus === 'syncing' }"
-          />
-        </button>
-
-        <!-- 壁纸库/Wallhaven -->
-        <button
-          type="button"
-          class="icon-btn"
-          title="壁纸库 (Wallhaven 4K / 个人图库)"
-          @click="showWallpaperModal = true"
-        >
-          <SvgIcon icon="material-symbols:wallpaper" class="text-base text-white" />
-        </button>
-
-        <!-- 扩展内置设置按钮 -->
-        <button
-          type="button"
-          class="icon-btn settings-btn"
-          title="系统与扩展设置"
-          @click="openSettings"
-        >
-          <SvgIcon icon="majesticons-applications" class="text-base text-white" />
-        </button>
-
-        <!-- 登录入口；登录后头像只保留在左侧功能栏 -->
-        <button
-          v-if="!authStore.userInfo"
-          type="button"
-          class="login-btn flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-medium shadow-sm transition-all"
-          @click="router.push('/login')"
-        >
-          <SvgIcon icon="material-symbols:account-circle" class="text-sm" />
-          <span>登录</span>
-        </button>
-      </div>
-    </header>
-
     <!-- 核心主体区 -->
     <main class="main-content flex flex-col items-center justify-start overflow-y-auto px-4 pb-12 pt-6">
+      <div
+        v-if="['cached', 'offline', 'error'].includes(extensionSyncStatus) || pendingMutationsCount > 0"
+        class="sync-status-banner"
+        :class="`is-${extensionSyncPresentation.tone}`"
+        role="status"
+      >
+        <SvgIcon icon="material-symbols:sync" />
+        <span>{{ extensionSyncPresentation.label }}</span>
+        <small v-if="pendingMutationsCount">{{ pendingMutationsCount }} 项修改等待同步</small>
+        <button v-if="authStore.token" type="button" @click="queueManagerVisible = true">
+          查看
+        </button>
+      </div>
+
       <!-- 极简大数字时钟与日期 -->
-      <section v-if="widgetPreferences.clock" class="clock-hero flex flex-col items-center mb-6 text-white text-shadow-md">
+      <section v-if="widgetPreferences.clock" class="clock-hero flex flex-col items-center mb-6 text-shadow-md">
         <div class="time-display flex items-baseline font-mono font-bold tracking-tight">
           <span class="text-6xl md:text-8xl select-all font-light">{{ currentTime }}</span>
-          <span class="text-xl md:text-2xl opacity-70 ml-2 font-normal">{{ currentSeconds }}</span>
+          <span v-if="widgetPreferences.clockSeconds" class="clock-seconds text-xl md:text-2xl opacity-70 ml-2 font-normal">{{ currentSeconds }}</span>
+          <span v-if="currentPeriod" class="clock-period">{{ currentPeriod }}</span>
         </div>
-        <div class="date-display text-sm md:text-base font-normal tracking-wide opacity-90 mt-1">
+        <div v-if="widgetPreferences.clockDate" class="date-display text-sm md:text-base font-normal tracking-wide opacity-90 mt-1">
           {{ currentDate }}
         </div>
       </section>
 
       <!-- 居中胶囊全能搜索栏 -->
-      <section v-if="widgetPreferences.search" class="search-section w-full max-w-[640px] mb-8">
+      <section v-if="widgetPreferences.search" class="search-section w-full max-w-[600px] mb-8">
         <div
           class="search-bar-capsule flex items-center backdrop-blur-xl px-3 py-2 shadow-lg transition-all duration-300"
           :class="{ 'is-focused': isSearchFocused }"
@@ -1247,6 +1560,7 @@ onUnmounted(() => {
             <button
               type="button"
               class="engine-select-btn flex items-center space-x-1 pl-2 pr-2 py-1 rounded-full hover:bg-white/20 dark:hover:bg-white/10 transition-colors"
+              :aria-label="`当前搜索引擎：${currentEngine.title}，点击切换`"
             >
               <img v-if="currentEngine.iconSrc" :src="currentEngine.iconSrc" class="w-4 h-4 object-contain" :alt="currentEngine.title">
               <SvgIcon v-else :icon="currentEngine.icon" class="w-4 h-4 text-white" />
@@ -1257,19 +1571,24 @@ onUnmounted(() => {
           <!-- 搜索输入框 -->
           <input
             v-model="searchQuery"
+            :list="widgetPreferences.searchHistoryEnabled && widgetPreferences.searchHistory.length ? 'extension-search-history' : undefined"
             type="text"
-            placeholder="搜索书签或全网 (回车搜索)..."
-            class="flex-1 bg-transparent border-none outline-none text-white placeholder-white/60 px-3 text-sm md:text-base"
+            placeholder="搜索网页、书签或直接输入网址"
+            class="extension-search-input flex-1 bg-transparent border-none outline-none px-3 text-sm md:text-base"
             @focus="isSearchFocused = true"
             @blur="isSearchFocused = false"
             @keydown.enter="handleSearchSubmit"
           >
+          <datalist id="extension-search-history">
+            <option v-for="query in widgetPreferences.searchHistory" :key="query" :value="query" />
+          </datalist>
 
           <!-- 清除按钮 -->
           <button
             v-if="searchQuery"
             type="button"
             class="clear-btn text-white/70 hover:text-white mr-1 p-1 rounded-full hover:bg-white/20 transition-colors"
+            aria-label="清空搜索内容"
             @click="searchQuery = ''"
           >
             <SvgIcon icon="material-symbols:close-rounded" class="w-4 h-4" />
@@ -1287,180 +1606,108 @@ onUnmounted(() => {
         </div>
       </section>
 
-      <section
-        v-if="extensionWidgetInstances.length || extensionWidgetEditMode"
-        class="extension-widget-grid w-full max-w-[1280px] mb-8"
-        :class="{ 'is-editing': extensionWidgetEditMode }"
-      >
-        <div class="extension-widget-toolbar">
-          <div class="flex items-center gap-2">
+      <section class="dashboard-canvas-section w-full max-w-[1120px]">
+        <div class="dashboard-canvas-header">
+          <div class="active-group-meta">
+            <span>{{ activeGroup?.title }}</span>
+            <small>{{ activeGroup?.count || 0 }} 个书签 · {{ buildWidgetDisplayGroups(extensionWidgetInstances).length }} 个组件</small>
+          </div>
+          <div class="extension-widget-toolbar">
+            <div v-if="extensionWidgetEditMode" class="extension-edit-mode-copy">
+              <strong>正在编辑当前页面</strong>
+              <small>书签与组件可混合拖动 · 组件尺寸严格吸附统一网格</small>
+            </div>
             <NDropdown v-if="extensionWidgetEditMode" trigger="click" :options="extensionWidgetAddOptions" @select="addExtensionWidget">
-              <button
-                type="button"
-                class="modal-secondary-action flex items-center gap-1"
-                :title="t('widgetLayout.add')"
-                :aria-label="t('widgetLayout.add')"
-              >
+              <button type="button" class="modal-secondary-action flex items-center gap-1" :title="t('widgetLayout.add')" :aria-label="t('widgetLayout.add')">
                 <SvgIcon icon="material-symbols:add-rounded" class="w-4 h-4" />
                 <span>{{ t('widgetLayout.add') }}</span>
               </button>
             </NDropdown>
-            <button
-              type="button"
-              class="modal-secondary-action flex items-center gap-1"
-              :title="extensionWidgetEditMode ? t('widgetLayout.done') : t('widgetLayout.edit')"
-              :aria-label="extensionWidgetEditMode ? t('widgetLayout.done') : t('widgetLayout.edit')"
-              @click="extensionWidgetEditMode = !extensionWidgetEditMode"
-            >
+            <button type="button" class="modal-secondary-action flex items-center gap-1" :title="extensionWidgetEditMode ? t('widgetLayout.done') : t('widgetLayout.edit')" :aria-label="extensionWidgetEditMode ? t('widgetLayout.done') : t('widgetLayout.edit')" @click="extensionWidgetEditMode = !extensionWidgetEditMode">
               <SvgIcon :icon="extensionWidgetEditMode ? 'material-symbols:check-rounded' : 'material-symbols:dashboard-customize-outline-rounded'" class="w-4 h-4" />
               <span>{{ extensionWidgetEditMode ? t('widgetLayout.done') : t('widgetLayout.edit') }}</span>
             </button>
           </div>
         </div>
 
-        <div v-if="!extensionWidgetInstances.length && extensionWidgetEditMode" class="extension-widget-empty col-span-full flex flex-col items-center justify-center p-8 border border-dashed border-cyan-500/30 rounded-2xl bg-slate-900/60 text-cyan-200">
-          <SvgIcon icon="material-symbols:widgets-outline-rounded" class="w-10 h-10 mb-2 opacity-60" />
-          <p class="text-sm font-semibold mb-1">
-            {{ t('widgetLayout.empty') }}
-          </p>
-          <p class="text-xs opacity-70 mb-4">
-            {{ t('widgetLayout.emptyTip') }}
-          </p>
-          <NDropdown trigger="click" :options="extensionWidgetAddOptions" @select="addExtensionWidget">
-            <button type="button" class="modal-primary-action flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs">
-              <SvgIcon icon="material-symbols:add-rounded" class="w-4 h-4" />
-              <span>{{ t('widgetLayout.add') }}</span>
-            </button>
-          </NDropdown>
-        </div>
-
-        <VueDraggable
-          v-else
-          v-model="extensionWidgetInstances"
-          class="extension-widget-track"
-          handle=".extension-widget-handle"
-          :disabled="!extensionWidgetEditMode"
-          :animation="150"
-          @end="onExtensionWidgetDragEnd"
-        >
-          <div
-            v-for="instance in extensionWidgetInstances"
-            :key="instance.id"
-            class="extension-widget-cell"
-            :class="{ 'is-widget-hidden': instance.hidden }"
-            :style="extensionWidgetCellStyle(instance)"
+        <div ref="extensionWidgetGridRef" class="extension-dashboard-grid" :class="{ 'is-editing': extensionWidgetEditMode }">
+          <VueDraggable
+            v-if="activeCanvasItems.length"
+            v-model="activeCanvasItems"
+            item-key="key"
+            class="extension-dashboard-track"
+            :disabled="!groupsReady || authStore.visitMode !== VisitMode.VISIT_MODE_LOGIN || Boolean(searchQuery.trim()) || Boolean(resizingExtensionWidgetId) || activeCanvasItems.length < 2"
+            :delay="extensionWidgetEditMode ? 0 : 480"
+            :delay-on-touch-only="false"
+            :touch-start-threshold="8"
+            :fallback-tolerance="8"
+            filter="input, textarea, button, a, select, [contenteditable='true'], [data-no-drag], .widget-resize-handle"
+            :prevent-on-filter="false"
+            chosen-class="is-dashboard-dragging"
+            :animation="180"
+            @start="handleBookmarkDragStart"
+            @end="handleBookmarkDragEnd"
           >
-            <div v-if="extensionWidgetEditMode" class="extension-widget-editor">
-              <span class="extension-widget-handle" :title="t('widgetLayout.drag')" :aria-label="t('widgetLayout.drag')">
-                <SvgIcon icon="material-symbols:drag-indicator" class="w-4 h-4" />
-              </span>
-              <span class="extension-widget-name">{{ widgetDefinitionTitle(widgetRegistry.get(instance.type) ?? { type: instance.type }) }}</span>
-              <span class="extension-widget-actions">
-                <button
-                  type="button"
-                  :title="t('widgetLayout.narrow')"
-                  :aria-label="t('widgetLayout.narrow')"
-                  @click="resizeExtensionWidget(instance, 'columns', -1)"
-                >
-                  <SvgIcon icon="material-symbols:chevron-left-rounded" class="w-3.5 h-3.5" />
+            <div
+              v-for="item in activeCanvasItems"
+              :key="item.key"
+              class="dashboard-canvas-item"
+              :class="item.kind === 'widget' ? ['extension-widget-cell', { 'is-widget-hidden': item.group.members[0].hidden, 'is-resizing': resizingExtensionWidgetId === item.group.members[0].id }] : ['speed-card', { 'is-expanded': bookmarkLayout(item.card).columns > 1 || bookmarkLayout(item.card).rows > 1 }]"
+              :style="item.kind === 'widget' ? extensionWidgetCellStyle(item.group) : bookmarkCardStyle(item.card)"
+              :title="item.kind === 'bookmark' ? item.card.description || item.card.title : undefined"
+              :aria-label="item.kind === 'bookmark' ? item.card.title : `${widgetDefinitionTitle(widgetRegistry.get(item.group.members[0].type) ?? { type: item.group.members[0].type })} 小组件`"
+              :role="item.kind === 'bookmark' ? 'link' : undefined"
+              tabindex="0"
+              @click="item.kind === 'bookmark' && handleCardClick(item.card)"
+              @contextmenu="item.kind === 'bookmark' ? handleCardContextMenu($event, item.card) : handleWidgetContextMenu($event, item.group.members[0])"
+              @keydown.enter.prevent="item.kind === 'bookmark' && handleCardClick(item.card)"
+              @keydown.space.prevent="item.kind === 'bookmark' && handleCardClick(item.card)"
+              @keydown="item.kind === 'bookmark' ? openCardContextMenuFromKeyboard($event, item.card) : openWidgetContextMenuFromKeyboard($event, item.group.members[0])"
+            >
+              <template v-if="item.kind === 'bookmark'">
+                <button v-if="authStore.visitMode === VisitMode.VISIT_MODE_LOGIN" type="button" class="speed-card-edit" data-no-drag :title="t('common.edit')" :aria-label="t('common.edit')" @click.stop="openCardEditor(item.card)">
+                  <SvgIcon icon="material-symbols:edit-outline-rounded" class="w-3.5 h-3.5" />
                 </button>
-                <button
-                  type="button"
-                  :title="t('widgetLayout.widen')"
-                  :aria-label="t('widgetLayout.widen')"
-                  @click="resizeExtensionWidget(instance, 'columns', 1)"
-                >
-                  <SvgIcon icon="material-symbols:chevron-right-rounded" class="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  :title="t('widgetLayout.shrink')"
-                  :aria-label="t('widgetLayout.shrink')"
-                  @click="resizeExtensionWidget(instance, 'rows', -1)"
-                >
-                  <SvgIcon icon="material-symbols:keyboard-arrow-up-rounded" class="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  :title="t('widgetLayout.stretch')"
-                  :aria-label="t('widgetLayout.stretch')"
-                  @click="resizeExtensionWidget(instance, 'rows', 1)"
-                >
-                  <SvgIcon icon="material-symbols:keyboard-arrow-down-rounded" class="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  :title="instance.hidden ? t('widgetLayout.show') : t('widgetLayout.hide')"
-                  :aria-label="instance.hidden ? t('widgetLayout.show') : t('widgetLayout.hide')"
-                  @click="toggleExtensionWidgetHidden(instance)"
-                >
-                  <SvgIcon :icon="instance.hidden ? 'material-symbols:visibility-off-outline-rounded' : 'material-symbols:visibility-outline-rounded'" class="w-3.5 h-3.5" />
-                </button>
-                <button
-                  v-if="hasExtensionWidgetSettings(instance)"
-                  type="button"
-                  :title="t('widgetLayout.configure')"
-                  :aria-label="t('widgetLayout.configure')"
-                  @click="openExtensionWidgetSettings(instance)"
-                >
-                  <SvgIcon icon="material-symbols:settings-outline-rounded" class="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  :title="t('widgetLayout.remove')"
-                  :aria-label="t('widgetLayout.remove')"
-                  @click="confirmRemoveExtensionWidget(extensionWidgetInstances.indexOf(instance))"
-                >
-                  <SvgIcon icon="material-symbols:close-rounded" class="w-3.5 h-3.5" />
-                </button>
-              </span>
+                <div class="card-icon-box">
+                  <ItemIcon :item-icon="item.card.icon" :size="64" class="card-item-icon" />
+                </div>
+                <div class="card-info">
+                  <span class="card-title">{{ item.card.title }}</span>
+                  <small v-if="bookmarkLayout(item.card).columns > 1 || bookmarkLayout(item.card).rows > 1" class="card-description">{{ item.card.description || item.card.url }}</small>
+                </div>
+              </template>
+
+              <template v-else>
+                <div v-if="extensionWidgetEditMode" class="extension-widget-editor" :class="{ 'is-compact': item.group.size.columns <= 2 }">
+                  <span class="extension-widget-handle" :title="t('widgetLayout.drag')" :aria-label="t('widgetLayout.drag')">
+                    <SvgIcon icon="material-symbols:drag-indicator" class="w-4 h-4" />
+                  </span>
+                  <span v-if="item.group.stackId" class="extension-widget-stack-badge">{{ `${t('widgetLayout.stack.title')} ${item.group.members.length}` }}</span>
+                  <span class="extension-widget-name">{{ widgetDefinitionTitle(widgetRegistry.get(item.group.members[0].type) ?? { type: item.group.members[0].type }) }}</span>
+                  <span class="extension-widget-size">{{ item.group.size.columns }}×{{ item.group.size.rows }}</span>
+                  <span class="extension-widget-actions">
+                    <button v-if="hasExtensionWidgetSettings(item.group.members[0])" type="button" class="is-labelled" :title="t('widgetLayout.configure')" :aria-label="t('widgetLayout.configure')" @click="openExtensionWidgetSettings(item.group.members[0])">配置</button>
+                    <NDropdown v-if="!item.group.stackId && extensionWidgetStackTargetOptions(item.group.members[0]).length" trigger="click" :options="extensionWidgetStackTargetOptions(item.group.members[0])" @select="stackExtensionWidgetWith(item.group.members[0], $event)">
+                      <button type="button" class="is-labelled" :title="t('widgetLayout.stack.add')" :aria-label="t('widgetLayout.stack.add')">叠放</button>
+                    </NDropdown>
+                    <button type="button" title="更多组件操作" aria-label="更多组件操作" @click.stop="handleWidgetContextMenu($event, item.group.members[0])"><SvgIcon icon="mingcute:more-1-fill" /></button>
+                  </span>
+                </div>
+                <WidgetStackHost :instances="item.group.members" />
+                <template v-if="extensionWidgetEditMode && !item.group.stackId && !item.group.members[0].hidden">
+                  <button type="button" class="widget-resize-handle is-right" data-no-drag :aria-label="t('widgetLayout.widen')" @pointerdown="startExtensionWidgetResize($event, item.group.members[0], 'columns', extensionWidgetGridRef)" />
+                  <button type="button" class="widget-resize-handle is-bottom" data-no-drag :aria-label="t('widgetLayout.stretch')" @pointerdown="startExtensionWidgetResize($event, item.group.members[0], 'rows', extensionWidgetGridRef)" />
+                  <button type="button" class="widget-resize-handle is-corner" data-no-drag :aria-label="`${t('widgetLayout.widen')} / ${t('widgetLayout.stretch')}`" @pointerdown="startExtensionWidgetResize($event, item.group.members[0], 'both', extensionWidgetGridRef)" />
+                </template>
+              </template>
             </div>
-            <WidgetHost :instance="instance" :edit-mode="extensionWidgetEditMode" />
+          </VueDraggable>
+
+          <div v-else class="extension-widget-empty">
+            <SvgIcon :icon="searchQuery ? 'material-symbols:search-off-rounded' : 'material-symbols:dashboard-customize-outline-rounded'" class="w-10 h-10 opacity-60" />
+            <p>{{ searchQuery ? '没有找到匹配的书签或服务' : '当前页面还是空的' }}</p>
+            <small>{{ searchQuery ? `按回车直接全网搜索 “${searchQuery}”` : '进入编辑模式添加组件，或在侧边栏管理书签' }}</small>
           </div>
-        </VueDraggable>
-      </section>
-
-      <!-- 现代应用网格 (Speed Dial Grid) -->
-      <section class="cards-grid-section w-full max-w-[1280px]">
-        <div class="active-group-meta">
-          <span>{{ activeGroup?.title }}</span>
-        </div>
-        <div v-if="displayedCards.length > 0" class="cards-grid">
-          <div
-            v-for="card in displayedCards"
-            :key="card.id"
-            class="speed-card group"
-            :class="{ 'is-long-pressing': longPressActive === card.id }"
-            :title="card.description || card.title"
-            @click="handleCardClick(card)"
-            @contextmenu="handleCardContextMenu($event, card)"
-            @pointerdown="startCardLongPress($event, card)"
-            @pointerup="cancelCardLongPress"
-            @pointercancel="cancelCardLongPress"
-            @pointerleave="cancelCardLongPress"
-          >
-            <!-- 图标容器 -->
-            <div class="card-icon-box">
-              <ItemIcon :item-icon="card.icon" :size="48" class="card-item-icon" />
-            </div>
-
-            <!-- 卡片标题 -->
-            <div class="card-info">
-              <span class="card-title">{{ card.title }}</span>
-              <span v-if="card.description" class="card-desc">{{ card.description }}</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- 无匹配结果空状态 -->
-        <div v-else class="empty-state flex flex-col items-center justify-center py-16 text-white/70">
-          <SvgIcon icon="material-symbols:search-off-rounded" class="w-12 h-12 text-white/40 mb-3" />
-          <p class="text-sm font-medium">
-            没有找到匹配的书签或服务
-          </p>
-          <p v-if="searchQuery" class="text-xs text-white/50 mt-1">
-            按回车直接全网搜索 "{{ searchQuery }}"
-          </p>
         </div>
       </section>
     </main>
@@ -1473,25 +1720,142 @@ onUnmounted(() => {
       </div>
     </Transition>
 
-    <!-- 右键卡片菜单 -->
-    <NDropdown
-      placement="bottom-start"
-      trigger="manual"
-      :x="rightMenuX"
-      :y="rightMenuY"
-      :options="cardDropdownOptions"
-      :show="rightMenuShow"
-      :on-clickoutside="() => rightMenuShow = false"
-      @select="handleRightMenuSelect"
-    />
+    <div v-if="rightMenuShow || widgetRightMenuShow" class="context-menu-dismiss" @pointerdown="closeContextMenus()" @contextmenu.prevent="closeContextMenus()" />
+
+    <!-- 书签右键：布局只写 Extension 偏好，不修改云端书签内容。 -->
+    <div
+      v-if="rightMenuShow && activeRightCard"
+      ref="bookmarkContextMenuRef"
+      class="extension-context-menu"
+      :style="{ left: `${rightMenuX}px`, top: `${rightMenuY}px` }"
+      role="menu"
+      @pointerdown.stop
+      @keydown="handleContextMenuKeydown"
+    >
+      <button type="button" class="context-menu-row" role="menuitem" @click="handleRightMenuSelect('open_tab')">
+        <ThemeIcon name="externalLink" /><span>在新标签页打开</span>
+      </button>
+      <button v-if="activeRightCard.lanUrl" type="button" class="context-menu-row" role="menuitem" @click="handleRightMenuSelect('open_lan')">
+        <ThemeIcon name="networkWired" /><span>打开局域网地址</span>
+      </button>
+      <div class="context-menu-section">
+        <div class="context-menu-title">
+          <ThemeIcon name="dashboard" /><span>布局</span>
+        </div>
+        <div class="context-size-grid">
+          <button
+            v-for="layout in bookmarkLayoutChoices"
+            :key="`${layout.columns}x${layout.rows}`"
+            type="button"
+            :class="{ active: bookmarkLayout(activeRightCard).columns === layout.columns && bookmarkLayout(activeRightCard).rows === layout.rows }"
+            @click="setBookmarkLayout(activeRightCard, layout); closeContextMenus()"
+          >
+            {{ layout.columns }}×{{ layout.rows }}
+          </button>
+        </div>
+      </div>
+      <template v-if="authStore.visitMode === VisitMode.VISIT_MODE_LOGIN">
+        <div class="context-menu-divider" />
+        <button type="button" class="context-menu-row" role="menuitem" @click="handleRightMenuSelect('edit')">
+          <ThemeIcon name="edit" /><span>编辑书签</span>
+        </button>
+        <button type="button" class="context-menu-row" role="menuitem" @click="handleRightMenuSelect('edit_home')">
+          <ThemeIcon name="folder" /><span>编辑分组</span>
+        </button>
+        <button type="button" class="context-menu-row danger" role="menuitem" @click="handleRightMenuSelect('delete')">
+          <ThemeIcon name="delete" /><span>删除</span>
+        </button>
+      </template>
+    </div>
+
+    <!-- 小组件右键：尺寸由注册表解析后生成，不允许越过组件 min/max/supportedSizes。 -->
+    <div
+      v-if="widgetRightMenuShow && activeRightWidget"
+      ref="widgetContextMenuRef"
+      class="extension-context-menu widget-context-menu"
+      :style="{ left: `${rightMenuX}px`, top: `${rightMenuY}px` }"
+      role="menu"
+      @pointerdown.stop
+      @keydown="handleContextMenuKeydown"
+    >
+      <div class="context-menu-heading">
+        <span>{{ widgetDefinitionTitle(widgetRegistry.get(activeRightWidget.type) ?? { type: activeRightWidget.type }) }}</span>
+        <small>{{ activeRightWidget.size.columns }}×{{ activeRightWidget.size.rows }}</small>
+      </div>
+      <div v-if="activeWidgetSizeChoices.length" class="context-menu-section">
+        <div class="context-menu-title">
+          <ThemeIcon name="dashboard" /><span>布局</span>
+        </div>
+        <div class="context-size-grid">
+          <button
+            v-for="size in activeWidgetSizeChoices"
+            :key="`${size.columns}x${size.rows}`"
+            type="button"
+            :class="{ active: activeRightWidget.size.columns === size.columns && activeRightWidget.size.rows === size.rows }"
+            @click="setActiveWidgetSize(size); closeContextMenus()"
+          >
+            {{ size.columns }}×{{ size.rows }}
+          </button>
+        </div>
+      </div>
+      <p v-else-if="activeRightWidget.stack" class="context-menu-note">
+        叠放中的组件需先移出叠放，再单独调整尺寸。
+      </p>
+      <template v-if="authStore.visitMode === VisitMode.VISIT_MODE_LOGIN">
+        <div class="context-menu-divider" />
+        <button v-if="hasExtensionWidgetSettings(activeRightWidget)" type="button" class="context-menu-row" role="menuitem" @click="openActiveWidgetSettings">
+          <ThemeIcon name="settings" /><span>配置组件</span>
+        </button>
+        <button type="button" class="context-menu-row" role="menuitem" @click="toggleExtensionWidgetHidden(activeRightWidget); closeContextMenus()">
+          <ThemeIcon :name="activeRightWidget.hidden ? 'eye' : 'eyeOff'" /><span>{{ activeRightWidget.hidden ? '显示组件' : '隐藏组件' }}</span>
+        </button>
+        <button v-if="activeRightWidget.stack" type="button" class="context-menu-row" role="menuitem" @click="removeExtensionWidgetFromStack(activeRightWidget); closeContextMenus()">
+          <ThemeIcon name="drag" /><span>移出叠放</span>
+        </button>
+        <button type="button" class="context-menu-row" role="menuitem" @click="showWidgetManager = true; closeContextMenus()">
+          <ThemeIcon name="dashboard" /><span>编辑主页组件</span>
+        </button>
+        <button type="button" class="context-menu-row danger" role="menuitem" @click="removeActiveWidgetFromMenu">
+          <ThemeIcon name="delete" /><span>删除</span>
+        </button>
+      </template>
+    </div>
 
     <!-- 现代化专属个人中心与系统控制台 -->
     <UserHubModal
       v-model:show="settingsModalVisible"
+      v-model:clock-enabled="extensionClockEnabled"
+      v-model:clock-seconds="extensionClockSeconds"
+      v-model:clock-date="extensionClockDate"
+      v-model:clock-hour-cycle="extensionClockHourCycle"
+      v-model:search-enabled="extensionSearchEnabled"
+      v-model:search-engine-id="widgetPreferences.searchEngineId"
+      v-model:search-open-mode="extensionSearchOpenMode"
+      v-model:search-history-enabled="extensionSearchHistoryEnabled"
+      v-model:sidebar-position="sidebarPosition"
+      v-model:sidebar-auto-hide="sidebarAutoHide"
+      v-model:sidebar-wheel-switch="sidebarWheelSwitch"
+      v-model:sidebar-density="sidebarDensity"
+      :search-history-count="widgetPreferences.searchHistory.length"
       :sync-status="extensionSyncStatus"
       :sync-revision="syncRevision"
       @refresh="refreshBootstrap"
+      @open-wallpaper="settingsModalVisible = false; showWallpaperModal = true"
+      @open-widget-manager="settingsModalVisible = false; showWidgetManager = true"
+      @open-sync-queue="settingsModalVisible = false; queueManagerVisible = true"
+      @clear-search-history="clearSearchHistory"
     />
+
+    <NModal
+      v-model:show="showGroupManager"
+      preset="card"
+      title="分组管理"
+      class="group-manager-modal extension-surface-modal"
+      style="width: min(680px, calc(100vw - 24px)); height: min(640px, calc(100vh - 24px)); border-radius: 20px;"
+      @after-leave="closeGroupManager"
+    >
+      <ItemGroupManage />
+    </NModal>
 
     <!-- 编辑卡片弹窗 -->
     <EditItem
@@ -1507,10 +1871,14 @@ onUnmounted(() => {
       preset="card"
       :title="t('widgetLayout.manager.title')"
       class="widget-manager-modal extension-surface-modal"
-      style="width: min(520px, calc(100vw - 24px)); border-radius: 20px; background: rgba(15, 23, 42, 0.98); border: 1px solid rgba(148, 163, 184, 0.18); box-shadow: 0 24px 80px rgba(2, 6, 23, 0.58);"
+      style="width: min(520px, calc(100vw - 24px)); border-radius: 20px;"
     >
       <div class="widget-manager-content">
         <p>{{ t('widgetLayout.manager.desc') }}</p>
+        <div class="widget-manager-page-scope">
+          <SvgIcon icon="material-symbols:folder-outline" />
+          <span><b>{{ activeGroup?.title }}</b><small>这里只管理当前分组页面的组件，切换分组后可单独配置。</small></span>
+        </div>
         <label class="widget-choice">
           <span><SvgIcon icon="material-symbols:schedule-outline-rounded" /><b>{{ t('widgetLayout.manager.clockTitle') }}</b><small>{{ t('widgetLayout.manager.clockDesc') }}</small></span>
           <NSwitch v-model:value="widgetPreferences.clock" />
@@ -1518,14 +1886,6 @@ onUnmounted(() => {
         <label class="widget-choice">
           <span><SvgIcon icon="material-symbols:search-rounded" /><b>{{ t('widgetLayout.manager.searchTitle') }}</b><small>{{ t('widgetLayout.manager.searchDesc') }}</small></span>
           <NSwitch v-model:value="widgetPreferences.search" />
-        </label>
-        <label class="widget-choice">
-          <span><SvgIcon icon="material-symbols:partly-cloudy-day-outline" /><b>{{ t('widgetLayout.manager.weatherTitle') }}</b><small>{{ t('widgetLayout.manager.weatherDesc') }}</small></span>
-          <NSwitch v-model:value="widgetPreferences.weather" />
-        </label>
-        <label class="widget-choice">
-          <span><SvgIcon icon="material-symbols:local-fire-department-outline-rounded" /><b>{{ t('widgetLayout.manager.trendingTitle') }}</b><small>{{ t('widgetLayout.manager.trendingDesc') }}</small></span>
-          <NSwitch v-model:value="widgetPreferences.trending" />
         </label>
         <div class="extension-widget-library">
           <div class="extension-widget-library-head">
@@ -1565,7 +1925,7 @@ onUnmounted(() => {
       preset="card"
       title="高清壁纸库 (Wallhaven 4K / 图库)"
       class="wallpaper-manager-modal extension-surface-modal"
-      style="width: min(960px, calc(100vw - 24px)); height: min(680px, calc(100vh - 24px)); border-radius: 20px; background: rgba(15, 23, 42, 0.98); border: 1px solid rgba(148, 163, 184, 0.18); box-shadow: 0 24px 80px rgba(2, 6, 23, 0.58);"
+      style="width: min(960px, calc(100vw - 24px)); height: min(680px, calc(100vh - 24px)); border-radius: 20px;"
       size="small"
       role="dialog"
       aria-modal="true"
@@ -1632,27 +1992,47 @@ onUnmounted(() => {
   inset: 0 auto 0 0;
   z-index: 42;
   width: 12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
 }
 
 .side-rail {
   position: fixed;
   inset: 0 auto 0 0;
   z-index: 40;
-  width: 54px;
-  padding: 20px 9px 16px;
+  width: 68px;
+  padding: 18px 7px 14px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   background: rgba(8, 13, 24, 0.56);
   border-right: 1px solid rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(22px) saturate(135%);
   box-shadow: 8px 0 30px rgba(0, 0, 0, 0.12);
+  transition: transform 240ms cubic-bezier(.2,.8,.2,1), opacity 180ms ease;
 }
+
+.sidebar-auto-hide .side-rail:not(.revealed) {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(calc(-100% - 8px));
+}
+
+.sidebar-right .edge-trigger { inset: 0 0 0 auto; }
+.sidebar-right .side-rail {
+  inset: 0 0 0 auto;
+  border-right: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: -8px 0 30px rgba(0, 0, 0, 0.12);
+}
+.sidebar-right.sidebar-auto-hide .side-rail:not(.revealed) { transform: translateX(calc(100% + 8px)); }
 
 .rail-avatar,
 .rail-button,
-.panel-close {
+.rail-group-button {
   display: grid;
   place-items: center;
   border: 0;
@@ -1662,24 +2042,37 @@ onUnmounted(() => {
 
 .rail-avatar {
   padding: 0;
-  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  border-radius: 10px;
   background: transparent;
 }
+.rail-avatar-label { width: 52px; overflow: hidden; color: rgba(255,255,255,.76); font-size: 9px; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; text-align: center; }
 
 .rail-divider {
-  width: 24px;
+  width: 34px;
   height: 1px;
   margin: 3px 0 7px;
   background: rgba(255, 255, 255, 0.14);
 }
 
 .rail-button {
-  width: 36px;
-  height: 36px;
+  position: relative;
+  width: 54px;
+  min-height: 46px;
   border-radius: 11px;
   background: transparent;
-  font-size: 18px;
+  font-size: 10px;
   transition: 180ms ease;
+}
+
+.rail-icon,
+.rail-button :deep(svg) {
+  display: block;
+  width: 20px;
+  height: 20px;
+  flex: none;
 }
 
 .rail-button:hover,
@@ -1688,168 +2081,54 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.14);
 }
 
-.rail-button.active::before {
+.rail-groups {
+  width: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.rail-groups::-webkit-scrollbar { display: none; }
+.rail-group-button {
+  position: relative;
+  width: 100%;
+  min-height: 52px;
+  padding: 5px 2px;
+  gap: 3px;
+  color: rgba(255,255,255,.68);
+  border-radius: 11px;
+  background: transparent;
+  transition: color .18s ease, background-color .18s ease;
+}
+.rail-group-button:hover,
+.rail-group-button.active { color: #fff; background: rgba(255,255,255,.13); }
+.rail-group-button.active::before {
   content: '';
   position: absolute;
-  left: 0;
+  left: -7px;
   width: 3px;
-  height: 20px;
+  height: 26px;
   border-radius: 0 3px 3px 0;
   background: #67e8f9;
 }
-
-.rail-spacer { flex: 1; }
-
-.function-panel {
-  position: fixed;
-  inset: 0 auto 0 54px;
-  z-index: 39;
-  width: min(330px, calc(100vw - 54px));
-  padding: 26px 20px 20px;
-  display: flex;
-  flex-direction: column;
-  color: white;
-  background: linear-gradient(145deg, rgba(10, 17, 31, 0.95), rgba(15, 23, 42, 0.82));
-  border-right: 1px solid rgba(255, 255, 255, 0.13);
-  backdrop-filter: blur(34px) saturate(140%);
-  box-shadow: 20px 0 60px rgba(0, 0, 0, 0.34);
-  transform: translateX(calc(-100% - 18px));
-  opacity: 0;
-  pointer-events: none;
-  transition: transform 260ms cubic-bezier(.2,.8,.2,1), opacity 200ms ease;
+.sidebar-right .rail-group-button.active::before { right: -7px; left: auto; border-radius: 3px 0 0 3px; }
+.rail-group-icon {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,.2);
+  border-radius: 8px;
+  background: rgba(255,255,255,.08);
+  font: 700 10px/1 ui-monospace, monospace;
 }
-
-.function-panel.open {
-  transform: translateX(0);
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.function-panel-head,
-.panel-section-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.function-eyebrow {
-  margin: 0 0 2px;
-  color: #67e8f9;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: .2em;
-}
-
-.function-panel h2 { margin: 0; font-size: 24px; font-weight: 720; }
-.panel-close { width: 34px; height: 34px; border-radius: 10px; background: rgba(255,255,255,.08); font-size: 20px; }
-
-.profile-card {
-  width: 100%;
-  margin: 24px 0 26px;
-  padding: 13px;
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  text-align: left;
-  color: white;
-  border: 1px solid rgba(255,255,255,.11);
-  border-radius: 17px;
-  background: linear-gradient(135deg, rgba(255,255,255,.11), rgba(255,255,255,.04));
-  cursor: pointer;
-}
-
-.profile-copy,
-.group-nav-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.profile-copy strong { font-size: 13px; }
-.profile-copy small { margin-top: 2px; color: rgba(255,255,255,.5); font-size: 10px; }
-.panel-section-title { padding: 0 4px 9px; font-size: 12px; font-weight: 700; }
-.panel-section-title small { color: rgba(255,255,255,.38); font-size: 10px; font-weight: 500; }
-.side-panel-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 3px 3px 12px; scrollbar-width: none; }
-.side-panel-scroll::-webkit-scrollbar { display: none; }
-
-.group-nav-item {
-  width: 100%;
-  padding: 11px 10px;
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  color: rgba(255,255,255,.7);
-  text-align: left;
-  border: 1px solid transparent;
-  border-radius: 13px;
-  background: transparent;
-  cursor: pointer;
-  transition: 180ms ease;
-}
-
-.group-nav-item:hover { color: white; background: rgba(255,255,255,.07); }
-.group-nav-item.active { color: white; border-color: rgba(103,232,249,.22); background: rgba(103,232,249,.1); }
-.group-number { color: rgba(255,255,255,.32); font: 10px/1 ui-monospace, monospace; }
-.group-nav-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
-.group-nav-copy small { margin-top: 2px; color: rgba(255,255,255,.4); font-size: 9px; }
-.group-dot { width: 5px; height: 5px; border-radius: 50%; background: transparent; }
-.group-nav-item.active .group-dot { background: #67e8f9; box-shadow: 0 0 10px #22d3ee; }
-
-.quick-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.09); }
-.quick-actions button { padding: 9px 6px; display: flex; align-items: center; justify-content: center; gap: 5px; color: rgba(255,255,255,.65); border: 1px solid rgba(255,255,255,.08); border-radius: 10px; background: rgba(255,255,255,.04); font-size: 10px; cursor: pointer; }
-.quick-actions button:hover { color: white; background: rgba(255,255,255,.1); }
-.quick-actions .quick-action-wide { grid-column: 1 / -1; color: #a5f3fc; border-color: rgba(103,232,249,.2); background: rgba(34,211,238,.08); }
-
-/* 顶部导航栏 */
-.top-nav-bar {
-  position: relative;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 24px;
-  width: 100%;
-}
-
-.icon-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.16);
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  backdrop-filter: blur(16px);
-  cursor: pointer;
-  color: #ffffff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.status-retry-pill {
-  align-items: center;
-  gap: 5px;
-  padding: 5px 10px;
-  color: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.35);
-  backdrop-filter: blur(14px);
-  font-size: 11px;
-  cursor: pointer;
-}
-
-.status-retry-pill:hover {
-  color: white;
-  background: rgba(255, 255, 255, 0.16);
-}
-
-.icon-btn:hover {
-  background: rgba(255, 255, 255, 0.32);
-  border-color: rgba(255, 255, 255, 0.45);
-  transform: translateY(-2px) scale(1.05);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
-}
-
-.icon-btn:active {
-  transform: translateY(0) scale(0.98);
-}
+.rail-group-button.active .rail-group-icon { color: #a5f3fc; border-color: rgba(103,232,249,.48); background: rgba(34,211,238,.14); }
+.rail-group-label { display: block; width: 50px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; line-height: 1.2; text-align: center; }
+.rail-group-add { color: rgba(165,243,252,.78); }
+.rail-spacer { flex: 1; min-height: 8px; }
+.rail-settings { display: flex; flex-direction: column; gap: 2px; flex: none; }
 
 /* 核心内容区 */
 .main-content {
@@ -1902,69 +2181,180 @@ onUnmounted(() => {
 .wheel-hint-enter-active,.wheel-hint-leave-active { transition: 180ms ease; }
 .wheel-hint-enter-from,.wheel-hint-leave-to { opacity: 0; transform: translate(-50%, 8px); }
 
-/* 卡片栅格 */
+.context-menu-dismiss { position: fixed; inset: 0; z-index: 46; background: transparent; }
+.extension-context-menu {
+  position: fixed;
+  z-index: 47;
+  width: 252px;
+  max-height: calc(100vh - 20px);
+  padding: 9px;
+  overflow-y: auto;
+  color: #f8fafc;
+  border: 1px solid rgba(148,163,184,.2);
+  border-radius: 15px;
+  background: linear-gradient(145deg, rgba(16,24,40,.96), rgba(8,47,58,.92));
+  box-shadow: 0 18px 48px rgba(2,6,23,.48);
+  backdrop-filter: blur(24px) saturate(145%);
+  user-select: none;
+}
+.widget-context-menu { width: 280px; background: linear-gradient(145deg, rgba(17,24,39,.97), rgba(30,41,59,.93)); }
+.context-menu-row {
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 9px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: rgba(248,250,252,.9);
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.context-menu-row:hover { color: #fff; background: rgba(255,255,255,.1); }
+.context-menu-row.danger { color: #fca5a5; }
+.context-menu-row > svg { width: 16px; height: 16px; flex: none; }
+.context-menu-section { padding: 7px 9px 6px; }
+.context-menu-title { margin-bottom: 7px; display: flex; align-items: center; gap: 7px; color: rgba(248,250,252,.86); font-size: 11px; font-weight: 650; }
+.context-menu-title > svg { width: 14px; height: 14px; }
+.context-size-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.context-size-grid button { min-width: 40px; padding: 4px 8px; border: 1px solid transparent; border-radius: 999px; color: rgba(248,250,252,.86); background: rgba(255,255,255,.14); font-size: 11px; line-height: 1.2; cursor: pointer; }
+.context-size-grid button:hover,.context-size-grid button.active { color: #ecfeff; border-color: rgba(103,232,249,.48); background: rgba(34,211,238,.22); }
+.context-menu-divider { height: 1px; margin: 5px 8px; background: rgba(148,163,184,.18); }
+.context-menu-heading { padding: 7px 9px 8px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.context-menu-heading span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 720; }
+.context-menu-heading small { padding: 3px 7px; border-radius: 999px; color: #a5f3fc; background: rgba(8,145,178,.16); font-size: 10px; }
+.context-menu-note { margin: 0; padding: 8px 9px; color: #94a3b8; font-size: 10px; line-height: 1.5; }
+
+/* iOS 主屏式书签网格 */
 .cards-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-  gap: 16px;
-  padding: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(86px, 1fr));
+  grid-auto-flow: dense;
+  grid-auto-rows: 96px;
+  gap: 22px 12px;
+  padding: 10px 6px 18px;
 }
 
 @media (min-width: 768px) {
   .cards-grid {
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 20px;
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    gap: 26px 16px;
   }
 }
 
-/* 单个 Speed Card */
+/* 单个图标不再使用半透明大卡片，点击区域仍覆盖图标与名称。 */
 .speed-card {
+  position: relative;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 14px 10px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(16px);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  gap: 8px;
+  padding: 3px 2px 6px;
+  border: 0;
+  border-radius: 16px;
+  background: transparent;
+  box-shadow: none;
   cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform .2s cubic-bezier(.2,.8,.2,1), filter .2s ease;
   text-align: center;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
+.speed-card.is-expanded { justify-content: center; padding: 12px; border-radius: 20px; background: rgba(15,23,42,.38); backdrop-filter: blur(16px); }
+.speed-card.is-expanded .card-icon-box { width: 68px; height: 68px; }
+.card-description { width: 100%; margin-top: 4px; display: -webkit-box; overflow: hidden; color: rgba(255,255,255,.6); font-size: 10px; line-height: 1.35; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.speed-card-edit {
+  position: absolute;
+  top: -3px;
+  left: 50%;
+  z-index: 4;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255,255,255,.5);
+  border-radius: 50%;
+  color: white;
+  background: rgba(15,23,42,.82);
+  box-shadow: 0 2px 8px rgba(2,6,23,.36);
+  opacity: 0;
+  transform: translateX(17px);
+  transition: opacity .18s ease, background .18s ease, transform .18s ease;
+}
+.speed-card:hover .speed-card-edit,
+.speed-card-edit:focus-visible { opacity: 1; }
 
 .speed-card:hover {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.3);
-  transform: translateY(-4px) scale(1.02);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3);
+  transform: translateY(-2px);
+  filter: brightness(1.06);
+}
+
+.speed-card:focus-visible {
+  outline: 2px solid var(--pn-color-accent, #67e8f9);
+  outline-offset: 5px;
 }
 
 .speed-card.is-long-pressing {
-  transform: scale(.96);
-  border-color: rgba(103, 232, 249, .7);
-  box-shadow: 0 0 0 3px rgba(34, 211, 238, .18);
+  transform: scale(.92);
+  filter: brightness(1.12);
+}
+
+.speed-card.is-long-pressing .card-icon-box {
+  box-shadow: 0 0 0 3px rgba(103,232,249,.72), 0 10px 24px rgba(2,6,23,.36);
 }
 
 .extension-widget-grid {
+  --widget-grid-row-height: 96px;
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
   grid-auto-flow: dense;
-  grid-auto-rows: minmax(72px, auto);
+  grid-auto-rows: var(--widget-grid-row-height);
   gap: 14px;
   padding: 8px;
+  position: relative;
 }
-.extension-widget-cell { min-width: 0; min-height: 0; }
+.extension-widget-cell { position: relative; min-width: 0; min-height: 0; touch-action: pan-y; }
+.extension-widget-grid.is-editing .extension-widget-cell { outline: 1px dashed rgba(103,232,249,.38); outline-offset: 2px; border-radius: 14px; }
+.extension-widget-cell.is-long-press-dragging { opacity: .78; transform: scale(.985); outline: 2px solid rgba(103,232,249,.72); outline-offset: 3px; }
+.extension-widget-cell.is-resizing { z-index: 8; outline: 2px solid rgba(103,232,249,.78); outline-offset: 2px; }
 .extension-widget-cell.is-widget-hidden { display: none; }
 .extension-widget-grid.is-editing .is-widget-hidden { display: block; opacity: 0.4; }
-.extension-widget-toolbar { display: flex; justify-content: flex-end; grid-column: 1 / -1; }
+.extension-widget-toolbar { position: absolute; top: -42px; right: 8px; z-index: 30; display: flex; justify-content: flex-end; }
 .extension-widget-track { display: contents; }
-.extension-widget-editor { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; padding: 5px 8px; border: 1px dashed rgba(103,232,249,.35); border-radius: 10px; background: rgba(15,23,42,.78); font-size: 11px; color: #a5f3fc; cursor: default; }
-.extension-widget-handle { cursor: grab; padding: 0 2px; font-size: 13px; color: #67e8f9; user-select: none; display: inline-flex; align-items: center; justify-content: center; }
-.extension-widget-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
-.extension-widget-actions { display: flex; align-items: center; gap: 4px; }
+.extension-widget-editor {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  left: 7px;
+  z-index: 24;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 6px 8px;
+  overflow-x: auto;
+  border: 1px solid rgba(103,232,249,.34);
+  border-radius: 11px;
+  background: rgba(8,15,30,.88);
+  box-shadow: 0 8px 24px rgba(2,6,23,.34);
+  backdrop-filter: blur(16px);
+  font-size: 11px;
+  color: #a5f3fc;
+  cursor: default;
+  scrollbar-width: thin;
+}
+.extension-widget-stack-badge { flex: none; padding: 2px 6px; border-radius: 999px; background: rgba(8,145,178,.2); color: #a5f3fc; font-size: 9px; white-space: nowrap; }
+.extension-widget-handle { cursor: grab; padding: 0 4px; gap: 2px; font-size: 10px; color: #67e8f9; user-select: none; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; }
+.extension-widget-name { flex: none; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; color: #fff; }
+.extension-widget-actions { display: flex; flex: none; align-items: center; gap: 4px; }
 .extension-widget-actions button {
-  min-width: 28px;
+  min-width: max-content;
   height: 28px;
   padding: 0 6px;
   display: inline-flex;
@@ -1975,11 +2365,37 @@ onUnmounted(() => {
   background: rgba(15,23,42,.85);
   color: #a5f3fc;
   font-size: 12px;
+  gap: 3px;
+  white-space: nowrap;
   cursor: pointer;
   transition: border-color .15s ease, background .15s ease;
   touch-action: manipulation;
 }
 .extension-widget-actions button:hover { border-color: rgba(103,232,249,.6); background: rgba(30,41,59,.95); }
+.extension-widget-actions button:disabled { cursor: default; opacity: .35; }
+.widget-resize-handle {
+  position: absolute;
+  z-index: 20;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  touch-action: none;
+}
+.widget-resize-handle.is-right { top: 14px; right: -6px; bottom: 14px; width: 12px; cursor: ew-resize; }
+.widget-resize-handle.is-bottom { right: 14px; bottom: -6px; left: 14px; height: 12px; cursor: ns-resize; }
+.widget-resize-handle.is-corner {
+  right: -7px;
+  bottom: -7px;
+  width: 18px;
+  height: 18px;
+  border: 2px solid #67e8f9;
+  border-top: 0;
+  border-left: 0;
+  border-radius: 0 0 5px;
+  cursor: nwse-resize;
+}
+:global(html.is-widget-resizing),
+:global(html.is-widget-resizing *) { cursor: nwse-resize !important; user-select: none !important; }
 .extension-widget-actions button:focus-visible,
 .extension-widget-list-item button:focus-visible,
 .modal-secondary-action:focus-visible,
@@ -1990,13 +2406,15 @@ onUnmounted(() => {
 
 @media (pointer: coarse), (max-width: 720px) {
   .extension-widget-grid { grid-template-columns: 1fr; }
+  .widget-resize-handle.is-right { display: none; }
   .extension-widget-cell { grid-column: 1 / -1 !important; }
-  .extension-widget-actions { flex-wrap: wrap; }
-  .extension-widget-actions button { min-width: 44px; height: 44px; padding: 0 8px; }
+  .extension-widget-actions { flex-wrap: nowrap; }
+  .extension-widget-actions button { min-width: max-content; height: 40px; padding: 0 9px; }
   .extension-widget-editor { min-height: 48px; padding: 6px 10px; }
   .extension-widget-handle { min-width: 32px; min-height: 32px; }
   .modal-secondary-action { min-height: 44px; padding: 10px 14px; }
   .extension-widget-list-item button { min-height: 44px; min-width: 44px; padding: 10px 12px; }
+  .speed-card-edit { width: 28px; height: 28px; opacity: 1; transform: translateX(15px); }
 }
 
 .widget-manager-content { display: flex; flex-direction: column; gap: 10px; color: #e2e8f0; }
@@ -2025,66 +2443,463 @@ onUnmounted(() => {
 
 :global(.extension-surface-modal .n-card-header) { padding: 17px 20px; border-bottom: 1px solid rgba(148, 163, 184, .14); color: #f8fafc; }
 :global(.extension-surface-modal .n-card__content) { color: #e2e8f0; }
+:global(.group-manager-modal .n-card__content) { height: calc(100% - 59px); overflow: hidden; }
 :global(.wallpaper-manager-modal .n-card__content) { height: calc(100% - 59px); padding: 0; overflow: hidden; }
 
 
 .card-icon-box {
-  width: 58px;
-  height: 58px;
+  width: 64px;
+  height: 64px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 16px;
-  margin-bottom: 8px;
+  border: 0;
+  border-radius: var(--pn-bookmark-icon-radius, 15px);
+  /* 图标素材自己决定底色；宿主不再额外铺白底或形成白色外圈。 */
+  background: transparent;
+  box-shadow: 0 7px 18px rgba(2,6,23,.28);
   overflow: hidden;
-  transition: transform 0.25s ease;
+  transition: transform .2s cubic-bezier(.2,.8,.2,1), box-shadow .2s ease;
 }
 
 .speed-card:hover .card-icon-box {
-  transform: scale(1.06);
+  transform: scale(1.045);
+  box-shadow: 0 10px 24px rgba(2,6,23,.34);
+}
+
+.card-icon-box :deep(.item-icon),
+.card-icon-box :deep(.n-avatar),
+.card-icon-box :deep(.n-image),
+.card-icon-box :deep(.n-image img) {
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: inherit !important;
+}
+
+.card-icon-box :deep(.n-image img) {
+  object-fit: cover;
 }
 
 .card-info {
-  width: 100%;
+  width: min(100%, 94px);
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
 }
 
 .card-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #fff;
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 1.35;
+  color: var(--pn-icon-default-color, #fff);
   width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
-}
-
-.card-desc {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.65);
-  width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  margin-top: 2px;
+  text-shadow: 0 1px 5px rgba(0,0,0,.65);
 }
 
 @media (max-width: 700px) {
-  .side-rail { width: 46px; padding-inline: 5px; }
-  .function-panel { left: 46px; width: calc(100vw - 46px); }
-  .top-nav-bar { padding: 10px 12px; }
-  .nav-left { display: none; }
-  .nav-right { width: 100%; justify-content: flex-end; }
-  .main-content { padding-left: 54px; }
+  .side-rail { width: 60px; padding-inline: 5px; }
+  .rail-group-label { width: 44px; }
+  .main-content { padding-left: 66px; }
+  .sidebar-right .main-content { padding-right: 66px; padding-left: 1rem; }
+  .sidebar-auto-hide .main-content { padding-left: 1rem; }
+  .sidebar-right.sidebar-auto-hide .main-content { padding-right: 1rem; }
   .clock-hero { margin-top: 20px; }
   .active-group-meta small { display: none; }
-  .cards-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-  .speed-card { padding: 10px 5px; }
-  .card-desc { display: none; }
+  .cards-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px 6px; }
+  .speed-card { padding-inline: 0; }
   :global(.extension-surface-modal .n-card-header) { padding: 14px 16px; }
   :global(.wallpaper-manager-modal .n-card__content) { height: calc(100% - 53px); }
+}
+
+@media (max-width: 430px) {
+  .cards-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* Aurora Workspace：Panel Next Extension 统一视觉外壳。 */
+.extension-tab-container {
+  --ext-canvas: var(--pn-color-page-background, #09111d);
+  --ext-text: var(--pn-color-text-primary, #f4f7fb);
+  --ext-text-muted: var(--pn-color-text-secondary, #9cabc0);
+  --ext-text-soft: var(--pn-color-text-muted, #75859b);
+  --ext-rail: var(--pn-sidebar-background, var(--pn-color-surface, #101622));
+  --ext-surface: var(--pn-color-surface, #141c2a);
+  --ext-surface-raised: var(--pn-color-surface-hover, #1a2536);
+  --ext-border: var(--pn-color-border, #344157);
+  --ext-divider: var(--pn-color-border, #2b3547);
+  --ext-accent: var(--pn-color-accent, #2eb8f0);
+  --ext-accent-soft: var(--pn-sidebar-active-background, var(--pn-color-surface-hover, #17354a));
+  --ext-danger: var(--pn-color-danger, #ef705c);
+  --ext-shadow: rgba(2, 6, 23, .28);
+  --ext-elevation: var(--pn-effect-shadow-medium, 0 14px 40px rgba(0, 0, 0, .38));
+  color: var(--ext-text);
+  background: var(--ext-canvas);
+}
+
+.side-rail {
+  inset: 12px auto 12px 12px;
+  width: 72px;
+  padding: 10px 7px;
+  gap: 4px;
+  color: var(--ext-text-muted);
+  border: 1px solid var(--ext-border);
+  border-radius: 20px;
+  background: var(--ext-rail);
+  box-shadow: var(--ext-elevation);
+  backdrop-filter: none;
+}
+
+.sidebar-right .side-rail {
+  inset: 12px 12px 12px auto;
+  border: 1px solid var(--ext-border);
+  box-shadow: var(--ext-elevation);
+}
+
+.sidebar-compact .side-rail { width: 60px; padding-inline: 5px; }
+.sidebar-compact .rail-avatar { width: 48px; }
+.sidebar-compact .rail-avatar-frame { width: 36px; height: 36px; }
+.sidebar-compact .rail-avatar-frame :deep(.n-avatar) { width: 36px !important; height: 36px !important; }
+.sidebar-compact .rail-group-button, .sidebar-compact .rail-button { min-height: 40px; }
+
+.sidebar-auto-hide .side-rail:not(.revealed) { transform: translateX(calc(-100% - 15px)); }
+.sidebar-right.sidebar-auto-hide .side-rail:not(.revealed) { transform: translateX(calc(100% + 15px)); }
+
+.main-content {
+  padding-top: 54px !important;
+  padding-right: 52px !important;
+  padding-left: 112px !important;
+  transition: padding 220ms cubic-bezier(.2, .8, .2, 1);
+}
+.sidebar-right .main-content { padding-right: 112px !important; padding-left: 52px !important; }
+.sidebar-auto-hide .main-content { padding-left: 52px !important; }
+.sidebar-right.sidebar-auto-hide .main-content { padding-right: 52px !important; }
+.sidebar-compact .main-content { padding-left: 96px !important; }
+.sidebar-right.sidebar-compact .main-content { padding-right: 96px !important; padding-left: 52px !important; }
+.sidebar-auto-hide.sidebar-compact .main-content { padding-left: 52px !important; }
+.sidebar-right.sidebar-auto-hide.sidebar-compact .main-content { padding-right: 52px !important; }
+
+.rail-avatar { position: relative; width: 58px; gap: 5px; color: var(--ext-text-muted); }
+.rail-avatar-frame { position: relative; display: block; width: 42px; height: 42px; }
+.rail-avatar-frame :deep(.n-avatar) {
+  border: 2px solid rgba(46, 184, 240, .45);
+  border-radius: 15px !important;
+  color: #fff;
+  background: linear-gradient(145deg, #55cce4, #5467d9 55%, #9458d3);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.24), 0 6px 18px rgba(16,42,82,.34);
+}
+.rail-avatar-status {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--ext-rail);
+  border-radius: 50%;
+  background: #8b98aa;
+}
+.rail-avatar-status.is-online { background: #35d79b; }
+.rail-avatar-status.is-syncing { background: #31b7ef; animation: extension-status-pulse 1.3s ease-in-out infinite; }
+.rail-avatar-status.is-cached { background: #9979e8; }
+.rail-avatar-status.is-offline { background: #8b98aa; }
+.rail-avatar-status.is-error { background: var(--ext-danger); }
+.rail-avatar-label { color: var(--ext-text-muted); }
+.rail-divider { width: 32px; margin: 7px 0; background: var(--ext-divider); }
+.rail-group-button, .rail-button { color: var(--ext-text-muted); border-radius: 14px; }
+.rail-group-button:hover, .rail-group-button.active, .rail-button:hover, .rail-button.active {
+  color: var(--ext-text);
+  background: var(--ext-surface-raised);
+}
+.rail-group-button.active { color: var(--ext-accent); background: var(--ext-accent-soft); }
+.rail-group-button.active::before { left: -7px; width: 3px; height: 26px; border-radius: 3px; background: var(--ext-accent); }
+.sidebar-right .rail-group-button.active::before { right: -7px; }
+.rail-group-icon {
+  width: 25px;
+  height: 25px;
+  border: 0;
+  border-radius: 8px;
+  color: inherit;
+  background: transparent;
+  font: 750 11px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.rail-group-button.active .rail-group-icon { color: inherit; border: 0; background: transparent; }
+.rail-group-add { color: var(--ext-accent); }
+
+.clock-hero { margin-bottom: 24px; color: var(--ext-text); }
+.time-display { letter-spacing: -.06em; }
+.time-display > span:first-child { font-size: clamp(46px, 6vw, 70px) !important; font-weight: 650 !important; }
+.clock-seconds { font-size: 18px !important; letter-spacing: 0; }
+.clock-period { margin-left: 8px; color: var(--ext-text-muted); font-size: 11px; font-weight: 650; letter-spacing: 0; }
+.date-display { color: var(--ext-text-muted); font-size: 13px !important; text-shadow: none; }
+.text-shadow-md { text-shadow: 0 3px 22px rgba(0,0,0,.32); }
+:global(html:not(.dark)) .text-shadow-md { text-shadow: 0 3px 20px rgba(255,255,255,.86); }
+
+.sync-status-banner {
+  width: min(100%, 620px);
+  min-height: 34px;
+  margin: -34px 0 18px;
+  padding: 7px 10px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--ext-border);
+  border-radius: 12px;
+  color: var(--ext-text-muted);
+  background: var(--ext-surface);
+  box-shadow: var(--ext-elevation);
+  font-size: 10px;
+}
+.sync-status-banner > svg { color: var(--ext-accent); font-size: 15px; }
+.sync-status-banner small { flex: 1; color: var(--ext-text-soft); }
+.sync-status-banner button { padding: 3px 8px; border: 0; border-radius: 8px; color: var(--ext-accent); background: var(--ext-accent-soft); cursor: pointer; }
+.sync-status-banner.is-error { border-color: var(--ext-danger); }
+.sync-status-banner.is-error > svg { color: var(--ext-danger); }
+
+.search-section { margin-bottom: 28px !important; }
+.search-bar-capsule {
+  min-height: 48px;
+  padding: 5px 8px 5px 10px !important;
+  border: 1px solid var(--ext-border);
+  border-radius: 18px;
+  color: var(--ext-text);
+  background: var(--ext-surface);
+  box-shadow: 0 10px 30px var(--ext-shadow);
+  backdrop-filter: none;
+}
+.search-bar-capsule.is-focused { border-color: var(--ext-accent); box-shadow: 0 0 0 3px rgba(46, 184, 240, .2), 0 12px 32px var(--ext-shadow); }
+.extension-search-input { color: var(--ext-text); }
+.extension-search-input::placeholder { color: var(--ext-text-soft); }
+.engine-select-btn { color: var(--ext-text-muted); border-radius: 10px !important; }
+.engine-select-btn:hover, .clear-btn:hover { background: var(--ext-surface-raised) !important; }
+.search-submit-btn { background: var(--ext-accent) !important; box-shadow: none !important; }
+
+.active-group-meta { margin: 0 3px 10px; color: var(--ext-text); }
+.active-group-meta > span { font-size: 12px; font-weight: 750; letter-spacing: .04em; }
+.active-group-meta small { color: var(--ext-text-soft); }
+.extension-widget-grid { --widget-grid-row-height: 76px; gap: 12px; padding: 0 0 8px; }
+.extension-widget-cell { border-radius: 20px; }
+.extension-widget-cell :deep(.trending-card),
+.extension-widget-cell :deep(.weather-card),
+.extension-widget-cell :deep(.countdown-card),
+.extension-widget-cell :deep(.search-card) {
+  border-color: var(--pn-widget-border, var(--ext-border));
+  border-radius: var(--pn-radius-large, 20px);
+  background: var(--pn-widget-background, var(--ext-surface));
+  box-shadow: var(--pn-widget-shadow, 0 12px 32px var(--ext-shadow));
+}
+.extension-widget-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  grid-column: 1 / -1;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  margin: -42px auto 12px;
+  padding: 7px 8px 7px 12px;
+  border: 1px solid var(--ext-border);
+  border-radius: 14px;
+  color: var(--ext-text);
+  background: var(--ext-surface);
+  box-shadow: 0 10px 28px var(--ext-shadow);
+}
+.extension-edit-mode-copy { display: flex; min-width: 0; flex-direction: column; padding-right: 6px; }
+.extension-edit-mode-copy strong { color: var(--ext-text); font-size: 11px; }
+.extension-edit-mode-copy small { margin-top: 1px; color: var(--ext-text-soft); font-size: 9px; white-space: nowrap; }
+.modal-secondary-action { border-color: var(--ext-border); color: var(--ext-text-muted); background: var(--ext-surface-raised); }
+.modal-secondary-action:hover { border-color: var(--ext-accent); color: var(--ext-accent); background: var(--ext-accent-soft); }
+.extension-widget-grid.is-editing .extension-widget-cell { outline-color: rgba(46, 184, 240, .5); border-radius: 20px; }
+.extension-widget-empty { color: var(--ext-text-muted) !important; border-color: var(--ext-border) !important; background: var(--ext-surface) !important; }
+.extension-widget-editor {
+  top: 8px;
+  right: 8px;
+  left: auto;
+  max-width: calc(100% - 16px);
+  padding: 5px 6px;
+  border-color: var(--ext-border);
+  border-radius: 11px;
+  color: var(--ext-accent);
+  background: var(--ext-surface-raised);
+  box-shadow: 0 8px 24px var(--ext-shadow);
+  backdrop-filter: none;
+}
+.extension-widget-handle { color: var(--ext-accent); }
+.extension-widget-name { max-width: 110px; color: var(--ext-text); }
+.extension-widget-size { flex: none; padding: 2px 6px; border-radius: 999px; color: var(--ext-accent); background: var(--ext-accent-soft); font-size: 9px; font-weight: 750; }
+.extension-widget-actions button { width: 28px; min-width: 28px; height: 28px; padding: 0; border-color: var(--ext-border); color: var(--ext-text-muted); background: var(--ext-surface); }
+.extension-widget-actions button.is-labelled { width: auto; min-width: 40px; padding: 0 8px; font-size: 10px; font-weight: 700; }
+.extension-widget-actions button span { display: none; }
+.extension-widget-actions button:hover { border-color: var(--ext-accent); color: var(--ext-accent); background: var(--ext-accent-soft); }
+.extension-widget-editor.is-compact .extension-widget-name,
+.extension-widget-editor.is-compact .extension-widget-actions .is-labelled { display: none; }
+.widget-resize-handle.is-corner { border-color: var(--ext-accent); }
+
+.cards-grid { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); grid-auto-rows: 90px; gap: 18px 12px; padding: 5px 0 18px; }
+.speed-card { gap: 7px; border-radius: 14px; color: var(--ext-text); }
+.speed-card:hover { background: var(--ext-surface-raised); }
+.speed-card.is-expanded { background: var(--ext-surface); border: 1px solid var(--ext-border); box-shadow: 0 10px 28px var(--ext-shadow); backdrop-filter: none; }
+.card-icon-box { width: 54px; height: 54px; border-radius: var(--pn-bookmark-icon-radius, 14px); box-shadow: 0 8px 18px rgba(0,0,0,.2); }
+.card-title { color: var(--pn-icon-default-color, var(--ext-text)); font-size: 10px; font-weight: 550; text-shadow: 0 1px 8px rgba(0,0,0,.48); }
+:global(html:not(.dark)) .card-title { text-shadow: 0 1px 8px rgba(255,255,255,.9); }
+.card-description { color: var(--ext-text-muted); }
+.speed-card-edit { border-color: var(--ext-border); color: var(--ext-text); background: var(--ext-surface-raised); box-shadow: 0 3px 10px var(--ext-shadow); }
+
+.extension-context-menu {
+  width: 228px;
+  padding: 7px;
+  color: var(--ext-text);
+  border-color: var(--ext-border);
+  border-radius: 16px;
+  background: var(--ext-surface);
+  box-shadow: 0 20px 50px rgba(0,0,0,.42);
+  backdrop-filter: none;
+}
+.extension-context-menu:focus-visible,
+.extension-widget-cell:focus-visible,
+.speed-card:focus-visible { outline: 2px solid var(--ext-accent); outline-offset: 3px; }
+.widget-context-menu { width: 248px; background: var(--ext-surface); }
+.context-menu-row { min-height: 34px; padding: 0 9px; color: var(--ext-text); border-radius: 9px; font-size: 10px; }
+.context-menu-row:hover { color: var(--ext-text); background: var(--ext-surface-raised); }
+.context-menu-row.danger { color: var(--ext-danger); }
+.context-menu-title, .context-menu-heading span { color: var(--ext-text); }
+.context-menu-heading small { color: var(--ext-accent); background: var(--ext-accent-soft); }
+.context-size-grid button { min-width: 36px; border: 1px solid var(--ext-border); border-radius: 8px; color: var(--ext-text-muted); background: var(--ext-surface-raised); }
+.context-size-grid button:hover, .context-size-grid button.active { color: var(--ext-accent); border-color: var(--ext-accent); background: var(--ext-accent-soft); }
+.context-menu-divider { background: var(--ext-divider); }
+.context-menu-note { color: var(--ext-text-soft); }
+.wheel-switch-hint { color: var(--ext-text); border-color: var(--ext-border); background: var(--ext-surface); box-shadow: 0 10px 35px var(--ext-shadow); backdrop-filter: none; }
+.wheel-switch-hint small { color: var(--ext-text-soft); }
+.empty-state { color: var(--ext-text-muted) !important; }
+.engine-select-btn :deep(svg), .clear-btn :deep(svg) { color: var(--ext-text-muted) !important; }
+
+:global(.extension-surface-modal) {
+  color: #dce6f4;
+  border: 1px solid #303c50;
+  background: #141c2a;
+  box-shadow: 0 24px 70px rgba(0,0,0,.42);
+}
+:global(html:not(.dark) .extension-surface-modal) {
+  color: #35445a;
+  border-color: #d8e2ec;
+  background: #f7fbff;
+  box-shadow: 0 24px 70px rgba(63,85,105,.2);
+}
+:global(.extension-surface-modal .n-card-header) { color: inherit; border-color: currentColor; border-bottom-color: rgba(143,157,177,.18); }
+:global(.extension-surface-modal .n-card__content) { color: inherit; }
+.widget-manager-content { color: var(--ext-text); }
+.widget-manager-content > p, .extension-widget-library > small, .extension-widget-library-head small { color: var(--ext-text-soft); }
+.widget-manager-page-scope { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--ext-border); border-radius: 13px; color: var(--ext-accent); background: var(--ext-accent-soft); }
+.widget-manager-page-scope > svg { width: 18px; height: 18px; flex: none; }
+.widget-manager-page-scope > span { min-width: 0; display: flex; flex-direction: column; }
+.widget-manager-page-scope b { overflow: hidden; color: var(--ext-text); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.widget-manager-page-scope small { margin-top: 2px; color: var(--ext-text-soft); font-size: 10px; }
+.widget-choice, .extension-widget-library { color: var(--ext-text); border-color: var(--ext-border); background: var(--ext-surface); }
+.widget-choice:hover { border-color: var(--ext-accent); background: var(--ext-accent-soft); }
+.widget-choice svg { color: var(--ext-accent); }
+.widget-choice small { color: var(--ext-text-soft); }
+.extension-widget-list-item { color: var(--ext-text); background: var(--ext-surface-raised); }
+.extension-widget-list-item button { color: var(--ext-accent); border-color: var(--ext-border); background: var(--ext-surface); }
+.modal-primary-action { border-color: var(--ext-accent); background: var(--ext-accent); box-shadow: 0 8px 24px rgba(20,127,192,.22); }
+
+@keyframes extension-status-pulse {
+  50% { opacity: .4; transform: scale(.82); }
+}
+
+@media (min-width: 768px) {
+  .cards-grid { grid-template-columns: repeat(auto-fill, minmax(82px, 1fr)); gap: 20px 14px; }
+}
+
+@media (max-width: 720px) {
+  .side-rail { inset-block: 8px; left: 8px; width: 64px; border-radius: 18px; }
+  .sidebar-right .side-rail { right: 8px; left: auto; }
+  .main-content { padding: 46px 14px 32px 84px !important; }
+  .sidebar-right .main-content { padding-right: 84px !important; padding-left: 14px !important; }
+  .sidebar-auto-hide .main-content { padding-left: 14px !important; }
+  .sidebar-right.sidebar-auto-hide .main-content { padding-right: 14px !important; }
+  .extension-widget-toolbar { margin-top: -36px; }
+  .extension-edit-mode-copy small { display: none; }
+  .cards-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (max-width: 430px) {
+  .clock-hero { margin-top: 4px; }
+  .time-display > span:first-child { font-size: 42px !important; }
+  .cards-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .extension-edit-mode-copy { display: none; }
+}
+
+/* Shared page canvas: bookmarks and widgets consume the exact same grid unit. */
+.dashboard-canvas-section { margin-bottom: 24px; }
+.dashboard-canvas-header {
+  min-height: 42px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.dashboard-canvas-header .active-group-meta { margin: 0 3px; display: flex; flex-direction: column; }
+.dashboard-canvas-header .extension-widget-toolbar {
+  position: static;
+  width: auto;
+  max-width: min(100%, 680px);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.extension-dashboard-grid {
+  --widget-grid-row-height: 90px;
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-auto-flow: dense;
+  grid-auto-rows: var(--widget-grid-row-height);
+  gap: 12px;
+  width: 100%;
+  min-height: var(--widget-grid-row-height);
+  padding: 5px 0 18px;
+}
+.extension-dashboard-track { display: contents; }
+.dashboard-canvas-item { min-width: 0; min-height: 0; }
+.extension-dashboard-grid .extension-widget-cell { height: 100%; border-radius: 20px; }
+.extension-dashboard-grid.is-editing .extension-widget-cell {
+  outline: 1px dashed color-mix(in srgb, var(--ext-accent) 58%, transparent);
+  outline-offset: 2px;
+}
+.extension-dashboard-grid.is-editing .extension-widget-cell.is-widget-hidden { display: block; opacity: .42; }
+.extension-dashboard-grid .extension-widget-empty {
+  grid-column: 1 / -1;
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px dashed var(--ext-border);
+  border-radius: 20px;
+  color: var(--ext-text-muted);
+  background: var(--ext-surface);
+}
+.extension-dashboard-grid .extension-widget-empty p { margin: 0; color: var(--ext-text); font-size: 13px; font-weight: 700; }
+.extension-dashboard-grid .extension-widget-empty small { color: var(--ext-text-soft); font-size: 10px; }
+.is-dashboard-dragging {
+  z-index: 40;
+  opacity: .82;
+  transform: scale(.97);
+  outline: 2px solid var(--ext-accent) !important;
+  outline-offset: 3px;
+}
+
+@media (max-width: 720px) {
+  .dashboard-canvas-header { align-items: flex-start; flex-direction: column; }
+  .dashboard-canvas-header .extension-widget-toolbar { align-self: stretch; justify-content: flex-end; }
+  .dashboard-canvas-section { overflow-x: auto; overscroll-behavior-inline: contain; }
+  .extension-dashboard-grid { min-width: 840px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .side-rail, .main-content, .rail-avatar-status { transition: none !important; animation: none !important; }
 }
 </style>

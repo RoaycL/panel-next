@@ -8,11 +8,15 @@ const typesSource = fs.readFileSync(new URL('../src/widgets/types.ts', import.me
 const constantsSource = fs.readFileSync(new URL('../src/widgets/constants.ts', import.meta.url), 'utf8')
 const schemaSource = fs.readFileSync(new URL('../src/sdk/configSchema.ts', import.meta.url), 'utf8')
   .replace(/^import type .*$/gm, '')
+const stackSource = fs.readFileSync(new URL('../src/widgets/stack.ts', import.meta.url), 'utf8')
+  .replace(/^import type .*$/gm, '')
+  .replace(/^import \{ MAX_WIDGET_STACK_SIZE \} from '\.\/types'\r?\n/gm, '')
 const registrySource = fs.readFileSync(new URL('../src/widgets/registry.ts', import.meta.url), 'utf8')
   .replace(/^import type \{[\s\S]*?\} from '\.\/types'\r?\n/, '')
   .replace(/^import \{ WIDGET_ID_PATTERN, WIDGET_TYPE_PATTERN \} from '\.\/constants'\r?\n/, '')
   .replace(/^import \{ .* \} from '\.\/types'\r?\n/, '')
-const transpiled = ts.transpileModule(`${typesSource}\n${constantsSource}\n${schemaSource}\n${registrySource}`, {
+  .replace(/^import \{ normalizeWidgetPositions, normalizeWidgetStacks \} from '\.\/stack'\r?\n/gm, '')
+const transpiled = ts.transpileModule(`${typesSource}\n${constantsSource}\n${schemaSource}\n${stackSource}\n${registrySource}`, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
   fileName: 'widget-registry.ts',
   reportDiagnostics: true,
@@ -20,7 +24,7 @@ const transpiled = ts.transpileModule(`${typesSource}\n${constantsSource}\n${sch
 if (transpiled.diagnostics?.length)
   throw new Error('Unable to transpile widget registry')
 const encoded = Buffer.from(transpiled.outputText).toString('base64')
-const { WidgetRegistry, WIDGET_LAYOUT_SCHEMA_VERSION, serializeWidgetLayout, validateWidgetWireInstance, color, defineConfigSchema, integer, number, url } = await import(`data:text/javascript;base64,${encoded}`)
+const { WidgetRegistry, WIDGET_LAYOUT_SCHEMA_VERSION, serializeWidgetLayout, validateWidgetWireInstance, widgetRegistry, buildWidgetDisplayGroups, moveWidgetWithinStack, stackWidgets, unstackWidget, resolveWidgetSize, resizeInstanceToWithinBounds, resizeInstanceWithinBounds, color, defineConfigSchema, integer, number, url } = await import(`data:text/javascript;base64,${encoded}`)
 
 const generatedSchema = defineConfigSchema({
   count: integer({ default: 2, min: 1, max: 5, label: 'Count' }),
@@ -92,10 +96,77 @@ assert.throws(() => registry.create('core.clock', '../unsafe', { column: 0, row:
 assert.throws(() => new WidgetRegistry().register({ ...definition, type: 'test.invalid-capability', capabilities: ['camera'] }), /capabilities/)
 assert.throws(() => registry.loadLayout({ schemaVersion: 1, widgets: Array.from({ length: 101 }, () => created) }), /limits/)
 
+const discreteDefinition = {
+  ...definition,
+  type: 'test.discrete-size',
+  size: {
+    default: { columns: 4, rows: 2 },
+    min: { columns: 2, rows: 1 },
+    max: { columns: 8, rows: 4 },
+    supportedSizes: [{ columns: 2, rows: 1 }, { columns: 4, rows: 2 }, { columns: 8, rows: 4 }],
+  },
+}
+widgetRegistry.register(discreteDefinition)
+assert.deepEqual(resolveWidgetSize('test.discrete-size', { columns: 3, rows: 2 }), { columns: 4, rows: 2 })
+const discrete = widgetRegistry.create('test.discrete-size', 'discrete.main', { column: 0, row: 0 })
+assert.equal(resizeInstanceToWithinBounds(discrete, { columns: 7, rows: 4 }), true)
+assert.deepEqual(discrete.size, { columns: 8, rows: 4 })
+assert.equal(resizeInstanceWithinBounds(discrete, 'columns', 1), false)
+const stackMembers = [
+  widgetRegistry.create('test.discrete-size', 'stack.a', { column: 0, row: 0 }),
+  widgetRegistry.create('test.discrete-size', 'stack.b', { column: 0, row: 1 }),
+  widgetRegistry.create('test.discrete-size', 'stack.c', { column: 0, row: 2 }),
+]
+const stackId = stackWidgets(stackMembers, 'stack.b', 'stack.a')
+assert.match(stackId, /^stack\./)
+assert.equal(buildWidgetDisplayGroups(stackMembers).length, 2)
+assert.deepEqual(stackMembers.slice(0, 2).map(instance => instance.stack?.order), [0, 1])
+assert.equal(moveWidgetWithinStack(stackMembers, 'stack.b', -1), true)
+assert.equal(stackMembers.find(instance => instance.id === 'stack.b')?.stack?.order, 0)
+const stackedLayout = serializeWidgetLayout(stackMembers)
+assert.equal(stackedLayout.widgets[0].position.row, stackedLayout.widgets[1].position.row)
+assert.equal(unstackWidget(stackMembers, 'stack.b'), true)
+assert.equal(stackMembers.every(instance => instance.stack === undefined), true)
+widgetRegistry.register({
+  ...discreteDefinition,
+  type: 'test.discrete-horizontal',
+  size: { ...discreteDefinition.size, resize: 'horizontal' },
+})
+const discreteHorizontal = widgetRegistry.create('test.discrete-horizontal', 'discrete.horizontal', { column: 0, row: 0 })
+assert.equal(resizeInstanceToWithinBounds(discreteHorizontal, { columns: 8, rows: 4 }), false)
+assert.deepEqual(discreteHorizontal.size, discreteDefinition.size.default)
+widgetRegistry.register({
+  ...definition,
+  type: 'test.vertical-only',
+  size: { ...definition.size, resize: 'vertical' },
+})
+const verticalOnly = widgetRegistry.create('test.vertical-only', 'vertical.main', { column: 0, row: 0 })
+assert.equal(resizeInstanceToWithinBounds(verticalOnly, { columns: 4, rows: 2 }), true)
+assert.deepEqual(verticalOnly.size, { columns: definition.size.default.columns, rows: 2 })
+widgetRegistry.register({
+  ...definition,
+  type: 'test.resize-step',
+  size: {
+    default: { columns: 1, rows: 1 },
+    min: { columns: 1, rows: 1 },
+    max: { columns: 7, rows: 2 },
+    step: { columns: 3, rows: 1 },
+  },
+})
+const stepped = widgetRegistry.create('test.resize-step', 'stepped.main', { column: 0, row: 0 })
+assert.equal(resizeInstanceWithinBounds(stepped, 'columns', 1), true)
+assert.equal(stepped.size.columns, 4)
+assert.throws(() => new WidgetRegistry().register({
+  ...discreteDefinition,
+  type: 'test.invalid-discrete-size',
+  size: { ...discreteDefinition.size, default: { columns: 3, rows: 2 } },
+}), /default size is not supported/)
+
 const builtins = fs.readFileSync(new URL('../src/widgets/builtins.ts', import.meta.url), 'utf8')
 const defineSource = fs.readFileSync(new URL('../src/widgets/define.ts', import.meta.url), 'utf8')
 const contextSource = fs.readFileSync(new URL('../src/widgets/context.ts', import.meta.url), 'utf8')
 const host = fs.readFileSync(new URL('../src/widgets/WidgetHost.vue', import.meta.url), 'utf8')
+const stackHost = fs.readFileSync(new URL('../src/widgets/WidgetStackHost.vue', import.meta.url), 'utf8')
 const settingsModal = fs.readFileSync(new URL('../src/widgets/WidgetSettingsModal.vue', import.meta.url), 'utf8')
 const home = fs.readFileSync(new URL('../src/views/home/index.vue', import.meta.url), 'utf8')
 const extension = fs.readFileSync(new URL('../src/views/extension/index.vue', import.meta.url), 'utf8')
@@ -144,6 +215,9 @@ assert.match(host, /!instance\.hidden/)
 assert.match(host, /renderError/)
 assert.match(host, /retryLoad/)
 assert.match(host, /editMode: props\.editMode/)
+assert.match(stackHost, /handleWheel/)
+assert.match(stackHost, /handlePointerUp/)
+assert.match(stackHost, /widget-stack-indicator/)
 assert.match(settingsModal, /configSchema\.fields/)
 assert.match(settingsModal, /definition\.value\.configSchema\.parse/)
 assert.match(home, /<WidgetHost :instance="headerClockWidget"/)
@@ -156,18 +230,26 @@ assert.match(home, /handle="\.widget-edit-handle"/)
 assert.match(home, /toggleWidgetHidden/)
 assert.match(home, /removeWidgetInstance/)
 assert.match(home, /resizeWidget/)
+assert.match(home, /useWidgetGridResize/)
+assert.match(home, /chosen-class="is-long-press-dragging"/)
+assert.match(home, /chosen-class="is-bookmark-long-pressing"/)
+assert.match(home, /class="widget-resize-handle is-corner"/)
 assert.match(home, /panelState\.panelConfig\.widgets/)
 assert.match(home, /quarantinedWidgets/)
 assert.match(home, /clearWidgetStorage/)
-assert.match(extension, /<WidgetHost :instance="instance"/)
+assert.match(extension, /<WidgetStackHost :instances="item\.group\.members"/)
 assert.match(extension, /WidgetSettingsModal/)
 assert.match(extension, /widgetRegistry\.create/)
 // 扩展端布局编辑器：拖拽/缩放/隐藏能力齐备
 assert.match(extension, /VueDraggable/)
 assert.match(extension, /extension-widget-handle/)
-assert.match(extension, /resizeInstanceWithinBounds/)
+assert.match(extension, /resizeInstanceToWithinBounds/)
+assert.match(extension, /useWidgetGridResize/)
+assert.match(extension, /chosen-class="is-dashboard-dragging"/)
+assert.match(extension, /class="widget-resize-handle is-corner"/)
 assert.match(extension, /toggleExtensionWidgetHidden/)
 assert.match(extensionAppearance, /contentLayout: WidgetLayout/)
+assert.match(extensionAppearance, /pageLayouts: Record<string, ExtensionPageLayout>/)
 assert.match(contextSource, /await storage\.flush/)
 assert.match(contextSource, /MAX_WIDGET_STORAGE_TOTAL_BYTES/)
 

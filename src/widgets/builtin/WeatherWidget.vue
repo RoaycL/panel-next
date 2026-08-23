@@ -127,7 +127,7 @@ onUnmounted(() => {
   padding: 10px 34px 15px 13px;
   border: 1px solid var(--pn-widget-border, rgb(255 255 255 / 16%));
   border-radius: 16px;
-  color: white;
+  color: var(--pn-widget-text-color, white);
   background: var(--pn-widget-background, rgb(18 25 39 / 42%));
   box-shadow: var(--pn-widget-shadow, 0 10px 30px rgb(0 0 0 / 14%));
   backdrop-filter: blur(var(--pn-effect-blur, 14px));
@@ -208,7 +208,7 @@ onUnmounted(() => {
 }
 
 .weather-source:hover {
-  color: white;
+  color: var(--pn-widget-text-color, white);
   text-decoration: underline;
 }
 

@@ -5,8 +5,9 @@ import {
   NModal,
   NTag,
 } from 'naive-ui'
-import { SvgIcon } from '@/components/common'
+import SvgIcon from '@/components/common/SvgIcon/index.vue'
 import type { ConflictDescriptor, ConflictResolutionChoice } from '@/sync/conflictResolver'
+import { getRuntime } from '@/runtime'
 
 const props = defineProps<{
   show: boolean
@@ -17,6 +18,8 @@ const emit = defineEmits<{
   (e: 'update:show', value: boolean): void
   (e: 'resolve', choice: ConflictResolutionChoice): void
 }>()
+
+const modalTo = getRuntime().kind === 'extension' ? '.pn-theme-root' : undefined
 
 const visible = computed({
   get: () => props.show,
@@ -38,6 +41,7 @@ const supportsDuplicate = computed(() =>
 <template>
   <NModal
     v-model:show="visible"
+    :to="modalTo"
     preset="card"
     :bordered="false"
     :mask-closable="false"
@@ -195,6 +199,23 @@ const supportsDuplicate = computed(() =>
     </div>
   </NModal>
 </template>
+
+<style scoped>
+:global(.conflict-resolver-modal.n-card) {
+  color: var(--pn-modal-content-text-color, #cbd5e1) !important;
+  border-color: var(--pn-modal-border, rgba(148, 163, 184, .18)) !important;
+  background: var(--pn-modal-background, rgba(2, 6, 23, .98)) !important;
+  box-shadow: var(--pn-effect-shadow-high, 0 28px 90px rgba(2, 6, 23, .62)) !important;
+}
+.conflict-modal-content { color: var(--pn-color-text-secondary, #cbd5e1) !important; background: transparent !important; }
+.conflict-modal-content :deep(.text-white),
+.conflict-modal-content :deep(.text-white\/80),
+.conflict-modal-content :deep(.text-white\/90) { color: var(--pn-color-text-primary, #fff) !important; }
+.conflict-modal-content :deep(.text-white\/40),
+.conflict-modal-content :deep(.text-white\/50),
+.conflict-modal-content :deep(.text-white\/60),
+.conflict-modal-content :deep(.text-white\/70) { color: var(--pn-color-text-muted, #94a3b8) !important; }
+</style>
 
 <style scoped>
 :global(.conflict-resolver-modal .n-card__content) {

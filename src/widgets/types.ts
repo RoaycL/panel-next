@@ -4,6 +4,7 @@ export const WIDGET_LAYOUT_SCHEMA_VERSION = 1
 export const MAX_WIDGET_INSTANCES = 100
 export const MAX_WIDGET_LAYOUT_BYTES = 256 * 1024
 export const MAX_WIDGET_CONFIG_BYTES = 32 * 1024
+export const MAX_WIDGET_STACK_SIZE = 10
 
 export interface WidgetPosition {
   column: number
@@ -15,10 +16,23 @@ export interface WidgetSize {
   rows: number
 }
 
+export interface WidgetStackMembership {
+  /** 同一堆栈共享的稳定标识。 */
+  id: string
+  /** 堆栈内顺序，从 0 开始，最大为 MAX_WIDGET_STACK_SIZE - 1。 */
+  order: number
+}
+
 export interface WidgetSizeConstraints {
   default: WidgetSize
   min: WidgetSize
   max: WidgetSize
+  /** 连续尺寸的网格步长，默认每次 1 列/1 行。 */
+  step?: WidgetSize
+  /** 非连续尺寸白名单；声明后宿主只允许这些精确组合。 */
+  supportedSizes?: readonly WidgetSize[]
+  /** 允许用户拖动缩放的方向，默认 both。 */
+  resize?: 'both' | 'horizontal' | 'vertical' | 'none'
 }
 
 export interface WidgetInstance<TConfig = unknown> {
@@ -28,6 +42,8 @@ export interface WidgetInstance<TConfig = unknown> {
   position: WidgetPosition
   size: WidgetSize
   hidden: boolean
+  /** 可选堆栈成员信息；旧客户端仍可读取布局，但再次保存时可能解除堆栈。 */
+  stack?: WidgetStackMembership
   config: TConfig
 }
 

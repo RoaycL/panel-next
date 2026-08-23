@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { NButton, NEmpty, NModal, NTag, useDialog } from 'naive-ui'
-import { SvgIcon } from '@/components/common'
+import SvgIcon from '@/components/common/SvgIcon/index.vue'
 import { clearOfflineQueue, readOfflineQueue, removeOfflineMutation } from '@/sync/offlineQueue'
 import type { OfflineMutation } from '@/sync/offlineQueue'
+import { getRuntime } from '@/runtime'
 
 const props = defineProps<{
   show: boolean
@@ -15,6 +16,8 @@ const emit = defineEmits<{
   (e: 'replay'): void
   (e: 'changed'): void
 }>()
+
+const modalTo = getRuntime().kind === 'extension' ? '.pn-theme-root' : undefined
 
 const dialog = useDialog()
 const queue = ref<OfflineMutation[]>([])
@@ -93,13 +96,14 @@ function handleReplay() {
 <template>
   <NModal
     v-model:show="visible"
+    :to="modalTo"
     preset="card"
     :bordered="false"
     style="width: min(560px, calc(100vw - 24px)); max-height: calc(100vh - 24px); border-radius: 20px; overflow: hidden; background: rgba(2, 6, 23, 0.98); border: 1px solid rgba(148, 163, 184, 0.18); box-shadow: 0 28px 90px rgba(2, 6, 23, 0.62);"
     class="offline-queue-manager"
     title="离线同步队列"
   >
-    <div class="p-1 text-slate-100 space-y-4">
+    <div class="offline-queue-content p-1 text-slate-100 space-y-4">
       <div class="flex items-center justify-between text-xs text-white/60">
         <span>以下修改保存在本机，联网后自动按顺序同步到云端。</span>
         <NTag size="small" round :bordered="false" type="info">
@@ -175,4 +179,14 @@ function handleReplay() {
 :global(.offline-queue-manager .n-card__content) {
   padding-top: 8px !important;
 }
+:global(.offline-queue-manager.n-card) {
+  color: var(--pn-modal-content-text-color, #cbd5e1) !important;
+  border-color: var(--pn-modal-border, rgba(148, 163, 184, .18)) !important;
+  background: var(--pn-modal-background, rgba(2, 6, 23, .98)) !important;
+  box-shadow: var(--pn-effect-shadow-high, 0 28px 90px rgba(2, 6, 23, .62)) !important;
+}
+.offline-queue-content { color: var(--pn-color-text-secondary, #cbd5e1) !important; }
+.offline-queue-content :deep(.text-white),
+.offline-queue-content :deep(.text-white\/60) { color: var(--pn-color-text-primary, #fff) !important; }
+.offline-queue-content :deep(.text-white\/45) { color: var(--pn-color-text-muted, #94a3b8) !important; }
 </style>

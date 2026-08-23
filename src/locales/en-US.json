@@ -473,6 +473,17 @@
     "saveSuccess": "Widget layout saved",
     "saveFail": "Failed to save widget layout",
     "storageCleanupFail": "Widget removed, but residual data cleanup failed. Will retry later.",
+    "stack": {
+      "title": "Widget stack",
+      "item": "Stack widget",
+      "add": "Stack with another widget",
+      "remove": "Remove from stack",
+      "moveUp": "Move forward in stack",
+      "moveDown": "Move backward in stack",
+      "incompatible": "Only widgets with the same grid size can be stacked",
+      "full": "A stack can contain at most 10 widgets",
+      "hint": "Scroll or swipe vertically to switch widgets"
+    },
     "manager": {
       "title": "Add and Manage Widgets",
       "desc": "Choose widgets to display on the extension new tab. Settings are saved only in the extension.",

@@ -38,6 +38,7 @@ func (a *UserApi) GetAuthInfo(c *gin.Context) {
 	user.Name = userInfo.Name
 	user.Role = userInfo.Role
 	user.Username = userInfo.Username
+	user.Mail = userInfo.Mail
 	apiReturn.SuccessData(c, gin.H{
 		"user":      user,
 		"visitMode": visitMode,
@@ -50,6 +51,7 @@ func (a *UserApi) UpdateInfo(c *gin.Context) {
 	type UpdateUserInfoStruct struct {
 		HeadImage string `json:"headImage"`
 		Name      string `json:"name" validate:"max=15,min=3,required"`
+		Mail      string `json:"mail" validate:"omitempty,email,max=50"`
 	}
 	params := UpdateUserInfoStruct{}
 
@@ -68,11 +70,13 @@ func (a *UserApi) UpdateInfo(c *gin.Context) {
 	err = mUser.UpdateUserInfoByUserId(userInfo.ID, map[string]interface{}{
 		"head_image": params.HeadImage,
 		"name":       params.Name,
+		"mail":       params.Mail,
 	})
 	// 删除缓存
 	global.UserToken.Delete(userInfo.Token)
 	if err != nil {
 		apiReturn.ErrorDatabase(c, err.Error())
+		return
 	}
 	apiReturn.Success(c)
 }

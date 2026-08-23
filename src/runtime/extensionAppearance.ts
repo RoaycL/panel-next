@@ -9,18 +9,73 @@ const MAX_PENDING_WIDGET_CLEANUPS = 100
 
 export interface ExtensionWidgetPreferences {
   clock: boolean
+  clockSeconds: boolean
+  clockDate: boolean
+  clockHourCycle: '12' | '24'
   search: boolean
+  searchEngineId: ExtensionSearchEngineId
+  searchOpenMode: 'current' | 'tab'
+  searchHistoryEnabled: boolean
+  searchHistory: string[]
   weather: boolean
   trending: boolean
+  sidebarPosition: 'left' | 'right'
+  sidebarAutoHide: boolean
+  sidebarWheelSwitch: boolean
+  sidebarDensity: 'compact' | 'comfortable'
+  /** Extension-only bookmark tile sizes. Keys are accountId:itemId. */
+  bookmarkLayouts: Record<string, ExtensionBookmarkLayout>
+  /** Extension-only dashboard layouts. Keys are accountId:groupId. */
+  pageLayouts: Record<string, ExtensionPageLayout>
+  /**
+   * Legacy global widget layout. It is retained only as a migration source and
+   * is cleared after the first real page adopts it.
+   */
   contentLayout: WidgetLayout
   pendingWidgetCleanupIds?: string[]
 }
 
+export type ExtensionSearchEngineId = 'baidu' | 'google' | 'bing' | 'github' | 'bilibili' | 'duckduckgo'
+
+export interface ExtensionBookmarkLayout {
+  columns: 1 | 2
+  rows: 1 | 2 | 4
+}
+
+export interface ExtensionPageLayout {
+  contentLayout: WidgetLayout
+  /** Mixed bookmark/widget order inside the page's shared grid. */
+  itemOrder: string[]
+}
+
+const BOOKMARK_LAYOUT_KEYS = new Set(['1x1', '1x2', '2x1', '2x2', '2x4'])
+const SEARCH_ENGINE_IDS = new Set<ExtensionSearchEngineId>(['baidu', 'google', 'bing', 'github', 'bilibili', 'duckduckgo'])
+const MAX_BOOKMARK_LAYOUTS = 500
+const MAX_PAGE_LAYOUTS = 100
+const MAX_PAGE_ORDER_ITEMS = 600
+const MAX_SEARCH_HISTORY = 10
+const MAX_SEARCH_QUERY_LENGTH = 200
+const PAGE_LAYOUT_KEY_PATTERN = /^[\w.:-]{1,120}$/
+const PAGE_ITEM_KEY_PATTERN = /^(?:bookmark|widget):[\w.:-]{1,80}$/
+
 export const defaultExtensionWidgets: ExtensionWidgetPreferences = {
   clock: true,
+  clockSeconds: true,
+  clockDate: true,
+  clockHourCycle: '24',
   search: true,
+  searchEngineId: 'baidu',
+  searchOpenMode: 'tab',
+  searchHistoryEnabled: true,
+  searchHistory: [],
   weather: true,
   trending: true,
+  sidebarPosition: 'left',
+  sidebarAutoHide: false,
+  sidebarWheelSwitch: true,
+  sidebarDensity: 'comfortable',
+  bookmarkLayouts: {},
+  pageLayouts: {},
   contentLayout: { schemaVersion: 1, widgets: [] },
   pendingWidgetCleanupIds: [],
 }
@@ -29,6 +84,9 @@ function defaultWidgetPreferences(): ExtensionWidgetPreferences {
   return {
     ...defaultExtensionWidgets,
     contentLayout: { schemaVersion: 1, widgets: [] },
+    bookmarkLayouts: {},
+    pageLayouts: {},
+    searchHistory: [],
     pendingWidgetCleanupIds: [],
   }
 }
@@ -106,12 +164,57 @@ export function readExtensionWidgets(): ExtensionWidgetPreferences {
     const pendingCleanups = Array.isArray(parsed.pendingWidgetCleanupIds)
       ? Array.from(new Set(parsed.pendingWidgetCleanupIds.filter(id => typeof id === 'string' && WIDGET_ID_PATTERN.test(id)))).slice(0, MAX_PENDING_WIDGET_CLEANUPS)
       : []
+    const bookmarkLayouts = parsed.bookmarkLayouts && typeof parsed.bookmarkLayouts === 'object' && !Array.isArray(parsed.bookmarkLayouts)
+      ? Object.fromEntries(Object.entries(parsed.bookmarkLayouts)
+          .filter(([key, value]) => /^[\w.:-]{1,80}$/.test(key)
+            && value && typeof value === 'object' && !Array.isArray(value)
+            && BOOKMARK_LAYOUT_KEYS.has(`${(value as ExtensionBookmarkLayout).columns}x${(value as ExtensionBookmarkLayout).rows}`))
+          .slice(0, MAX_BOOKMARK_LAYOUTS)) as Record<string, ExtensionBookmarkLayout>
+      : {}
+    const pageLayouts = parsed.pageLayouts && typeof parsed.pageLayouts === 'object' && !Array.isArray(parsed.pageLayouts)
+      ? Object.fromEntries(Object.entries(parsed.pageLayouts)
+          .filter(([key, value]) => PAGE_LAYOUT_KEY_PATTERN.test(key)
+            && value && typeof value === 'object' && !Array.isArray(value)
+            && (value as ExtensionPageLayout).contentLayout?.schemaVersion === 1
+            && Array.isArray((value as ExtensionPageLayout).contentLayout?.widgets))
+          .slice(0, MAX_PAGE_LAYOUTS)
+          .map(([key, value]) => {
+            const page = value as ExtensionPageLayout
+            const itemOrder = Array.isArray(page.itemOrder)
+              ? Array.from(new Set(page.itemOrder.filter(item => typeof item === 'string' && PAGE_ITEM_KEY_PATTERN.test(item)))).slice(0, MAX_PAGE_ORDER_ITEMS)
+              : []
+            return [key, { contentLayout: page.contentLayout, itemOrder } satisfies ExtensionPageLayout]
+          })) as Record<string, ExtensionPageLayout>
+      : {}
+    const searchHistory = Array.isArray(parsed.searchHistory)
+      ? Array.from(new Set(parsed.searchHistory
+          .filter(query => typeof query === 'string')
+          .map(query => query.trim())
+          .filter(query => query.length > 0 && query.length <= MAX_SEARCH_QUERY_LENGTH)))
+          .slice(0, MAX_SEARCH_HISTORY)
+      : []
+    const searchEngineId = typeof parsed.searchEngineId === 'string' && SEARCH_ENGINE_IDS.has(parsed.searchEngineId as ExtensionSearchEngineId)
+      ? parsed.searchEngineId as ExtensionSearchEngineId
+      : defaultExtensionWidgets.searchEngineId
 
     return {
       clock: parsed.clock !== false,
+      clockSeconds: parsed.clockSeconds !== false,
+      clockDate: parsed.clockDate !== false,
+      clockHourCycle: parsed.clockHourCycle === '12' ? '12' : '24',
       search: parsed.search !== false,
+      searchEngineId,
+      searchOpenMode: parsed.searchOpenMode === 'current' ? 'current' : 'tab',
+      searchHistoryEnabled: parsed.searchHistoryEnabled !== false,
+      searchHistory,
       weather: parsed.weather !== false,
       trending: parsed.trending !== false,
+      sidebarPosition: parsed.sidebarPosition === 'right' ? 'right' : 'left',
+      sidebarAutoHide: parsed.sidebarAutoHide === true,
+      sidebarWheelSwitch: parsed.sidebarWheelSwitch !== false,
+      sidebarDensity: parsed.sidebarDensity === 'compact' ? 'compact' : 'comfortable',
+      bookmarkLayouts,
+      pageLayouts,
       contentLayout,
       pendingWidgetCleanupIds: pendingCleanups,
     }
@@ -121,19 +224,35 @@ export function readExtensionWidgets(): ExtensionWidgetPreferences {
   }
 }
 
-export function saveExtensionWidgets(preferences: ExtensionWidgetPreferences): Promise<boolean> {
+export function saveExtensionWidgets(
+  preferences: ExtensionWidgetPreferences,
+  changedPageLayoutKeys?: readonly string[],
+): Promise<boolean> {
   const runtime = getRuntime()
   if (runtime.kind !== 'extension')
     return Promise.resolve(true)
 
   const snapshot = JSON.parse(JSON.stringify(preferences)) as ExtensionWidgetPreferences
-  return updateExtensionWidgets(current => ({
-    ...snapshot,
-    // Cleanup tombstones are service-owned state. View models can be stale
-    // because local adapter change echoes are intentionally suppressed,
-    // so a regular layout save must never replace this queue.
-    pendingWidgetCleanupIds: current.pendingWidgetCleanupIds ?? [],
-  }))
+  return updateExtensionWidgets((current) => {
+    const pageLayouts = changedPageLayoutKeys === undefined
+      ? snapshot.pageLayouts ?? {}
+      : changedPageLayoutKeys.reduce<Record<string, ExtensionPageLayout>>((layouts, key) => {
+          const page = snapshot.pageLayouts?.[key]
+          if (page)
+            layouts[key] = page
+          else
+            delete layouts[key]
+          return layouts
+        }, { ...current.pageLayouts })
+    return {
+      ...snapshot,
+      pageLayouts,
+      // Cleanup tombstones are service-owned state. View models can be stale
+      // because local adapter change echoes are intentionally suppressed,
+      // so a regular layout save must never replace this queue.
+      pendingWidgetCleanupIds: current.pendingWidgetCleanupIds ?? [],
+    }
+  })
 }
 
 export function updateExtensionWidgets(
@@ -175,6 +294,7 @@ export async function removeExtensionWidgetFlow(
   targetId: string,
   quarantinedWidgets: unknown[] = [],
   currentPreferences: ExtensionWidgetPreferences = readExtensionWidgets(),
+  pageLayoutKey?: string,
 ): Promise<RemoveWidgetFlowResult> {
   const snapshotInstances = [...instances]
   const targetIndex = instances.findIndex(inst => inst.id === targetId)
@@ -202,10 +322,20 @@ export async function removeExtensionWidgetFlow(
         throw new Error('Widget cleanup queue is full; refusing to remove layout without a durable cleanup marker.')
       if (!pending.includes(removedInstance.id))
         pending.push(removedInstance.id)
+      const nextPageLayouts = pageLayoutKey
+        ? {
+            ...storedPreferences.pageLayouts,
+            [pageLayoutKey]: {
+              contentLayout: nextLayout,
+              itemOrder: currentPreferences.pageLayouts?.[pageLayoutKey]?.itemOrder ?? [],
+            },
+          }
+        : currentPreferences.pageLayouts ?? storedPreferences.pageLayouts
       return {
         ...storedPreferences,
         ...currentPreferences,
-        contentLayout: nextLayout,
+        pageLayouts: nextPageLayouts,
+        contentLayout: pageLayoutKey ? currentPreferences.contentLayout : nextLayout,
         pendingWidgetCleanupIds: pending,
       }
     })

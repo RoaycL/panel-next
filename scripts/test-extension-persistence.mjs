@@ -10,6 +10,7 @@ function cleanImports(src) {
 const appearanceSource = cleanImports(fs.readFileSync(new URL('../src/runtime/extensionAppearance.ts', import.meta.url), 'utf8'))
 const contextSource = cleanImports(fs.readFileSync(new URL('../src/widgets/context.ts', import.meta.url), 'utf8'))
 const registrySource = cleanImports(fs.readFileSync(new URL('../src/widgets/registry.ts', import.meta.url), 'utf8'))
+const stackSource = cleanImports(fs.readFileSync(new URL('../src/widgets/stack.ts', import.meta.url), 'utf8'))
 const typesSource = cleanImports(fs.readFileSync(new URL('../src/widgets/types.ts', import.meta.url), 'utf8'))
 const constantsSource = cleanImports(fs.readFileSync(new URL('../src/widgets/constants.ts', import.meta.url), 'utf8'))
 const extensionSource = cleanImports(fs.readFileSync(new URL('../src/runtime/extension.ts', import.meta.url), 'utf8'))
@@ -73,6 +74,7 @@ const bundleCode = [
   bundlePreamble,
   constantsSource,
   typesSource,
+  stackSource,
   registrySource,
   contextSource,
   appearanceSource,
@@ -130,11 +132,51 @@ durableMap.clear()
 flushCount = 0
 flushShouldFail = false
 
+const defaultSidebarPreferences = readExtensionWidgets()
+assert.equal(defaultSidebarPreferences.sidebarPosition, 'left')
+assert.equal(defaultSidebarPreferences.sidebarAutoHide, false)
+assert.equal(defaultSidebarPreferences.sidebarWheelSwitch, true)
+assert.equal(defaultSidebarPreferences.sidebarDensity, 'comfortable')
+assert.equal(defaultSidebarPreferences.clockSeconds, true)
+assert.equal(defaultSidebarPreferences.clockDate, true)
+assert.equal(defaultSidebarPreferences.clockHourCycle, '24')
+assert.equal(defaultSidebarPreferences.searchEngineId, 'baidu')
+assert.equal(defaultSidebarPreferences.searchOpenMode, 'tab')
+assert.equal(defaultSidebarPreferences.searchHistoryEnabled, true)
+assert.deepEqual(defaultSidebarPreferences.searchHistory, [])
+assert.deepEqual(defaultSidebarPreferences.bookmarkLayouts, {})
+assert.deepEqual(defaultSidebarPreferences.pageLayouts, {})
+
 const prefsA = {
   clock: true,
+  clockSeconds: false,
+  clockDate: true,
+  clockHourCycle: '12',
   search: true,
+  searchEngineId: 'google',
+  searchOpenMode: 'current',
+  searchHistoryEnabled: true,
+  searchHistory: ['Panel Next', 'GitHub'],
   weather: true,
   trending: true,
+  sidebarPosition: 'right',
+  sidebarAutoHide: true,
+  sidebarWheelSwitch: false,
+  sidebarDensity: 'compact',
+  bookmarkLayouts: {
+    '7:101': { columns: 2, rows: 2 },
+  },
+  pageLayouts: {
+    '7:1': {
+      contentLayout: {
+        schemaVersion: 1,
+        widgets: [
+          { id: 'page.clock', type: 'core.clock', version: 1, position: { column: 0, row: 0 }, size: { columns: 2, rows: 1 }, hidden: false, config: {} },
+        ],
+      },
+      itemOrder: ['widget:page.clock', 'bookmark:101'],
+    },
+  },
   contentLayout: {
     schemaVersion: 1,
     widgets: [
@@ -157,6 +199,31 @@ assert.equal(saveResult2, true)
 assert.equal(flushCount, 1) // flush count remained 1
 
 console.log('Passed saveExtensionWidgets basic & deduplication tests.')
+
+const pageScopedPreferences = readExtensionWidgets()
+assert.equal(pageScopedPreferences.pageLayouts['7:1'].contentLayout.widgets[0].id, 'page.clock')
+assert.deepEqual(pageScopedPreferences.pageLayouts['7:1'].itemOrder, ['widget:page.clock', 'bookmark:101'])
+
+// Two tabs editing different pages must merge page layouts instead of replacing
+// the other tab's newer page with a stale full-preferences snapshot.
+const multiPageBase = structuredClone(pageScopedPreferences)
+multiPageBase.pageLayouts['7:2'] = {
+  contentLayout: { schemaVersion: 1, widgets: [] },
+  itemOrder: ['bookmark:202'],
+}
+await saveExtensionWidgets(multiPageBase)
+const tabA = structuredClone(readExtensionWidgets())
+const tabB = structuredClone(readExtensionWidgets())
+tabA.pageLayouts['7:1'].itemOrder = ['bookmark:101', 'widget:page.clock']
+tabB.pageLayouts['7:2'].itemOrder = ['bookmark:203', 'bookmark:202']
+await Promise.all([
+  saveExtensionWidgets(tabA, ['7:1']),
+  saveExtensionWidgets(tabB, ['7:2']),
+])
+const mergedPages = readExtensionWidgets().pageLayouts
+assert.deepEqual(mergedPages['7:1'].itemOrder, ['bookmark:101', 'widget:page.clock'])
+assert.deepEqual(mergedPages['7:2'].itemOrder, ['bookmark:203', 'bookmark:202'])
+await saveExtensionWidgets(prefsA)
 
 console.log('--- Running Persistence Failure & False-Save-Success Prevention Tests ---')
 
@@ -453,6 +520,31 @@ durableMap.set('PANEL_NEXT_WIDGET_V1.7:notes.2:9:note_data', JSON.stringify({ te
   // pendingWidgetCleanupIds is now cleared!
   const updatedPrefs = readExtensionWidgets()
   assert.deepEqual(updatedPrefs.pendingWidgetCleanupIds, [])
+}
+
+// Scenario D: deleting from one page must not overwrite another page's layout.
+{
+  const pagePrefs = {
+    ...initialPrefs,
+    contentLayout: { schemaVersion: 1, widgets: [] },
+    pageLayouts: {
+      '9:alpha': {
+        contentLayout: { schemaVersion: 1, widgets: [widget1, widget2] },
+        itemOrder: ['widget:clock.1', 'bookmark:11', 'widget:notes.2'],
+      },
+      '9:beta': {
+        contentLayout: { schemaVersion: 1, widgets: [widget2] },
+        itemOrder: ['widget:notes.2', 'bookmark:22'],
+      },
+    },
+  }
+  await saveExtensionWidgets(pagePrefs)
+  const result = await removeExtensionWidgetFlow([widget1, widget2], 'clock.1', [], pagePrefs, '9:alpha')
+  assert.equal(result.success, true)
+  const saved = readExtensionWidgets()
+  assert.deepEqual(saved.pageLayouts['9:alpha'].contentLayout.widgets.map(widget => widget.id), ['notes.2'])
+  assert.deepEqual(saved.pageLayouts['9:beta'].contentLayout.widgets.map(widget => widget.id), ['notes.2'])
+  assert.deepEqual(saved.pageLayouts['9:beta'].itemOrder, ['widget:notes.2', 'bookmark:22'])
 }
 
 console.log('Passed Two-Stage Deletion & Retry Queue Production Flow Tests.')

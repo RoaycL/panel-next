@@ -6,6 +6,7 @@ import IconEditor from './IconEditor.vue'
 import { edit, getSiteFavicon } from '@/api/panel/itemIcon'
 import { getList as getGroupList } from '@/api/panel/itemIconGroup'
 import { t } from '@/locales'
+import { getRuntime } from '@/runtime'
 
 interface Props {
   visible: boolean
@@ -16,6 +17,7 @@ interface Props {
 const props = defineProps<Props>()
 const emit = defineEmits<Emit>()
 const ms = useMessage()
+const modalTo = getRuntime().kind === 'extension' ? '.pn-theme-root' : undefined
 const submitLoading = ref(false)
 const getIconLoading = ref([false, false])
 const itemIconGroupOptions = ref<{
@@ -187,6 +189,7 @@ async function getGroupListOptions() {
 <template>
   <NModal
     v-model:show="show"
+    :to="modalTo"
     preset="card"
     size="small"
     class="edit-item-glass-modal"
@@ -287,42 +290,26 @@ async function getGroupListOptions() {
 /* Edit Item Frosted Glass Modal */
 .edit-item-glass-modal.n-card {
   margin: auto !important;
-  border-radius: 20px !important;
-  background: rgba(18, 20, 26, 0.84) !important;
-  backdrop-filter: blur(28px) saturate(190%) !important;
-  -webkit-backdrop-filter: blur(28px) saturate(190%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
-  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.08) inset !important;
-}
-
-html:not(.dark) .edit-item-glass-modal.n-card {
-  background: rgba(255, 255, 255, 0.88) !important;
-  border: 1px solid rgba(0, 0, 0, 0.08) !important;
-  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.8) inset !important;
+  border-radius: var(--pn-radius-large, 20px) !important;
+  color: var(--pn-modal-content-text-color, var(--pn-color-text-secondary, inherit)) !important;
+  background: var(--pn-modal-background, rgba(18, 20, 26, 0.96)) !important;
+  border: 1px solid var(--pn-modal-border, var(--pn-color-border, rgba(255, 255, 255, 0.12))) !important;
+  box-shadow: var(--pn-effect-shadow-high, 0 25px 60px -15px rgba(0, 0, 0, 0.65)) !important;
 }
 
 .edit-item-glass-modal .form-glass-card {
   border-radius: 12px;
   padding: 12px 14px;
-  background: rgba(255, 255, 255, 0.035);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-html:not(.dark) .edit-item-glass-modal .form-glass-card {
-  background: rgba(255, 255, 255, 0.7);
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: var(--pn-color-surface-hover, rgba(255, 255, 255, 0.035));
+  border: 1px solid var(--pn-color-border, rgba(255, 255, 255, 0.08));
 }
 
 .edit-item-glass-modal .card-section-title {
   font-size: 12px;
   font-weight: 600;
-  color: #38bdf8;
+  color: var(--pn-color-accent, #38bdf8);
   letter-spacing: 0.02em;
   text-transform: uppercase;
-}
-
-html:not(.dark) .edit-item-glass-modal .card-section-title {
-  color: #0284c7;
 }
 
 .edit-item-glass-modal .n-form-item {

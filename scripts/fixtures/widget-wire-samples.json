@@ -20,6 +20,33 @@
       }
     },
     {
+      "name": "valid widget stack membership",
+      "expect": "valid",
+      "instance": {
+        "id": "stacked.weather", "type": "core.weather", "version": 1,
+        "position": { "column": 0, "row": 1 }, "size": { "columns": 6, "rows": 2 },
+        "stack": { "id": "stack.dashboard.1", "order": 9 }, "config": {}
+      }
+    },
+    {
+      "name": "stack order beyond host limit",
+      "expect": "invalid",
+      "instance": {
+        "id": "stacked.invalid", "type": "core.weather", "version": 1,
+        "position": { "column": 0, "row": 1 }, "size": { "columns": 6, "rows": 2 },
+        "stack": { "id": "stack.dashboard.1", "order": 10 }, "config": {}
+      }
+    },
+    {
+      "name": "stack id violating identity pattern",
+      "expect": "invalid",
+      "instance": {
+        "id": "stacked.bad-id", "type": "core.weather", "version": 1,
+        "position": { "column": 0, "row": 1 }, "size": { "columns": 6, "rows": 2 },
+        "stack": { "id": "../stack", "order": 0 }, "config": {}
+      }
+    },
+    {
       "name": "missing hidden and config fields",
       "expect": "valid",
       "instance": {

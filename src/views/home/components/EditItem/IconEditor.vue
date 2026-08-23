@@ -16,7 +16,9 @@ const emit = defineEmits<{
   (e: 'update:itemIcon', visible: Panel.ItemIcon): void // 定义修改父组件（prop内）的值的事件
 }>()
 const authStore = useAuthStore()
-const uploadAction = getRuntime().resolveUrl('/api/file/uploadImg')
+const runtime = getRuntime()
+const uploadAction = runtime.resolveUrl('/api/file/uploadImg')
+const modalTo = runtime.kind === 'extension' ? '.pn-theme-root' : undefined
 const showGallery = ref(false)
 
 // 默认图标背景色
@@ -222,6 +224,7 @@ function handleGallerySelect(url: string) {
       preset="card"
       size="small"
       class="round-card-modal"
+      :to="modalTo"
       style="width: min(720px, calc(100vw - 24px)); max-height: calc(100vh - 24px);"
       :title="t('iconItem.selectFromGallery')"
     >

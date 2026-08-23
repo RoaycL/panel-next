@@ -39,6 +39,9 @@ const widgetContext = reactive({
   get themeTokens() {
     return theme.tokens.widget
   },
+  get size() {
+    return props.instance.size
+  },
 })
 watch(() => props.editMode, (editMode) => {
   widgetContext.editMode = editMode === true
@@ -118,10 +121,22 @@ function retryLoad() {
 
 <style scoped>
 .pn-widget-shell {
+  container-type: inline-size;
   display: flex;
   flex: 1;
+  height: 100%;
   min-width: 0;
+  min-height: 0;
   color: var(--pn-widget-text-color, inherit);
+}
+
+.pn-widget-shell > :deep(*) {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  overflow: auto;
 }
 
 /* Widget Variant（§13）：glass 默认；solid 用表面色；borderless 去壳。 */

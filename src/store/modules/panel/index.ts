@@ -3,8 +3,9 @@ import { defaultState, defaultStatePanelConfig, getLocalState, migrateLegacyBran
 import { router } from '@/router'
 import type { PanelStateNetworkModeEnum } from '@/enums'
 import { get as getUserConfig } from '@/api/panel/userConfig'
-import { preparePanelAppearance } from '@/themes'
-import type { PanelAppearanceResult, ThemeMode, ThemeSurface } from '@/themes'
+import { preparePanelAppearance } from '@/themes/legacyAdapter'
+import type { PanelAppearanceResult } from '@/themes/legacyAdapter'
+import type { ThemeMode, ThemeSurface } from '@/themes/types'
 import { getRuntime } from '@/runtime'
 import { saveExtensionAppearance } from '@/runtime/extensionAppearance'
 export const usePanelState = defineStore('panel', {

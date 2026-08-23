@@ -7,6 +7,7 @@ const policy = JSON.parse(fs.readFileSync(path.resolve('version-policy.json'), '
 const versionFile = path.resolve(policy.source)
 const packageFile = path.resolve('package.json')
 const manifestFile = path.resolve('extension/manifest.json')
+const envFile = path.resolve('.env')
 
 const source = fs.readFileSync(versionFile, 'utf8').trim()
 const [rawCode, currentVersion] = source.split('|')
@@ -19,6 +20,7 @@ if (`${parts[0]}.${parts[1]}` !== policy.series || policy.packageIncrement !== '
 
 const packageJson = JSON.parse(fs.readFileSync(packageFile, 'utf8'))
 const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'))
+const envContent = fs.readFileSync(envFile, 'utf8')
 const nextVersion = `${parts[0]}.${parts[1]}.${Number(parts[2]) + 1}`
 const nextCode = Number(rawCode) + 1
 if (nextVersion.localeCompare(policy.firstVersion, undefined, { numeric: true }) < 0)
@@ -27,9 +29,13 @@ if (nextVersion.localeCompare(policy.firstVersion, undefined, { numeric: true })
 packageJson.version = nextVersion
 manifest.version = nextVersion
 manifest.version_name = `${nextVersion} ${policy.label}`
+if (!/^VITE_APP_VERSION=.+$/m.test(envContent))
+  throw new Error('Missing VITE_APP_VERSION in .env')
+const nextEnv = envContent.replace(/^VITE_APP_VERSION=.+$/m, `VITE_APP_VERSION=${nextVersion}`)
 
 fs.writeFileSync(versionFile, `${nextCode}|${nextVersion}\n`)
 fs.writeFileSync(packageFile, `${JSON.stringify(packageJson, null, 2)}\n`)
 fs.writeFileSync(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`)
+fs.writeFileSync(envFile, nextEnv)
 
 console.log(`${policy.label} package version bumped from ${currentVersion} to ${nextVersion}`)

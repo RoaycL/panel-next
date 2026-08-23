@@ -29,9 +29,10 @@ import { getPendingMutationCount } from '@/sync/offlineQueue'
 import type { ConflictDescriptor, ConflictResolutionChoice } from '@/sync/conflictResolver'
 import type { DashboardGroup } from '@/dashboard/core'
 import { createDashboardState, createItemSortRequest, filterDashboardGroups, normalizeDashboardGroups, selectItemUrl } from '@/dashboard/core'
-import { ThemeIcon, ThemeSettingsModal } from '@/themes'
-import type { WidgetInstance } from '@/widgets'
-import { WidgetHost, WidgetSettingsModal, clearWidgetStorage, createHeaderClockWidget, createHeaderSearchWidget, createHeaderWeatherWidget, createTrendingWidget, createCountdownWidget, generateWidgetInstanceId, serializeWidgetLayout, widgetRegistry } from '@/widgets'
+import ThemeIcon from '@/themes/ThemeIcon.vue'
+import type { WidgetDisplayGroup, WidgetInstance } from '@/widgets'
+import { WidgetHost, WidgetStackHost, WidgetSettingsModal, applyWidgetDisplayOrder, buildWidgetDisplayGroups, canStackWidgets, clearWidgetStorage, createHeaderClockWidget, createHeaderSearchWidget, createHeaderWeatherWidget, createTrendingWidget, createCountdownWidget, generateWidgetInstanceId, moveWidgetWithinStack, normalizeWidgetStacks, resizeInstanceWithinBounds, serializeWidgetLayout, stackWidgets, unstackWidget, widgetRegistry } from '@/widgets'
+import { useWidgetGridResize } from '@/widgets/useGridResize'
 
 withDefaults(defineProps<{
   layout?: 'web' | 'extension'
@@ -48,6 +49,7 @@ const userStore = useUserStore()
 const runtime = getRuntime()
 const AppStarter = defineAsyncComponent(() => import('./components/AppStarter/index.vue'))
 const EditItem = defineAsyncComponent(() => import('./components/EditItem/index.vue'))
+const ThemeSettingsModal = defineAsyncComponent(() => import('@/themes/ThemeSettingsModal.vue'))
 
 const scrollContainerRef = ref<HTMLElement | null>(null)
 
@@ -64,6 +66,8 @@ const dropdownMenuY = ref(0)
 const dropdownShow = ref(false)
 const currentRightSelectItem = ref<Panel.ItemInfo | null>(null)
 const currentAddItenIconGroupId = ref<number | undefined>()
+const bookmarkDragSnapshots = new WeakMap<DashboardGroup, Panel.ItemInfo[]>()
+let suppressBookmarkClickUntil = 0
 
 const settingModalShow = ref(false)
 const themeCenterVisible = ref(false)
@@ -197,7 +201,13 @@ watch(() => panelState.panelConfig.widgets, (stored) => {
   widgetInstances.value = buildWidgetInstances(stored)
 }, { immediate: true })
 
-const visibleWidgetInstances = computed(() => widgetInstances.value.filter(instance => !instance.hidden))
+const visibleWidgetGroups = computed<WidgetDisplayGroup[]>({
+  get: () => buildWidgetDisplayGroups(widgetInstances.value),
+  set: (groups) => {
+    applyWidgetDisplayOrder(widgetInstances.value, groups.map(group => group.key))
+    widgetInstances.value = [...widgetInstances.value]
+  },
+})
 
 const widgetAddOptions = computed(() => widgetRegistry.list()
   .filter(definition => !definition.surfaces || definition.surfaces.includes(runtime.kind))
@@ -226,31 +236,67 @@ function widgetTypeLabel(type: string) {
   return widgetDefinitionTitle(widgetRegistry.get(type) ?? { type })
 }
 
-function widgetCellStyle(instance: WidgetInstance) {
-  const columns = Math.min(Math.max(instance.size.columns, 1), 12)
+function widgetCellStyle(value: { size: WidgetInstance['size'] }) {
+  const columns = Math.min(Math.max(value.size.columns, 1), 12)
   return {
     gridColumn: `span ${columns} / span ${columns}`,
-    gridRow: `span ${Math.max(instance.size.rows, 1)}`,
+    gridRow: `span ${Math.max(value.size.rows, 1)}`,
   }
+}
+
+function widgetStackTargetOptions(instance: WidgetInstance) {
+  const seen = new Set<string>()
+  return widgetInstances.value.flatMap((target) => {
+    const key = target.stack?.id ?? target.id
+    if (seen.has(key) || !canStackWidgets(widgetInstances.value, instance.id, target.id))
+      return []
+    seen.add(key)
+    const count = target.stack ? widgetInstances.value.filter(candidate => candidate.stack?.id === target.stack?.id).length : 1
+    return [{
+      key: target.id,
+      label: count > 1 ? `${widgetTypeLabel(target.type)} (${count})` : widgetTypeLabel(target.type),
+    }]
+  })
+}
+
+function stackWidgetWith(instance: WidgetInstance, targetId: string | number) {
+  if (!stackWidgets(widgetInstances.value, instance.id, String(targetId)))
+    return
+  widgetInstances.value = [...widgetInstances.value]
+  widgetLayoutDirty.value = true
+}
+
+function removeWidgetFromStack(instance: WidgetInstance) {
+  if (!unstackWidget(widgetInstances.value, instance.id))
+    return
+  widgetInstances.value = [...widgetInstances.value]
+  widgetLayoutDirty.value = true
+}
+
+function moveStackMember(instance: WidgetInstance, delta: number) {
+  if (!moveWidgetWithinStack(widgetInstances.value, instance.id, delta))
+    return
+  widgetInstances.value = [...widgetInstances.value]
+  widgetLayoutDirty.value = true
+}
+
+function isLastWidgetStackMember(instance: WidgetInstance) {
+  if (!instance.stack)
+    return true
+  const count = widgetInstances.value.filter(member => member.stack?.id === instance.stack?.id).length
+  return instance.stack.order >= count - 1
 }
 
 function canResizeWidget(instance: WidgetInstance, axis: 'columns' | 'rows', delta: number) {
-  const bounds = widgetRegistry.get(instance.type)?.size
-  if (!bounds)
+  if (instance.stack)
     return false
-  const next = instance.size[axis] + delta
-  return next >= bounds.min[axis] && next <= bounds.max[axis]
+  const probe = { ...instance, size: { ...instance.size } }
+  return resizeInstanceWithinBounds(probe, axis, delta)
 }
 
 function resizeWidget(instance: WidgetInstance, axis: 'columns' | 'rows', delta: number) {
-  const bounds = widgetRegistry.get(instance.type)?.size
-  if (!bounds)
-    return
-  const next = Math.min(bounds.max[axis], Math.max(bounds.min[axis], instance.size[axis] + delta))
-  if (next !== instance.size[axis]) {
-    instance.size[axis] = next
+  if (resizeInstanceWithinBounds(instance, axis, delta))
     widgetLayoutDirty.value = true
-  }
 }
 
 function toggleWidgetHidden(instance: WidgetInstance) {
@@ -263,6 +309,8 @@ function removeWidgetInstance(index: number) {
   if (instance)
     pendingWidgetStorageCleanup.add(instance.id)
   widgetInstances.value.splice(index, 1)
+  normalizeWidgetStacks(widgetInstances.value)
+  widgetInstances.value = [...widgetInstances.value]
   widgetLayoutDirty.value = true
 }
 
@@ -310,30 +358,82 @@ function cancelWidgetLayoutEdit() {
   pendingWidgetStorageCleanup.clear()
 }
 
-async function saveWidgetLayout() {
+async function saveWidgetLayout(closeEditor = true): Promise<boolean> {
   if (widgetLayoutSaving.value)
-    return
+    return false
   widgetLayoutSaving.value = true
   try {
-    panelState.panelConfig.widgets = serializeWidgetLayout(widgetInstances.value, quarantinedWidgets.value)
-    panelState.recordState()
-    const { code, msg, queued } = await enqueueAppearanceSave(() => setUserConfig({ panel: panelState.panelConfig }))
+    const nextLayout = serializeWidgetLayout(widgetInstances.value, quarantinedWidgets.value)
+    const nextPanelConfig = { ...panelState.panelConfig, widgets: nextLayout }
+    const { code, msg, queued } = await enqueueAppearanceSave(() => setUserConfig({ panel: nextPanelConfig }))
     if (code === 0) {
+      panelState.panelConfig = nextPanelConfig
+      panelState.recordState()
       widgetLayoutDirty.value = false
-      widgetEditMode.value = false
+      if (closeEditor)
+        widgetEditMode.value = false
       // 离线排队时远端尚未确认删除，保留组件私有数据可避免冲突恢复后丢失。
       if (!queued)
         await Promise.all([...pendingWidgetStorageCleanup].map(id => clearWidgetStorage(id)))
       pendingWidgetStorageCleanup.clear()
       ms.success(t('widgetLayout.saveSuccess'))
+      return true
     }
-    else {
-      ms.error(`${t('widgetLayout.saveFail')}:${msg}`)
-    }
+    ms.error(`${t('widgetLayout.saveFail')}:${msg}`)
+    return false
+  }
+  catch (error) {
+    ms.error(`${t('widgetLayout.saveFail')}:${error instanceof Error ? error.message : String(error)}`)
+    return false
   }
   finally {
     widgetLayoutSaving.value = false
   }
+}
+
+const { activeWidgetId: resizingWidgetId, startWidgetResize } = useWidgetGridResize({
+  onPreview: () => {
+    widgetLayoutDirty.value = true
+  },
+  onCommit: () => {
+    widgetLayoutDirty.value = true
+  },
+})
+
+function startHomeWidgetResize(event: PointerEvent, instance: WidgetInstance, direction: 'columns' | 'rows' | 'both') {
+  const grid = event.currentTarget instanceof HTMLElement
+    ? event.currentTarget.closest<HTMLElement>('.widget-grid')
+    : null
+  startWidgetResize(event, instance, direction, grid)
+}
+
+let browseWidgetSnapshot: WidgetInstance[] | null = null
+function handleBrowseWidgetDragStart() {
+  browseWidgetSnapshot = widgetInstances.value.map(instance => ({
+    ...instance,
+    position: { ...instance.position },
+    size: { ...instance.size },
+  }))
+}
+
+async function handleBrowseWidgetDragEnd() {
+  const snapshot = browseWidgetSnapshot
+  browseWidgetSnapshot = null
+  widgetInstances.value.forEach((instance, index) => {
+    instance.position = { column: 0, row: index }
+  })
+  widgetLayoutDirty.value = true
+  if (!await saveWidgetLayout(false) && snapshot) {
+    widgetInstances.value = snapshot
+    widgetLayoutDirty.value = false
+  }
+}
+
+function handleWidgetEditDragEnd() {
+  widgetInstances.value.forEach((instance, index) => {
+    instance.position = { column: 0, row: index }
+  })
+  widgetLayoutDirty.value = true
 }
 
 function openPage(openMethod: number, url: string, title?: string) {
@@ -366,12 +466,54 @@ function openPage(openMethod: number, url: string, title?: string) {
 }
 
 function handleItemClick(itemGroup: DashboardGroup, item: Panel.ItemInfo) {
+  if (Date.now() < suppressBookmarkClickUntil)
+    return
   if (itemGroup.sortStatus) {
     handleEditItem(item)
     return
   }
   const jumpUrl = selectItemUrl(item, panelState.networkMode === PanelStateNetworkModeEnum.lan)
   openPage(item.openMethod, jumpUrl, item.title)
+}
+
+function canDragBookmarks(group: DashboardGroup) {
+  return canEdit.value && group.items.length > 1 && !searchKeyword.value.trim()
+}
+
+function handleBookmarkDragStart(group: DashboardGroup) {
+  bookmarkDragSnapshots.set(group, group.items.map(item => ({ ...item })))
+  suppressBookmarkClickUntil = Date.now() + 800
+}
+
+async function handleBookmarkDragEnd(group: DashboardGroup) {
+  suppressBookmarkClickUntil = Date.now() + 500
+  const snapshot = bookmarkDragSnapshots.get(group)
+  bookmarkDragSnapshots.delete(group)
+  if (!snapshot)
+    return
+  group.items.forEach((item, index) => { item.sort = index + 1 })
+  const request = createItemSortRequest(group)
+  if (!request) {
+    group.items = snapshot
+    refreshFilteredItems()
+    return
+  }
+  try {
+    const response = await saveSort(request)
+    if (response.code !== 0) {
+      group.items = snapshot
+      refreshFilteredItems()
+      ms.error(`${t('common.saveFail')}:${response.msg}`)
+    }
+    else if (response.queued) {
+      ms.info(response.msg)
+    }
+  }
+  catch (error) {
+    group.items = snapshot
+    refreshFilteredItems()
+    ms.error(`${t('common.saveFail')}:${error instanceof Error ? error.message : String(error)}`)
+  }
 }
 
 function handWindowIframeIdLoad(_payload: Event) {
@@ -809,7 +951,7 @@ function handleAddItem(itemIconGroupId?: number) {
                   {{ t('widgetLayout.add') }}
                 </button>
               </NDropdown>
-              <button type="button" class="widget-tool-button" :disabled="widgetLayoutSaving" @click="saveWidgetLayout">
+              <button type="button" class="widget-tool-button" :disabled="widgetLayoutSaving" @click="saveWidgetLayout()">
                 {{ t('widgetLayout.save') }}
               </button>
               <button type="button" class="widget-tool-button" @click="cancelWidgetLayoutEdit">
@@ -819,31 +961,55 @@ function handleAddItem(itemIconGroupId?: number) {
           </div>
 
           <!-- 浏览模式 -->
-          <div v-if="!widgetEditMode" class="widget-grid">
+          <VueDraggable
+            v-if="!widgetEditMode"
+            v-model="visibleWidgetGroups"
+            item-key="key"
+            class="widget-grid"
+            :disabled="!canEdit || widgetLayoutSaving || visibleWidgetGroups.length < 2"
+            :delay="480"
+            :delay-on-touch-only="false"
+            :touch-start-threshold="8"
+            :fallback-tolerance="8"
+            filter="input, textarea, button, a, select, [contenteditable='true'], [data-no-drag]"
+            :prevent-on-filter="false"
+            chosen-class="is-long-press-dragging"
+            :animation="180"
+            @start="handleBrowseWidgetDragStart"
+            @end="handleBrowseWidgetDragEnd"
+          >
             <div
-              v-for="instance in visibleWidgetInstances" :key="instance.id"
-              class="widget-cell" :style="widgetCellStyle(instance)"
+              v-for="group in visibleWidgetGroups" :key="group.key"
+              class="widget-cell" :style="widgetCellStyle(group)"
             >
-              <WidgetHost :instance="instance" @item-search="itemFrontEndSearch" />
+              <WidgetStackHost :instances="group.members" @item-search="itemFrontEndSearch" />
             </div>
-          </div>
+          </VueDraggable>
 
           <!-- 编辑模式：拖放排序、缩放、隐藏与删除 -->
           <VueDraggable
             v-else
             v-model="widgetInstances" item-key="id" :animation="200"
             handle=".widget-edit-handle"
+            :disabled="Boolean(resizingWidgetId)"
             class="widget-grid widget-grid-editing"
+            @end="handleWidgetEditDragEnd"
           >
             <div
               v-for="(instance, index) in widgetInstances" :key="instance.id"
-              class="widget-cell" :style="widgetCellStyle(instance)"
+              class="widget-cell"
+              :class="{ 'is-resizing': resizingWidgetId === instance.id }"
+              :style="widgetCellStyle(instance)"
             >
               <div v-if="instance.hidden" class="widget-hidden-card">
-                <span class="widget-edit-handle" :title="t('widgetLayout.drag')">{{ '⠿' }}</span>
+                <span v-if="!instance.stack" class="widget-edit-handle" :title="t('widgetLayout.drag')">{{ '⠿' }}</span>
+                <span v-else class="widget-stack-member-badge">{{ `${t('widgetLayout.stack.title')} ${instance.stack.order + 1}` }}</span>
                 <span class="widget-hidden-name">{{ widgetTypeLabel(instance.type) }}</span>
                 <button type="button" class="widget-edit-action" :title="t('widgetLayout.show')" @click="toggleWidgetHidden(instance)">
                   {{ '👁' }}
+                </button>
+                <button v-if="instance.stack" type="button" class="widget-edit-action" :title="t('widgetLayout.stack.remove')" @click="removeWidgetFromStack(instance)">
+                  {{ '□' }}
                 </button>
                 <button type="button" class="widget-edit-action" :title="t('widgetLayout.remove')" @click="removeWidgetInstance(index)">
                   {{ '✕' }}
@@ -851,7 +1017,8 @@ function handleAddItem(itemIconGroupId?: number) {
               </div>
               <div v-else class="widget-edit-card">
                 <div class="widget-edit-bar">
-                  <span class="widget-edit-handle" :title="t('widgetLayout.drag')">{{ '⠿' }}</span>
+                  <span v-if="!instance.stack" class="widget-edit-handle" :title="t('widgetLayout.drag')">{{ '⠿' }}</span>
+                  <span v-else class="widget-stack-member-badge">{{ `${t('widgetLayout.stack.title')} ${instance.stack.order + 1}` }}</span>
                   <button type="button" class="widget-edit-action" :title="t('widgetLayout.narrow')" :disabled="!canResizeWidget(instance, 'columns', -1)" @click="resizeWidget(instance, 'columns', -1)">
                     {{ '−' }}
                   </button>
@@ -870,11 +1037,54 @@ function handleAddItem(itemIconGroupId?: number) {
                   <button v-if="hasWidgetSettings(instance)" type="button" class="widget-edit-action" title="配置" @click="openWidgetSettings(instance)">
                     {{ '⚙' }}
                   </button>
+                  <NDropdown
+                    v-if="!instance.stack && widgetStackTargetOptions(instance).length"
+                    trigger="click"
+                    :options="widgetStackTargetOptions(instance)"
+                    @select="stackWidgetWith(instance, $event)"
+                  >
+                    <button type="button" class="widget-edit-action" :title="t('widgetLayout.stack.add')">
+                      {{ '▣' }}
+                    </button>
+                  </NDropdown>
+                  <button v-if="instance.stack" type="button" class="widget-edit-action" :title="t('widgetLayout.stack.moveUp')" :disabled="instance.stack.order === 0" @click="moveStackMember(instance, -1)">
+                    {{ '⇧' }}
+                  </button>
+                  <button v-if="instance.stack" type="button" class="widget-edit-action" :title="t('widgetLayout.stack.moveDown')" :disabled="isLastWidgetStackMember(instance)" @click="moveStackMember(instance, 1)">
+                    {{ '⇩' }}
+                  </button>
+                  <button v-if="instance.stack" type="button" class="widget-edit-action" :title="t('widgetLayout.stack.remove')" @click="removeWidgetFromStack(instance)">
+                    {{ '□' }}
+                  </button>
                   <button type="button" class="widget-edit-action" :title="t('widgetLayout.remove')" @click="removeWidgetInstance(index)">
                     {{ '✕' }}
                   </button>
                 </div>
                 <WidgetHost :instance="instance" :edit-mode="true" @item-search="itemFrontEndSearch" />
+                <button
+                  v-if="!instance.stack"
+                  type="button"
+                  class="widget-resize-handle is-right"
+                  data-no-drag
+                  :aria-label="t('widgetLayout.widen')"
+                  @pointerdown="startHomeWidgetResize($event, instance, 'columns')"
+                />
+                <button
+                  v-if="!instance.stack"
+                  type="button"
+                  class="widget-resize-handle is-bottom"
+                  data-no-drag
+                  :aria-label="t('widgetLayout.stretch')"
+                  @pointerdown="startHomeWidgetResize($event, instance, 'rows')"
+                />
+                <button
+                  v-if="!instance.stack"
+                  type="button"
+                  class="widget-resize-handle is-corner"
+                  data-no-drag
+                  :aria-label="`${t('widgetLayout.widen')} / ${t('widgetLayout.stretch')}`"
+                  @pointerdown="startHomeWidgetResize($event, instance, 'both')"
+                />
               </div>
             </div>
           </VueDraggable>
@@ -931,14 +1141,22 @@ function handleAddItem(itemIconGroupId?: number) {
             <div v-if="panelState.panelConfig.iconStyle === PanelPanelConfigStyleEnum.info">
               <div v-if="itemGroup.items">
                 <VueDraggable
-                  v-model="itemGroup.items" item-key="sort" :animation="300"
+                  v-model="itemGroup.items" item-key="id" :animation="300"
                   class="icon-info-box"
                   filter=".not-drag"
-                  :disabled="!itemGroup.sortStatus"
+                  :disabled="!canDragBookmarks(itemGroup)"
+                  :delay="itemGroup.sortStatus ? 0 : 480"
+                  :delay-on-touch-only="false"
+                  :touch-start-threshold="8"
+                  :fallback-tolerance="8"
+                  :prevent-on-filter="false"
+                  chosen-class="is-bookmark-long-pressing"
+                  @start="handleBookmarkDragStart(itemGroup)"
+                  @end="handleBookmarkDragEnd(itemGroup)"
                 >
-                  <div v-for="item, index in itemGroup.items" :key="index" :title="item.description" @contextmenu="(e) => handleContextMenu(e, itemGroup, item)" @auxclick="(e) => handleAuxClick(e, itemGroup, item)">
+                  <div v-for="item in itemGroup.items" :key="item.id" :title="item.description" @contextmenu="(e) => handleContextMenu(e, itemGroup, item)" @auxclick="(e) => handleAuxClick(e, itemGroup, item)">
                     <AppIcon
-                      :class="itemGroup.sortStatus ? 'cursor-move' : 'cursor-pointer'"
+                      :class="canDragBookmarks(itemGroup) ? 'cursor-grab' : 'cursor-pointer'"
                       :item-info="item"
                       :icon-text-color="panelState.panelConfig.iconTextColor"
                       :icon-text-info-hide-description="panelState.panelConfig.iconTextInfoHideDescription || false"
@@ -950,7 +1168,7 @@ function handleAddItem(itemIconGroupId?: number) {
 
                   <div v-if="itemGroup.items.length === 0" class="not-drag">
                     <AppIcon
-                      :class="itemGroup.sortStatus ? 'cursor-move' : 'cursor-pointer'"
+                      :class="canDragBookmarks(itemGroup) ? 'cursor-grab' : 'cursor-pointer'"
                       :item-info="{ icon: { itemType: 3, text: 'subway:add' }, title: t('common.add'), url: '', openMethod: 0 }"
                       :icon-text-color="panelState.panelConfig.iconTextColor"
                       :icon-text-info-hide-description="panelState.panelConfig.iconTextInfoHideDescription || false"
@@ -967,15 +1185,23 @@ function handleAddItem(itemIconGroupId?: number) {
             <div v-if="panelState.panelConfig.iconStyle === PanelPanelConfigStyleEnum.icon">
               <div v-if="itemGroup.items">
                 <VueDraggable
-                  v-model="itemGroup.items" item-key="sort" :animation="300"
+                  v-model="itemGroup.items" item-key="id" :animation="300"
                   class="icon-small-box"
 
                   filter=".not-drag"
-                  :disabled="!itemGroup.sortStatus"
+                  :disabled="!canDragBookmarks(itemGroup)"
+                  :delay="itemGroup.sortStatus ? 0 : 480"
+                  :delay-on-touch-only="false"
+                  :touch-start-threshold="8"
+                  :fallback-tolerance="8"
+                  :prevent-on-filter="false"
+                  chosen-class="is-bookmark-long-pressing"
+                  @start="handleBookmarkDragStart(itemGroup)"
+                  @end="handleBookmarkDragEnd(itemGroup)"
                 >
-                  <div v-for="item, index in itemGroup.items" :key="index" :title="item.description" @contextmenu="(e) => handleContextMenu(e, itemGroup, item)" @auxclick="(e) => handleAuxClick(e, itemGroup, item)">
+                  <div v-for="item in itemGroup.items" :key="item.id" :title="item.description" @contextmenu="(e) => handleContextMenu(e, itemGroup, item)" @auxclick="(e) => handleAuxClick(e, itemGroup, item)">
                     <AppIcon
-                      :class="itemGroup.sortStatus ? 'cursor-move' : 'cursor-pointer'"
+                      :class="canDragBookmarks(itemGroup) ? 'cursor-grab' : 'cursor-pointer'"
                       :item-info="item"
                       :icon-text-color="panelState.panelConfig.iconTextColor"
                       :icon-text-info-hide-description="!panelState.panelConfig.iconTextInfoHideDescription"
@@ -1312,8 +1538,10 @@ html {
 }
 
 .widget-grid {
+  --widget-grid-row-height: 96px;
   display: grid;
   grid-template-columns: repeat(12, 1fr);
+  grid-auto-rows: var(--widget-grid-row-height);
   gap: 14px;
   align-items: stretch;
 }
@@ -1325,9 +1553,14 @@ html {
 }
 
 .widget-cell {
+  position: relative;
   display: flex;
   min-width: 0;
+  touch-action: pan-y;
 }
+.widget-cell.is-long-press-dragging { opacity: .78; transform: scale(.985); outline: 2px solid rgb(103 232 249 / 72%); outline-offset: 3px; }
+.widget-cell.is-resizing { z-index: 8; outline: 2px solid rgb(103 232 249 / 78%); outline-offset: 2px; }
+.is-bookmark-long-pressing { opacity: .78; transform: scale(.96); outline: 2px solid rgb(103 232 249 / 72%); outline-offset: 3px; border-radius: 16px; }
 
 .widget-cell > * {
   flex: 1;
@@ -1356,11 +1589,24 @@ html {
   top: 6px;
   right: 8px;
   display: flex;
+  max-width: calc(100% - 16px);
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 3px;
   padding: 3px 6px;
   border-radius: 999px;
   background: rgb(18 25 39 / 82%);
   box-shadow: 0 6px 18px rgb(0 0 0 / 28%);
+}
+
+.widget-stack-member-badge {
+  padding: 1px 5px;
+  border-radius: 999px;
+  color: rgb(165 243 252 / 92%);
+  background: rgb(8 145 178 / 20%);
+  font-size: 10px;
+  line-height: 1.5;
+  white-space: nowrap;
 }
 
 .widget-edit-handle {
@@ -1386,6 +1632,30 @@ html {
   cursor: default;
   opacity: .3;
 }
+
+.widget-resize-handle {
+  position: absolute;
+  z-index: 20;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  touch-action: none;
+}
+.widget-resize-handle.is-right { top: 14px; right: -6px; bottom: 14px; width: 12px; cursor: ew-resize; }
+.widget-resize-handle.is-bottom { right: 14px; bottom: -6px; left: 14px; height: 12px; cursor: ns-resize; }
+.widget-resize-handle.is-corner {
+  right: -7px;
+  bottom: -7px;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgb(103 232 249);
+  border-top: 0;
+  border-left: 0;
+  border-radius: 0 0 5px;
+  cursor: nwse-resize;
+}
+:global(html.is-widget-resizing),
+:global(html.is-widget-resizing *) { cursor: nwse-resize !important; user-select: none !important; }
 
 .widget-hidden-card {
   align-items: center;
@@ -1530,6 +1800,10 @@ html {
 
   .widget-cell {
     grid-column: span 12 / span 12 !important;
+  }
+
+  .widget-resize-handle.is-right {
+    display: none;
   }
 
   .widget-edit-bar {

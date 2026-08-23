@@ -5,9 +5,11 @@ import type {
   WidgetLayoutLoadResult,
   WidgetPosition,
   WidgetSize,
+  WidgetStackMembership,
 } from './types'
 import { WIDGET_ID_PATTERN, WIDGET_TYPE_PATTERN } from './constants'
-import { MAX_WIDGET_CONFIG_BYTES, MAX_WIDGET_INSTANCES, MAX_WIDGET_LAYOUT_BYTES, WIDGET_LAYOUT_SCHEMA_VERSION } from './types'
+import { MAX_WIDGET_CONFIG_BYTES, MAX_WIDGET_INSTANCES, MAX_WIDGET_LAYOUT_BYTES, MAX_WIDGET_STACK_SIZE, WIDGET_LAYOUT_SCHEMA_VERSION } from './types'
+import { normalizeWidgetPositions, normalizeWidgetStacks } from './stack'
 
 const MAX_GRID_VALUE = 10000
 export const MAX_WIDGET_GRID_COLUMNS = 12
@@ -64,17 +66,58 @@ function parsePosition(value: unknown): WidgetPosition {
   return { column: Number(value.column), row: Number(value.row) }
 }
 
+function parseStack(value: unknown): WidgetStackMembership | undefined {
+  if (value === undefined)
+    return undefined
+  if (!isRecord(value) || typeof value.id !== 'string' || !WIDGET_ID_PATTERN.test(value.id)
+    || !Number.isSafeInteger(value.order) || Number(value.order) < 0 || Number(value.order) >= MAX_WIDGET_STACK_SIZE) {
+    throw new Error('Invalid widget stack membership.')
+  }
+  return { id: value.id, order: Number(value.order) }
+}
+
 function clamp(value: number, minimum: number, maximum: number) {
   return Math.min(maximum, Math.max(minimum, value))
+}
+
+function sameSize(a: WidgetSize, b: WidgetSize) {
+  return a.columns === b.columns && a.rows === b.rows
+}
+
+function resolveSizeForDefinition(
+  definition: WidgetDefinition,
+  requested: WidgetSize,
+  supportedSizes = definition.size.supportedSizes,
+): WidgetSize {
+  const columns = clamp(Math.round(requested.columns), definition.size.min.columns, definition.size.max.columns)
+  const rows = clamp(Math.round(requested.rows), definition.size.min.rows, definition.size.max.rows)
+  if (supportedSizes?.length) {
+    const nearest = supportedSizes.reduce((current, candidate) => {
+      const candidateDistance = Math.abs(candidate.columns - columns) + Math.abs(candidate.rows - rows)
+      const nearestDistance = Math.abs(current.columns - columns) + Math.abs(current.rows - rows)
+      return candidateDistance < nearestDistance ? candidate : current
+    }, supportedSizes[0])
+    return { ...nearest }
+  }
+  const step = definition.size.step ?? { columns: 1, rows: 1 }
+  return {
+    columns: clamp(
+      definition.size.min.columns + Math.round((columns - definition.size.min.columns) / step.columns) * step.columns,
+      definition.size.min.columns,
+      definition.size.max.columns,
+    ),
+    rows: clamp(
+      definition.size.min.rows + Math.round((rows - definition.size.min.rows) / step.rows) * step.rows,
+      definition.size.min.rows,
+      definition.size.max.rows,
+    ),
+  }
 }
 
 function parseSize(value: unknown, definition: WidgetDefinition): WidgetSize {
   if (!isRecord(value) || !isGridInteger(value.columns, 1) || !isGridInteger(value.rows, 1))
     throw new Error('Invalid widget size.')
-  return {
-    columns: clamp(Number(value.columns), definition.size.min.columns, definition.size.max.columns),
-    rows: clamp(Number(value.rows), definition.size.min.rows, definition.size.max.rows),
-  }
+  return resolveSizeForDefinition(definition, { columns: Number(value.columns), rows: Number(value.rows) })
 }
 
 function validateDefinition(definition: WidgetDefinition) {
@@ -100,6 +143,37 @@ function validateDefinition(definition: WidgetDefinition) {
     }
     if ((axis === 'columns' && maximum > MAX_WIDGET_GRID_COLUMNS) || (axis === 'rows' && maximum > MAX_WIDGET_GRID_ROWS))
       throw new Error(`Widget ${definition.type} exceeds the host grid limits.`)
+  }
+  const step = definition.size.step ?? { columns: 1, rows: 1 }
+  if (!isGridInteger(step.columns, 1) || !isGridInteger(step.rows, 1))
+    throw new Error(`Widget ${definition.type} declared invalid resize steps.`)
+  if (!definition.size.supportedSizes) {
+    for (const axis of ['columns', 'rows'] as const) {
+      if ((definition.size.default[axis] - definition.size.min[axis]) % step[axis] !== 0
+        || (definition.size.max[axis] - definition.size.min[axis]) % step[axis] !== 0) {
+        throw new Error(`Widget ${definition.type} size range is not aligned to its resize steps.`)
+      }
+    }
+  }
+  if (definition.size.resize && !['both', 'horizontal', 'vertical', 'none'].includes(definition.size.resize))
+    throw new Error(`Widget ${definition.type} declared an invalid resize mode.`)
+  if (definition.size.supportedSizes) {
+    if (!definition.size.supportedSizes.length)
+      throw new Error(`Widget ${definition.type} declared an empty supportedSizes list.`)
+    const keys = new Set<string>()
+    for (const size of definition.size.supportedSizes) {
+      if (!isGridInteger(size.columns, 1) || !isGridInteger(size.rows, 1)
+        || size.columns < definition.size.min.columns || size.columns > definition.size.max.columns
+        || size.rows < definition.size.min.rows || size.rows > definition.size.max.rows) {
+        throw new Error(`Widget ${definition.type} declared an invalid supported size.`)
+      }
+      const key = `${size.columns}x${size.rows}`
+      if (keys.has(key))
+        throw new Error(`Widget ${definition.type} declared duplicate supported sizes.`)
+      keys.add(key)
+    }
+    if (!definition.size.supportedSizes.some(size => sameSize(size, definition.size.default)))
+      throw new Error(`Widget ${definition.type} default size is not supported.`)
   }
   const defaults = definition.configSchema.parse(definition.defaultConfig())
   if (jsonSize(defaults) > MAX_WIDGET_CONFIG_BYTES)
@@ -138,6 +212,12 @@ export function validateWidgetWireInstance(candidate: unknown): string | null {
     return 'invalid widget size'
   if (candidate.hidden !== undefined && typeof candidate.hidden !== 'boolean')
     return 'invalid hidden flag'
+  try {
+    parseStack(candidate.stack)
+  }
+  catch {
+    return 'invalid widget stack membership'
+  }
   if (jsonSize(candidate.config ?? null) > MAX_WIDGET_CONFIG_BYTES)
     return 'widget config exceeds the size limit'
   return null
@@ -212,6 +292,7 @@ export class WidgetRegistry {
       position: parsePosition(value.position),
       size: parseSize(value.size, definition),
       hidden: value.hidden === true,
+      stack: parseStack(value.stack),
       config: parsedConfig,
     }
   }
@@ -254,6 +335,8 @@ export class WidgetRegistry {
         issues.push({ id, reason: error instanceof Error ? error.message : 'Invalid widget instance.', preserved: preservable })
       }
     }
+    if (normalizeWidgetStacks(widgets))
+      issues.push({ id: '<stack>', reason: 'Invalid or incomplete widget stack was repaired.', preserved: false })
     return { layout: { schemaVersion: WIDGET_LAYOUT_SCHEMA_VERSION, widgets }, droppedWidgetIds, quarantinedWidgets, issues }
   }
 }
@@ -289,11 +372,15 @@ export function serializeWidgetLayout(
     preservedQuarantine.push(candidate)
     seenIds.add(candidateId)
   }
+  const normalizedInstances = instances.map(instance => ({
+    ...instance,
+    position: { ...instance.position },
+    size: { ...instance.size },
+    stack: instance.stack ? { ...instance.stack } : undefined,
+  }))
+  normalizeWidgetStacks(normalizedInstances)
   const widgets = [
-    ...instances.map((instance, index) => ({
-      ...instance,
-      position: { column: 0, row: index },
-    })),
+    ...normalizeWidgetPositions(normalizedInstances),
     ...preservedQuarantine,
   ]
   if (widgets.length > MAX_WIDGET_INSTANCES)
@@ -309,18 +396,63 @@ export function serializeWidgetLayout(
 
 export const widgetRegistry = new WidgetRegistry()
 
+export function resolveWidgetSize(type: string, requested: WidgetSize): WidgetSize | null {
+  const definition = widgetRegistry.get(type)
+  if (!definition || !Number.isFinite(requested.columns) || !Number.isFinite(requested.rows))
+    return null
+  return { ...resolveSizeForDefinition(definition, requested) }
+}
+
+export function canResizeWidgetAxis(type: string, axis: 'columns' | 'rows'): boolean {
+  const mode = widgetRegistry.get(type)?.size.resize ?? 'both'
+  return mode === 'both' || (mode === 'horizontal' && axis === 'columns') || (mode === 'vertical' && axis === 'rows')
+}
+
+export function resizeInstanceToWithinBounds(instance: WidgetInstance, requested: WidgetSize): boolean {
+  const definition = widgetRegistry.get(instance.type)
+  if (!definition)
+    return false
+  const allowsColumns = canResizeWidgetAxis(instance.type, 'columns')
+  const allowsRows = canResizeWidgetAxis(instance.type, 'rows')
+  const constrained = {
+    columns: allowsColumns ? requested.columns : instance.size.columns,
+    rows: allowsRows ? requested.rows : instance.size.rows,
+  }
+  const supported = definition.size.supportedSizes?.filter(size => (allowsColumns || size.columns === instance.size.columns)
+    && (allowsRows || size.rows === instance.size.rows))
+  if (definition.size.supportedSizes && !supported?.length)
+    return false
+  const resolved = resolveSizeForDefinition(definition, constrained, supported)
+  if (!resolved || sameSize(resolved, instance.size))
+    return false
+  instance.size = resolved
+  return true
+}
+
 /** 在注册表尺寸约束内尝试缩放实例；返回是否发生了变化（宿主编辑器通用）。 */
 export function resizeInstanceWithinBounds(
   instance: WidgetInstance,
   axis: 'columns' | 'rows',
   delta: number,
 ): boolean {
-  const bounds = widgetRegistry.get(instance.type)?.size
-  if (!bounds || !Number.isInteger(delta) || delta === 0)
+  if (!canResizeWidgetAxis(instance.type, axis) || !Number.isInteger(delta) || delta === 0)
     return false
-  const next = instance.size[axis] + delta
-  if (next < bounds.min[axis] || next > bounds.max[axis])
+  const definition = widgetRegistry.get(instance.type)
+  if (!definition)
     return false
-  instance.size[axis] = next
-  return true
+  const supported = definition.size.supportedSizes
+  if (supported?.length) {
+    const otherAxis = axis === 'columns' ? 'rows' : 'columns'
+    const candidates = supported
+      .filter(size => size[otherAxis] === instance.size[otherAxis]
+        && (delta > 0 ? size[axis] > instance.size[axis] : size[axis] < instance.size[axis]))
+      .sort((a, b) => delta > 0 ? a[axis] - b[axis] : b[axis] - a[axis])
+    const target = candidates[Math.min(Math.abs(delta), candidates.length) - 1]
+    return target ? resizeInstanceToWithinBounds(instance, target) : false
+  }
+  const step = definition.size.step?.[axis] ?? 1
+  return resizeInstanceToWithinBounds(instance, {
+    ...instance.size,
+    [axis]: instance.size[axis] + delta * step,
+  })
 }

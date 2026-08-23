@@ -5,6 +5,7 @@ import process from 'node:process'
 const root = path.resolve(process.argv[2] ?? 'dist/extension')
 const manifestPath = path.join(root, 'manifest.json')
 const newtabPath = path.join(root, 'newtab.html')
+const maxJavaScriptChunkBytes = 500_000
 
 function assert(condition, message) {
   if (!condition)
@@ -43,6 +44,10 @@ for (const file of filesUnder(root)) {
   const relative = path.relative(root, file)
   assert(path.extname(file) !== '.map', `source map must not be packaged: ${relative}`)
   assert(path.basename(file) !== '.env', `environment file must not be packaged: ${relative}`)
+  if (path.extname(file) === '.js') {
+    const bytes = fs.statSync(file).size
+    assert(bytes <= maxJavaScriptChunkBytes, `extension JavaScript chunk exceeds 500 kB: ${relative} (${bytes} bytes)`)
+  }
 }
 
 console.log(`Validated Manifest V3 package at ${root}`)

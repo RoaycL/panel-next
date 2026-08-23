@@ -4,6 +4,8 @@ export function getList<T>(type?: string) {
   return post<T>({
     url: '/file/getList',
     data: type ? { type } : {},
+    // 后台/列表加载请求：网络或 CORS 失败时静默降级，避免在不可达服务器上反复弹出错误提示。
+    silentNetworkError: true,
   })
 }
 

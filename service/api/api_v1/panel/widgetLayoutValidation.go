@@ -13,6 +13,7 @@ const (
 	maxWidgetLayoutBytes      = 256 << 10
 	maxWidgetConfigBytes      = 32 << 10
 	maxWidgetInstances        = 100
+	maxWidgetStackSize        = 10
 	// 与前端 Number.MAX_SAFE_INTEGER 对齐：超出后 JS 端无法精确表示，
 	// 会导致双端契约漂移（前端拒绝、后端接受）。
 	maxJavaScriptSafeInteger = int64(1)<<53 - 1
@@ -71,6 +72,17 @@ func validatePanelWidgetLayout(panel map[string]interface{}) error {
 		if hidden, exists := widget["hidden"]; exists {
 			if _, ok := hidden.(bool); !ok {
 				return fmt.Errorf("widget %q has an invalid hidden flag", id)
+			}
+		}
+		if rawStack, exists := widget["stack"]; exists {
+			stack, ok := rawStack.(map[string]interface{})
+			if !ok {
+				return fmt.Errorf("widget %q has an invalid stack membership", id)
+			}
+			stackID, idOK := stack["id"].(string)
+			order := integer(stack["order"])
+			if !idOK || !widgetIDPattern.MatchString(stackID) || order < 0 || order >= maxWidgetStackSize {
+				return fmt.Errorf("widget %q has an invalid stack membership", id)
 			}
 		}
 		configJSON, err := json.Marshal(widget["config"])

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { NAvatar, NImage } from 'naive-ui'
 import { computed, ref } from 'vue'
-import { SvgIconOnline } from '@/components/common'
+import SvgIconOnline from '@/components/common/SvgIconOnline/index.vue'
 import { getRuntime } from '@/runtime'
 
 interface Prop {

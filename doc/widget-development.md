@@ -23,7 +23,9 @@ src/widgets/
 └── builtins.ts     # 内置组件注册示例（core.* 前缀）
 ```
 
-数据流：**布局配置 → Registry 校验/迁移/隔离 → WidgetHost 懒加载组件 → config 字段以 props 注入组件**。Web 布局随账号同步；扩展布局只保存在扩展本地，两端共享定义和渲染接口但不会互相覆盖样式、组件或布局。
+数据流：**布局配置 → Registry 校验/迁移/隔离 → WidgetHost 懒加载组件 → config 字段以 props 注入组件**。Web 布局随账号同步；扩展布局只保存在扩展本地，两端共享定义和渲染接口但不会互相覆盖样式、组件或布局。扩展端再按 `账号 ID + 分组 ID` 隔离页面布局：切换分组会加载该页面自己的组件实例、叠放关系和书签/组件混排顺序，不会把上一页组件复制或覆盖到当前页。
+
+扩展主页使用统一的 12 列画布，书签和组件共用同一个 `grid-auto-rows` 与 `gap`。因此 `2 × 2` 组件与 `2 × 2` 书签占用完全相同的网格边界；拖动边框产生的尺寸仍必须经过 Registry 的 `min/max/step/supportedSizes/resize` 解析。窄窗口不会改变尺寸语义，而是保留完整 12 列画布并允许横向滚动。
 
 ---
 
@@ -219,6 +221,50 @@ widgetRegistry.register(defineWidget({
 
 最后在应用初始化阶段（如 `main.ts` 引入 `./widgets/contrib`）执行注册。注册后组件自动出现在「添加组件」菜单中，无需修改任何视图代码。
 
+### 3.1 尺寸与边框缩放契约
+
+宿主把边框拖动换算成整数网格尺寸，并在松开指针时只保存一次。所有创建、迁移、按钮缩放和边框缩放都经过注册表的同一套尺寸解析：
+
+```ts
+size: {
+  default: { columns: 4, rows: 2 },
+  min: { columns: 2, rows: 1 },
+  max: { columns: 8, rows: 4 },
+  step: { columns: 1, rows: 1 }, // 可选，默认 1×1
+  resize: 'both', // both | horizontal | vertical | none
+  // 可选：非连续尺寸白名单；声明后只能落在这些精确组合上
+  supportedSizes: [
+    { columns: 2, rows: 1 },
+    { columns: 4, rows: 2 },
+    { columns: 8, rows: 4 },
+  ],
+}
+```
+
+- `min <= default <= max`，列上限 12、行上限 24。
+- `supportedSizes` 中的组合必须唯一且位于 min/max 内，必须包含 default。
+- 未声明 `supportedSizes` 时，min/default/max 必须与 step 对齐，并在范围内按 step 连续缩放。
+- 小于 720px 时扩展端保留完整 12 列语义并允许画布横向滚动，横向拖动与桌面端使用同一尺寸换算。
+- 组件应使用容器自适应样式，在声明支持的每个尺寸下完成视觉测试。
+
+### 3.2 小组件堆栈
+
+宿主支持类似 iOS 的小组件堆栈。第三方组件不需要实现额外代码；堆栈由宿主在 `WidgetInstance` 上维护：
+
+```ts
+stack?: {
+  id: string   // 同一堆栈共享的稳定 ID
+  order: number // 0～9
+}
+```
+
+- 只有当前网格尺寸完全相同、未隐藏的组件可以叠放，一个堆栈最多 10 个成员。
+- 堆栈成员各自保留 `id/type/version/config` 和私有存储，只共享一个网格槽位。
+- Web 与 Extension 浏览模式均可用鼠标滚轮、触控上下滑动或右侧指示器切换。
+- 当前显示成员只保存在当前浏览器的本地存储中，不参与账号同步；成员关系和顺序参与同步。
+- 堆栈状态下宿主锁定整体尺寸。需要改变尺寸时，应先把成员移出堆栈，分别调整为相同尺寸后重新叠放。
+- 传输格式继续使用 `schemaVersion: 1` 的可选字段，以保证旧客户端能读取其余布局；旧客户端再次保存布局时可能解除堆栈，因此跨设备使用时应保持客户端版本一致。
+
 ---
 
 ## 4. 宿主提供的运行时能力
@@ -230,6 +276,7 @@ widgetRegistry.register(defineWidget({
 | `instanceId` | `string` | 同类型多实例区分；作为私有存储命名空间 |
 | `type` | `string` | 当前组件类型 |
 | `editMode` | `boolean`（响应式对象属性） | 布局编辑中为 true：应暂停轮询/动画等昂贵操作 |
+| `size` | `Readonly<WidgetSize>` | 当前网格尺寸；边框缩放预览期间响应式更新 |
 | `capabilities` | `readonly WidgetCapability[]` | 当前定义声明的能力 |
 | `surface` | `'web' \| 'extension'` | 当前渲染宿主 |
 

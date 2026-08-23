@@ -90,6 +90,26 @@ const themes = computed(() => themeRegistry.list(props.surface).map(definition =
 
 const activeDefinition = computed(() => themeRegistry.get(draft.themeId))
 
+const visualPreview = computed(() => {
+  try {
+    const runtimeMode = getThemeRuntimeState().resolvedMode
+    const resolvedMode = draft.mode === 'auto' ? runtimeMode : draft.mode
+    const tokens = themeRegistry.resolve(buildDraftSelection(), resolvedMode).tokens
+    return {
+      canvas: tokens.color.pageBackground,
+      surface: tokens.color.surface,
+      border: tokens.color.border,
+      text: tokens.color.textPrimary,
+      muted: tokens.color.textMuted,
+      accent: tokens.color.accent,
+      radius: tokens.radius.large,
+    }
+  }
+  catch {
+    return null
+  }
+})
+
 const iconPackOptions = computed(() => themeRegistry.listIconPacks().map(pack => ({
   label: pack.id === 'core.default' ? t('theme.iconPack.default') : pack.name,
   value: pack.id,
@@ -299,6 +319,7 @@ function formatDateInput(timestamp: number | null): string {
 <template>
   <NModal
     :show="props.show"
+    :to="props.surface === 'extension' ? '.pn-theme-root' : undefined"
     preset="card"
     class="theme-settings-modal"
     :title="t('theme.center.title')"
@@ -312,6 +333,23 @@ function formatDateInput(timestamp: number | null): string {
       <section class="theme-section">
         <h4>{{ t('theme.center.themes') }}</h4>
         <NSelect :value="draft.themeId" :options="themes" @update:value="switchTheme" />
+        <div
+          v-if="visualPreview"
+          class="theme-visual-preview"
+          :style="{ background: visualPreview.canvas, color: visualPreview.text, borderColor: visualPreview.border, borderRadius: visualPreview.radius }"
+          aria-label="主题实时预览"
+        >
+          <div class="theme-preview-sidebar" :style="{ background: visualPreview.surface, borderColor: visualPreview.border }">
+            <i :style="{ background: visualPreview.accent }" /><i /><i />
+          </div>
+          <div class="theme-preview-content">
+            <strong>Panel Next</strong>
+            <span :style="{ color: visualPreview.muted }">{{ resolveText(activeDefinition?.meta.description) || t('theme.default.description') }}</span>
+            <div class="theme-preview-cards">
+              <i :style="{ background: visualPreview.surface, borderColor: visualPreview.border }" /><i :style="{ background: visualPreview.surface, borderColor: visualPreview.border }" />
+            </div>
+          </div>
+        </div>
         <p v-if="activeDefinition?.meta.description" class="theme-meta-line">
           {{ resolveText(activeDefinition.meta.description) }}
         </p>
@@ -436,6 +474,20 @@ function formatDateInput(timestamp: number | null): string {
 </template>
 
 <style scoped>
+:global(.theme-settings-modal.n-card) {
+  border: 1px solid var(--pn-modal-border, var(--pn-color-border, rgba(148, 163, 184, .24)));
+  border-radius: var(--pn-radius-large, 18px);
+  color: var(--pn-modal-content-text-color, var(--pn-color-text-secondary, inherit));
+  background: var(--pn-modal-background, var(--pn-color-surface, #fff));
+  box-shadow: var(--pn-effect-shadow-high, 0 22px 60px rgba(2, 6, 23, .3));
+}
+:global(.theme-settings-modal .n-card-header) {
+  color: var(--pn-modal-title-text-color, var(--pn-color-text-primary, inherit));
+  border-bottom: 1px solid var(--pn-modal-border, var(--pn-color-border, transparent));
+}
+:global(.theme-settings-modal .n-card__footer) {
+  border-top: 1px solid var(--pn-modal-border, var(--pn-color-border, transparent));
+}
 .theme-settings-body {
   display: flex;
   flex-direction: column;
@@ -450,6 +502,24 @@ function formatDateInput(timestamp: number | null): string {
   font-weight: 600;
   opacity: 0.85;
 }
+
+.theme-visual-preview {
+  height: 116px;
+  margin-top: 10px;
+  padding: 10px;
+  display: flex;
+  gap: 10px;
+  overflow: hidden;
+  border: 1px solid;
+}
+.theme-preview-sidebar { width: 34px; padding: 7px; display: flex; flex-direction: column; gap: 7px; border: 1px solid; border-radius: 10px; }
+.theme-preview-sidebar i { width: 18px; height: 18px; display: block; border-radius: 6px; background: currentColor; opacity: .2; }
+.theme-preview-sidebar i:first-child { opacity: 1; }
+.theme-preview-content { min-width: 0; display: flex; flex: 1; flex-direction: column; gap: 5px; }
+.theme-preview-content strong { font-size: 13px; }
+.theme-preview-content > span { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.theme-preview-cards { margin-top: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.theme-preview-cards i { height: 48px; border: 1px solid; border-radius: 10px; }
 
 .theme-meta-line {
   display: flex;

@@ -38,10 +38,18 @@ const typeDropdownOptions = [
 
 async function getFileList() {
   loading.value = true
-  const type = activeType.value === 'all' ? undefined : activeType.value
-  const { data } = await getList<Common.ListResponse<File.Info[]>>(type)
-  imageList.value = data.list
-  loading.value = false
+  try {
+    const type = activeType.value === 'all' ? undefined : activeType.value
+    const { data } = await getList<Common.ListResponse<File.Info[]>>(type)
+    imageList.value = data.list
+  }
+  catch {
+    // 服务器不可达（例如 CORS/网络失败）时降级为空列表，避免未捕获的 Promise 拒绝。
+    imageList.value = []
+  }
+  finally {
+    loading.value = false
+  }
 }
 
 async function copyImageUrl(text: string) {

@@ -285,25 +285,21 @@
 - [x] 更新 `doc/web_extension_architecture.md` 的主题存储边界。
 - [x] 更新 Widget 开发文档的主题适配要求。
 
-## 18.5. Extension 入口 chunk 体积分析（非阻塞，仅分析与 TODO）
+## 18.5. Extension 入口 chunk 体积优化（已完成）
 
-**测量（本阶段实测，`vite build --mode extension --config vite.config.analyze.mts` 生成 sourcemap + 未压缩产物）：**
-- 入口 chunk 为 `store-*.js`，压缩后 **796,244 B**，未压缩 **1,783,480 B**，触发 Vite/Rolldown 的 500 KB 警告。
-- 未压缩（由 `.map` 的 `sources`/`sourcesContent` 统计，字节为模块源码长度）：vue-router ≈57.5 KB、@iconify/vue ≈50.7 KB、pinia ≈50.3 KB、naive-ui `Input` ≈41.9 KB、`DatePicker` ≈34.3 KB、`Select` ≈30.4 KB、crypto-js `cipher-core` ≈29.9 KB、`TimePicker` ≈29.9 KB、date-fns `parse` ≈29.1 KB；src 侧最大为 `themes/registry.ts` ≈18.4 KB、`themes/ThemeSettingsModal.vue` ≈15.2 KB、`widgets/registry.ts` ≈13.6 KB、`themes/cssVariables.ts` ≈10.2 KB。
+**生产构建实测：**
+- 优化前入口 `store-*.js` 为 **797.61 kB**，触发 Vite/Rolldown 的 500 kB 警告。
+- 第一阶段解除主题桶文件与设置弹窗的静态依赖后降为 **565.37 kB**，`ThemeSettingsModal` 独立为 **155.37 kB**。
+- 第二阶段解除公共组件/Widget 桶文件的入口副作用、异步加载 Widget 设置/冲突/离线队列弹窗，并将 `crypto-js` 全量导入收窄为 AES + UTF-8 后，入口降为 **252.73 kB**。
+- 最终较基线减少 **544.88 kB（约 68%）**，生产构建不再出现大于 500 kB 的 chunk 警告。
 
-**根因：**
-- `src/themes/index.ts`（桶文件）**静态 re-export** 三个 `.vue` SFC：`ThemeProvider.vue`、`ThemeIcon.vue`、`ThemeSettingsModal.vue`（第 65-67 行）。
-- `src/App.vue`（静态入口）`import { ThemeProvider, registerThemeStoreAccessor } from '@/themes'`；`src/store/modules/panel/index.ts`（静态入口）`import { preparePanelAppearance } from '@/themes'`。二者都触发桶文件求值。
-- 其中 `ThemeSettingsModal.vue` 静态 `import` 了大量 naive-ui（`NDatePicker`、`NTimePicker`、`NColorPicker`、`NInputNumber`、`NSelect`、`NModal`、`NPopconfirm`、`NSwitch`、`NSlider`、`NSpace`、`useMessage` 等），连带把 naive-ui 的 `Popover`、`Scrollbar`、`SelectMenu`、`Selection`、`Tag`、`Modal`、`BodyWrapper`、`VirtualList` 以及 `date-fns` / `date-fns-tz` 一并带入入口 chunk。这正是上面「naive-ui 模块 + crypto-js + date-fns」清单的来源。
-- Widget 本身是懒加载的（`WidgetHost` 通过 `definition.load()` 动态 `import`），因此 widget 组件不占入口；但 `src/widgets/registry.ts` 作为注册表被静态引用而留在入口。
-
-**可实施的分割方案（按风险从低到高；未实施，仅记录）：**
-1. 把 `ThemeSettingsModal` 从 `@/themes` 桶文件去掉（删除 `src/themes/index.ts` 第 67 行 re-export），改由其真实消费者直接从文件路径导入：`src/views/home/index.vue`（第 29 行）与 `src/views/extension/components/UserHubModal.vue`（第 14 行）。这样 naive-ui 只会出现在懒加载的 `UserHubModal` chunk（Extension 已分割）与 Web 的 `home` chunk，入口 chunk 即脱离 naive-ui。
-2. 收窄 store 的桶导入：`src/store/modules/panel/index.ts` 改为 `import { preparePanelAppearance } from '@/themes/legacyAdapter'`、类型从 `@/themes/types` 导入，让 store（静态在入口）不依赖桶文件剩下的 SFC re-export。App.vue 仍从桶文件取 `ThemeProvider`，或同样改为直接文件导入。
-3. 对仅管理后台且在首屏不需要的界面（`SystemMonitor/Edit` 弹窗、`SearchBox`、`Users` / `UserInfo` / `UserSessions` / `BackupRestore` 等 app）改用 `defineAsyncComponent` 懒加载。
-4. 用带 sourcemap 的 analyze 构建复测入口 chunk 落地阈值；**不要**改 `chunkSizeWarningLimit`，也**不要**加 `manualChunks`（本阶段无需手工配置分包即可释出 chunk）。
-
-**明确结论：** 本节为分析与 TODO 记录，**优化未实施**；`chunkSizeWarningLimit` 未改动，未新增 `manualChunks`，未声称已完成优化。上述分析不影响本任务任何已验证的修复与版本号。
+**已实施边界：**
+- `src/themes/index.ts` 不再导出 `.vue` 组件；入口、Store 和消费者均从具体模块导入。
+- `src/App.vue` 不再从 `@/components/common` 桶文件导入 Provider。
+- Extension 入口不再从 `@/components/common` 与 `@/widgets` 桶文件导入运行时组件。
+- `ThemeSettingsModal`、`WidgetSettingsModal`、`ConflictResolverModal`、`OfflineQueueManager` 均按需异步加载。
+- 未提高 `chunkSizeWarningLimit`，未用 `manualChunks` 隐藏问题。
+- `validate-extension.mjs` 对每个生产 JavaScript chunk 执行 500,000 字节硬上限检查；`validate-lazy-management.mjs` 固化入口导入边界，防止回归。
 
 ## 19. 全量验证
 

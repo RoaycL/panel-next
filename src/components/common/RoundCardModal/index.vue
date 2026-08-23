@@ -2,6 +2,7 @@
 import { computed, useAttrs } from 'vue'
 import type { CSSProperties } from 'vue'
 import { NModal } from 'naive-ui'
+import { getRuntime } from '@/runtime'
 
 defineOptions({ inheritAttrs: false })
 
@@ -23,9 +24,11 @@ const emit = defineEmits<{
 const attrs = useAttrs()
 
 const bindAttrs = computed(() => {
-  const { class: _class, style: _style, ...rest } = attrs
+  const { class: _class, style: _style, to: _to, ...rest } = attrs
   return rest
 })
+const modalTarget = computed(() => (attrs.to as string | HTMLElement | undefined)
+  ?? (getRuntime().kind === 'extension' ? '.pn-theme-root' : undefined))
 const modalClass = computed(() => ['round-card-modal', attrs.class])
 const modalStyle = computed(() => [
   {
@@ -51,6 +54,7 @@ const showModal = computed({
     :size="size"
     v-bind="bindAttrs"
     :class="modalClass"
+    :to="modalTarget"
     :style="modalStyle"
     :title="title"
     :draggable="draggable"
@@ -79,38 +83,23 @@ const showModal = computed({
 <style>
 /* Global Frosted Glass Modal Theme for RoundCardModal */
 .round-card-modal.n-card {
-  border-radius: 20px !important;
-  background: rgba(18, 20, 26, 0.84) !important;
-  backdrop-filter: blur(28px) saturate(190%) !important;
-  -webkit-backdrop-filter: blur(28px) saturate(190%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
-  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.08) inset !important;
-}
-
-html:not(.dark) .round-card-modal.n-card {
-  background: rgba(255, 255, 255, 0.88) !important;
-  border: 1px solid rgba(0, 0, 0, 0.08) !important;
-  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.8) inset !important;
+  border-radius: var(--pn-radius-large, 20px) !important;
+  color: var(--pn-modal-content-text-color, var(--pn-color-text-secondary, inherit)) !important;
+  background: var(--pn-modal-background, rgba(18, 20, 26, 0.96)) !important;
+  border: 1px solid var(--pn-modal-border, var(--pn-color-border, rgba(255, 255, 255, 0.12))) !important;
+  box-shadow: var(--pn-effect-shadow-high, 0 25px 60px -15px rgba(0, 0, 0, 0.65)) !important;
 }
 
 .round-card-modal .n-card-header {
   padding: 14px 20px 12px !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
-  background: rgba(255, 255, 255, 0.03) !important;
-}
-
-html:not(.dark) .round-card-modal .n-card-header {
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
-  background: rgba(0, 0, 0, 0.02) !important;
+  color: var(--pn-modal-title-text-color, var(--pn-color-text-primary, inherit)) !important;
+  border-bottom: 1px solid var(--pn-modal-border, var(--pn-color-border, rgba(255, 255, 255, 0.08))) !important;
+  background: var(--pn-color-surface-hover, transparent) !important;
 }
 
 .round-card-modal .n-card__footer {
   padding: 12px 20px 14px !important;
-  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
-}
-
-html:not(.dark) .round-card-modal .n-card__footer {
-  border-top: 1px solid rgba(0, 0, 0, 0.06) !important;
+  border-top: 1px solid var(--pn-modal-border, var(--pn-color-border, rgba(255, 255, 255, 0.08))) !important;
 }
 
 /* 移动端全屏优化 */

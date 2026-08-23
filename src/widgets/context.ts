@@ -2,7 +2,7 @@ import type { InjectionKey } from 'vue'
 import { inject } from 'vue'
 import { getRuntime } from '@/runtime'
 import type { ThemeTokens, ResolvedThemeMode } from '@/themes/types'
-import type { WidgetCapability, WidgetSurface } from './types'
+import type { WidgetCapability, WidgetSize, WidgetSurface } from './types'
 import { assertContextCapability, WidgetPermissionError } from './capabilities'
 
 const MAX_WIDGET_STORAGE_KEY_LENGTH = 64
@@ -20,6 +20,8 @@ export interface WidgetContext {
   type: string
   /** 仪表盘是否处于布局编辑模式（编辑态下组件应暂停轮询/动画等重操作） */
   editMode: boolean
+  /** 当前宿主网格尺寸；边框缩放预览期间保持响应式更新。 */
+  size: Readonly<WidgetSize>
   capabilities: readonly WidgetCapability[]
   surface: WidgetSurface
   /** 当前主题 ID；无 ThemeProvider 时为默认主题。 */

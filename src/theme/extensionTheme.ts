@@ -1,7 +1,92 @@
 import type { GlobalThemeOverrides } from 'naive-ui'
+import type { ThemeTokens } from '@/themes'
 
-/** Shared Naive UI palette for every teleported surface in the extension. */
-export const extensionThemeOverrides: GlobalThemeOverrides = {
+/** Build Naive UI overlays from the same Theme SDK tokens as the extension shell. */
+export function createExtensionThemeOverrides(tokens: Readonly<ThemeTokens>): GlobalThemeOverrides {
+  return {
+    common: {
+      primaryColor: tokens.color.accent,
+      primaryColorHover: tokens.icon.activeColor,
+      primaryColorPressed: tokens.color.accent,
+      primaryColorSuppl: tokens.icon.activeColor,
+      infoColor: tokens.color.accent,
+      warningColor: tokens.color.warning,
+      errorColor: tokens.color.danger,
+      successColor: tokens.color.success,
+      bodyColor: tokens.color.pageBackground,
+      cardColor: tokens.color.surface,
+      modalColor: tokens.modal.background,
+      popoverColor: tokens.color.surface,
+      inputColor: tokens.color.surfaceOverlay,
+      actionColor: tokens.color.surfaceHover,
+      borderColor: tokens.color.border,
+      dividerColor: tokens.color.border,
+      textColorBase: tokens.color.textPrimary,
+      textColor1: tokens.color.textPrimary,
+      textColor2: tokens.color.textSecondary,
+      textColor3: tokens.color.textMuted,
+      placeholderColor: tokens.color.textMuted,
+      borderRadius: tokens.radius.medium,
+      borderRadiusSmall: tokens.radius.small,
+    },
+    Button: {
+      borderRadiusTiny: tokens.radius.small,
+      borderRadiusSmall: tokens.radius.small,
+      borderRadiusMedium: tokens.radius.medium,
+      borderRadiusLarge: tokens.radius.large,
+      fontWeight: tokens.font.weightHeading,
+    },
+    Card: {
+      borderRadius: tokens.radius.large,
+      color: tokens.modal.background,
+      borderColor: tokens.modal.border,
+      titleTextColor: tokens.modal.titleTextColor,
+    },
+    Dialog: {
+      borderRadius: tokens.radius.large,
+      color: tokens.modal.background,
+      titleTextColor: tokens.modal.titleTextColor,
+      contentTextColor: tokens.modal.contentTextColor,
+      iconColor: tokens.color.accent,
+    },
+    Message: {
+      borderRadius: tokens.radius.medium,
+      color: tokens.notification.background,
+      textColor: tokens.notification.contentTextColor,
+      boxShadow: tokens.notification.boxShadow,
+    },
+    Notification: {
+      borderRadius: tokens.radius.large,
+      color: tokens.notification.background,
+      textColor: tokens.notification.contentTextColor,
+      titleTextColor: tokens.notification.titleTextColor,
+      descriptionTextColor: tokens.notification.contentTextColor,
+      boxShadow: tokens.notification.boxShadow,
+    },
+    Popover: {
+      borderRadius: tokens.radius.medium,
+      color: tokens.color.surface,
+      textColor: tokens.color.textSecondary,
+    },
+    Input: {
+      borderRadius: tokens.radius.medium,
+      color: tokens.color.surfaceOverlay,
+      colorFocus: tokens.color.surface,
+      border: `1px solid ${tokens.color.border}`,
+      borderFocus: `1px solid ${tokens.color.accent}`,
+      boxShadowFocus: tokens.effect.shadowLow,
+    },
+    DataTable: {
+      thColor: tokens.color.surfaceHover,
+      tdColor: tokens.color.surface,
+      tdColorHover: tokens.color.surfaceHover,
+      borderColor: tokens.color.border,
+    },
+  }
+}
+
+/** Dark glass palette for every teleported surface in the extension. */
+export const extensionDarkThemeOverrides: GlobalThemeOverrides = {
   common: {
     primaryColor: '#10b981',
     primaryColorHover: '#34d399',
@@ -81,3 +166,82 @@ export const extensionThemeOverrides: GlobalThemeOverrides = {
     borderColor: 'rgba(148, 163, 184, 0.14)',
   },
 }
+
+/** Light glass palette. Keep the same accent while restoring real light surfaces and contrast. */
+export const extensionLightThemeOverrides: GlobalThemeOverrides = {
+  common: {
+    primaryColor: '#059669',
+    primaryColorHover: '#10b981',
+    primaryColorPressed: '#047857',
+    primaryColorSuppl: '#10b981',
+    infoColor: '#0284c7',
+    warningColor: '#d97706',
+    errorColor: '#dc2626',
+    successColor: '#059669',
+    bodyColor: '#f1f5f9',
+    cardColor: 'rgba(255, 255, 255, 0.96)',
+    modalColor: 'rgba(248, 250, 252, 0.98)',
+    popoverColor: 'rgba(255, 255, 255, 0.98)',
+    inputColor: 'rgba(255, 255, 255, 0.9)',
+    actionColor: 'rgba(241, 245, 249, 0.96)',
+    borderColor: 'rgba(100, 116, 139, 0.22)',
+    dividerColor: 'rgba(100, 116, 139, 0.16)',
+    textColorBase: '#0f172a',
+    textColor1: '#0f172a',
+    textColor2: '#334155',
+    textColor3: '#64748b',
+    placeholderColor: '#94a3b8',
+    borderRadius: '12px',
+    borderRadiusSmall: '10px',
+  },
+  Button: extensionDarkThemeOverrides.Button,
+  Card: {
+    borderRadius: '20px',
+    color: 'rgba(255, 255, 255, 0.96)',
+    borderColor: 'rgba(100, 116, 139, 0.18)',
+    titleTextColor: '#0f172a',
+  },
+  Dialog: {
+    borderRadius: '18px',
+    color: 'rgba(255, 255, 255, 0.98)',
+    titleTextColor: '#0f172a',
+    contentTextColor: '#334155',
+    iconColor: '#059669',
+  },
+  Message: {
+    borderRadius: '14px',
+    color: 'rgba(255, 255, 255, 0.98)',
+    textColor: '#334155',
+    boxShadow: '0 18px 48px rgba(15, 23, 42, 0.16)',
+  },
+  Notification: {
+    borderRadius: '16px',
+    color: 'rgba(255, 255, 255, 0.98)',
+    textColor: '#334155',
+    titleTextColor: '#0f172a',
+    descriptionTextColor: '#64748b',
+    boxShadow: '0 22px 60px rgba(15, 23, 42, 0.18)',
+  },
+  Popover: {
+    borderRadius: '14px',
+    color: 'rgba(255, 255, 255, 0.98)',
+    textColor: '#334155',
+  },
+  Input: {
+    borderRadius: '12px',
+    color: 'rgba(255, 255, 255, 0.9)',
+    colorFocus: '#ffffff',
+    border: '1px solid rgba(100, 116, 139, 0.25)',
+    borderFocus: '1px solid rgba(5, 150, 105, 0.7)',
+    boxShadowFocus: '0 0 0 3px rgba(16, 185, 129, 0.12)',
+  },
+  DataTable: {
+    thColor: 'rgba(226, 232, 240, 0.78)',
+    tdColor: 'rgba(255, 255, 255, 0.68)',
+    tdColorHover: 'rgba(226, 232, 240, 0.72)',
+    borderColor: 'rgba(100, 116, 139, 0.14)',
+  },
+}
+
+/** Compatibility export for callers that still explicitly request the dark extension palette. */
+export const extensionThemeOverrides = extensionDarkThemeOverrides

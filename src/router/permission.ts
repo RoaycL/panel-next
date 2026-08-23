@@ -18,7 +18,8 @@ export function setupPageGuard(router: Router) {
     if (authStore.authMode === 'device' && authStore.token && !authStore.accessExpiresAt) {
       const refreshed = await authStore.refreshSession()
       if (!refreshed) {
-        next({ name: 'login' })
+        // Extension 新标签页必须始终可作为访客主页打开；登录仅由用户点击头像触发。
+        next({ name: __PANEL_RUNTIME__ === 'extension' ? 'Home' : 'login' })
         return
       }
     }

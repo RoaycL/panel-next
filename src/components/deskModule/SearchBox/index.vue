@@ -136,12 +136,18 @@ function handleClearSearchTerm() {
 }
 
 onMounted(() => {
-  moduleConfig.getValueByNameFromCloud<State>('deskModuleSearchBox').then(({ code, data }) => {
-    if (code === 0)
-      state.value = data || defaultState
-    else
-      state.value = defaultState
-  })
+  // 云端模块配置不可达（扩展尚未配置服务端的 404/网络错误等）时静默回退到本地
+  // 默认搜索引擎，避免 getValueByNameFromCloud 的拒绝变成未捕获的 Promise 拒绝。
+  moduleConfig.getValueByNameFromCloud<State>('deskModuleSearchBox')
+    .then(({ code, data }) => {
+      if (code === 0)
+        state.value = data || defaultState
+      else
+        state.value = defaultState
+    })
+    .catch(() => {
+      state.value = { ...defaultState }
+    })
 
   // SEARCH-03: 按 / 快速聚焦搜索框，不干扰编辑输入框
   document.addEventListener('keydown', handleSlashKey)
