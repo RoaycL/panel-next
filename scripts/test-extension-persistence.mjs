@@ -193,6 +193,16 @@ assert.equal(flushCount, 1)
 assert.equal(memoryMap.get(EXTENSION_WIDGETS_KEY), storedWidgetBytes(prefsA))
 assert.equal(durableMap.get(EXTENSION_WIDGETS_KEY), storedWidgetBytes(prefsA))
 
+// Refuse one oversized preference record before Chrome's shared local-storage
+// quota fails with a browser-specific error and leaves the UI without guidance.
+const oversizedPreferences = structuredClone(prefsA)
+oversizedPreferences.contentLayout.widgets[0].config = { blob: 'x'.repeat(4 * 1024 * 1024) }
+await assert.rejects(
+  () => saveExtensionWidgets(oversizedPreferences),
+  error => /4 MiB/.test(error.message),
+)
+assert.equal(durableMap.get(EXTENSION_WIDGETS_KEY), storedWidgetBytes(prefsA))
+
 // 2. Saving identical content skips write & flush (deduplication)
 const saveResult2 = await saveExtensionWidgets(prefsA)
 assert.equal(saveResult2, true)
@@ -223,6 +233,17 @@ await Promise.all([
 const mergedPages = readExtensionWidgets().pageLayouts
 assert.deepEqual(mergedPages['7:1'].itemOrder, ['bookmark:101', 'widget:page.clock'])
 assert.deepEqual(mergedPages['7:2'].itemOrder, ['bookmark:203', 'bookmark:202'])
+
+// A stale tab must not resurrect the legacy global layout after another tab
+// migrated it into a page. Otherwise a later group can adopt duplicate widgets.
+const staleLegacyTab = structuredClone(readExtensionWidgets())
+const migratedTab = structuredClone(staleLegacyTab)
+migratedTab.contentLayout = { schemaVersion: 1, widgets: [] }
+await saveExtensionWidgets(migratedTab, ['7:1'])
+assert.equal(readExtensionWidgets().contentLayout.widgets.length, 0)
+staleLegacyTab.pageLayouts['7:2'].itemOrder = ['bookmark:202']
+await saveExtensionWidgets(staleLegacyTab, ['7:2'])
+assert.equal(readExtensionWidgets().contentLayout.widgets.length, 0)
 await saveExtensionWidgets(prefsA)
 
 console.log('--- Running Persistence Failure & False-Save-Success Prevention Tests ---')

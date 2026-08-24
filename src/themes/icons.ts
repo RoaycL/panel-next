@@ -6,7 +6,7 @@ import { THEME_ICON_NAMES } from './types'
  * 全部图标随应用本地打包，禁止远程脚本；单色 SVG 使用 currentColor。
  */
 export const DEFAULT_ICON_SET: Readonly<ThemeIconSet> = Object.freeze({
-  settings: 'mdi-pencil',
+  settings: 'panel-next-settings',
   close: 'line-md-close-small',
   add: 'typcn-plus',
   refresh: 'material-symbols-sync',
@@ -34,8 +34,8 @@ export const DEFAULT_ICON_SET: Readonly<ThemeIconSet> = Object.freeze({
   dashboard: 'majesticons-applications',
   networkWired: 'mdi-lan',
   networkWireless: 'mdi-wan',
-  eye: 'lucide-wallpaper',
-  eyeOff: 'lucide-wallpaper',
+  eye: 'panel-next-visibility',
+  eyeOff: 'panel-next-visibility-off',
   chevronRight: 'mdi-chevron-right',
   darkMode: 'material-symbols-dark-mode-outline-rounded',
   lightMode: 'material-symbols-light-mode-outline-rounded',

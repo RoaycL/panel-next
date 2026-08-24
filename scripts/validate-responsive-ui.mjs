@@ -14,6 +14,12 @@ const userSessions = fs.readFileSync(new URL('../src/components/apps/UserSession
 const extensionPreferences = fs.readFileSync(new URL('../src/runtime/extensionAppearance.ts', import.meta.url), 'utf8')
 const routerPermission = fs.readFileSync(new URL('../src/router/permission.ts', import.meta.url), 'utf8')
 const localControlIcons = new Set(fs.readdirSync(new URL('../src/assets/svg-icons/', import.meta.url)).map(name => name.replace(/\.svg$/, '')))
+const extensionTemplate = extension.slice(extension.indexOf('<template>'))
+
+function bundledIconNames(source) {
+  return [...source.matchAll(/['"]((?:material-symbols|mingcute|mdi|ri|simple-icons)[:\-][a-z0-9-]+)['"]/gi)]
+    .map(match => match[1].replaceAll(':', '-'))
+}
 
 for (const rule of [
   /\.sun-main\s*\{[^}]*overflow:\s*hidden/,
@@ -103,7 +109,18 @@ assert.match(userSessions, /:scroll-x="860"/)
 assert.match(extension, /function handleAvatarClick\(\)[\s\S]*router\.push\('\/login'\)/)
 assert.match(routerPermission, /__PANEL_RUNTIME__ === 'extension' \? 'Home' : 'login'/)
 const settingsIconNames = [...extensionSettings.matchAll(/(?:icon="|icon: ')([a-z0-9:-]+)(?:"|')/gi)].map(match => match[1].replaceAll(':', '-'))
-for (const iconName of settingsIconNames)
+const extensionIconNames = [...new Set([
+  ...settingsIconNames,
+  ...bundledIconNames(extensionTemplate),
+  'mdi-github',
+  'ri-bilibili-fill',
+  'simple-icons-duckduckgo',
+])]
+for (const iconName of extensionIconNames)
   assert.ok(localControlIcons.has(iconName), `extension control-center icon must be bundled locally: ${iconName}`)
+
+assert.match(extension, /isPreviewingWidgetResize/)
+assert.match(extension, /document\.addEventListener\('visibilitychange', handleVisibilityChange\)/)
+assert.doesNotMatch(extension, /window\.addEventListener\('wheel', handleGroupWheel/)
 
 console.log('Validated grouped extension rail, constrained context menus, profile rendering, guest-first routing, effective settings, and iOS bookmark icons')

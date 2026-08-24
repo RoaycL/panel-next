@@ -55,6 +55,7 @@ const MAX_PAGE_LAYOUTS = 100
 const MAX_PAGE_ORDER_ITEMS = 600
 const MAX_SEARCH_HISTORY = 10
 const MAX_SEARCH_QUERY_LENGTH = 200
+const MAX_EXTENSION_WIDGET_PREFERENCES_BYTES = 4 * 1024 * 1024
 const PAGE_LAYOUT_KEY_PATTERN = /^[\w.:-]{1,120}$/
 const PAGE_ITEM_KEY_PATTERN = /^(?:bookmark|widget):[\w.:-]{1,80}$/
 
@@ -247,6 +248,12 @@ export function saveExtensionWidgets(
     return {
       ...snapshot,
       pageLayouts,
+      // A page-scoped save may come from a tab that still holds the retired
+      // global layout. Once another tab has migrated and cleared it, never
+      // resurrect that legacy source and duplicate widgets on another page.
+      contentLayout: changedPageLayoutKeys !== undefined && current.contentLayout.widgets.length === 0
+        ? current.contentLayout
+        : snapshot.contentLayout,
       // Cleanup tombstones are service-owned state. View models can be stale
       // because local adapter change echoes are intentionally suppressed,
       // so a regular layout save must never replace this queue.
@@ -264,6 +271,10 @@ export function updateExtensionWidgets(
 
   return enqueueExtensionStorageSave(async () => {
     const serialized = JSON.stringify(updater(readExtensionWidgets()))
+    const serializedBytes = new TextEncoder().encode(serialized).byteLength
+    if (serializedBytes > MAX_EXTENSION_WIDGET_PREFERENCES_BYTES) {
+      throw new Error(`扩展页面布局数据已超过本地安全上限（${Math.ceil(serializedBytes / 1024 / 1024)} MiB / 4 MiB），请删除不再使用的小组件或分组布局后重试。`)
+    }
     // 全局去重点：与已存储内容字节一致时跳过写入，避免多标签页循环触发
     if (runtime.storage.getItem(EXTENSION_WIDGETS_KEY) === serialized)
       return true
@@ -335,7 +346,11 @@ export async function removeExtensionWidgetFlow(
         ...storedPreferences,
         ...currentPreferences,
         pageLayouts: nextPageLayouts,
-        contentLayout: pageLayoutKey ? currentPreferences.contentLayout : nextLayout,
+        contentLayout: pageLayoutKey
+          ? (storedPreferences.contentLayout.widgets.length === 0
+              ? storedPreferences.contentLayout
+              : currentPreferences.contentLayout)
+          : nextLayout,
         pendingWidgetCleanupIds: pending,
       }
     })

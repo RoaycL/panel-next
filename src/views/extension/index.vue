@@ -164,6 +164,7 @@ const extensionWidgetSettingsVisible = ref(false)
 const extensionWidgetSettingsInstance = ref<WidgetInstance | null>(null)
 const isRemovingWidget = ref(false)
 const isWidgetLayoutDirty = ref(false)
+const isPreviewingWidgetResize = ref(false)
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 let loadedWidgetPageKey: string | null = null
 let isLoadingWidgetPage = false
@@ -261,7 +262,7 @@ function loadExtensionWidgetLayout(layout: unknown, pageKey: string) {
 
 // 防抖保存实例拖拽/缩放/隐藏/设置修改
 watch(extensionWidgetInstances, () => {
-  if (!isRemovingWidget.value && !isLoadingWidgetPage) {
+  if (!isRemovingWidget.value && !isLoadingWidgetPage && !isPreviewingWidgetResize.value) {
     syncLoadedWidgetPageLayout(loadedWidgetPageKey, true)
     scheduleSaveExtensionWidgets(300)
   }
@@ -343,6 +344,11 @@ const {
   activeWidgetId: resizingExtensionWidgetId,
   startWidgetResize: startExtensionWidgetResize,
 } = useWidgetGridResize({
+  onStart: () => {
+    // Pointermove only updates the visual preview. Serializing the complete
+    // page layout on every pixel/grid step causes visible resize jank.
+    isPreviewingWidgetResize.value = true
+  },
   onPreview: () => {
     isWidgetLayoutDirty.value = true
   },
@@ -352,6 +358,9 @@ const {
       instance.size = { ...previous }
       isWidgetLayoutDirty.value = true
     }
+  },
+  onFinish: () => {
+    isPreviewingWidgetResize.value = false
   },
 })
 
@@ -553,6 +562,30 @@ function updateClock() {
 
 }
 
+function stopClockTimer() {
+  if (clockTimer !== null) {
+    window.clearInterval(clockTimer)
+    clockTimer = null
+  }
+}
+
+function syncClockTimer() {
+  stopClockTimer()
+  if (!widgetPreferences.value.clock || document.hidden)
+    return
+  updateClock()
+  clockTimer = window.setInterval(updateClock, 1000)
+}
+
+function handleVisibilityChange() {
+  syncClockTimer()
+}
+
+watch([
+  () => widgetPreferences.value.clock,
+  () => widgetPreferences.value.clockHourCycle,
+], syncClockTimer)
+
 // 2. 聚合搜索引擎
 interface SearchEngine {
   id: ExtensionSearchEngineId
@@ -566,9 +599,11 @@ const searchEngines: SearchEngine[] = [
   { id: 'baidu', title: '百度', url: 'https://www.baidu.com/s?wd=%s', icon: '', iconSrc: SvgSrcBaidu },
   { id: 'google', title: 'Google', url: 'https://www.google.com/search?q=%s', icon: '', iconSrc: SvgSrcGoogle },
   { id: 'bing', title: 'Bing', url: 'https://www.bing.com/search?q=%s', icon: '', iconSrc: SvgSrcBing },
-  { id: 'github', title: 'GitHub', url: 'https://github.com/search?q=%s', icon: 'mdi:github' },
-  { id: 'bilibili', title: 'Bilibili', url: 'https://search.bilibili.com/all?keyword=%s', icon: 'ri:bilibili-fill' },
-  { id: 'duckduckgo', title: 'DuckDuckGo', url: 'https://duckduckgo.com/?q=%s', icon: 'simple-icons:duckduckgo' },
+  // Search selector icons use the bundled sprite directly. Bookmark favicons
+  // below may still use Iconify, but core controls must remain visible offline.
+  { id: 'github', title: 'GitHub', url: 'https://github.com/search?q=%s', icon: 'mdi-github' },
+  { id: 'bilibili', title: 'Bilibili', url: 'https://search.bilibili.com/all?keyword=%s', icon: 'ri-bilibili-fill' },
+  { id: 'duckduckgo', title: 'DuckDuckGo', url: 'https://duckduckgo.com/?q=%s', icon: 'simple-icons-duckduckgo' },
 ]
 
 const currentEngine = computed<SearchEngine>(() => searchEngines.find(engine => engine.id === widgetPreferences.value.searchEngineId) ?? searchEngines[0])
@@ -1125,8 +1160,17 @@ const widgetContextMenuRef = ref<HTMLElement | null>(null)
 let contextMenuReturnFocus: HTMLElement | null = null
 
 function positionContextMenu(event: MouseEvent, estimatedWidth = 252, estimatedHeight = 340) {
-  rightMenuX.value = Math.max(10, Math.min(event.clientX, window.innerWidth - estimatedWidth - 10))
-  rightMenuY.value = Math.max(10, Math.min(event.clientY, window.innerHeight - estimatedHeight - 10))
+  let x = event.clientX
+  let y = event.clientY
+  // Keyboard-activated buttons dispatch click events at (0, 0). Anchor the
+  // menu to the focused control instead of unexpectedly opening top-left.
+  if (x === 0 && y === 0 && event.currentTarget instanceof HTMLElement) {
+    const rect = event.currentTarget.getBoundingClientRect()
+    x = rect.left + Math.min(rect.width / 2, 48)
+    y = rect.top + Math.min(rect.height, 48)
+  }
+  rightMenuX.value = Math.max(10, Math.min(x, window.innerWidth - estimatedWidth - 10))
+  rightMenuY.value = Math.max(10, Math.min(y, window.innerHeight - estimatedHeight - 10))
 }
 
 function handleCardContextMenu(event: MouseEvent, card: Panel.ItemInfo) {
@@ -1356,6 +1400,10 @@ async function applyExternalStorageChanges() {
     }
   }
   if (keys.includes(EXTENSION_WIDGETS_KEY)) {
+    // Do not silently replace an unsaved pointer/drag change with another
+    // tab's storage notification. Page-scoped writes merge in storage first.
+    if (isWidgetLayoutDirty.value && !await persistExtensionWidgets())
+      return
     widgetPreferences.value = readExtensionWidgets()
     const pageKey = readyPageLayoutKey.value
     if (pageKey)
@@ -1400,15 +1448,14 @@ function handleExternalStorageChange(change: StorageChangeEvent) {
 // 8. 周期与初始化
 onMounted(async () => {
   isDisposed = false
-  updateClock()
-  clockTimer = window.setInterval(updateClock, 1000)
+  syncClockTimer()
 
   removeSyncConflictListener = onSyncConflict(() => {
     void triggerOfflineReplay().then(refreshBootstrap, refreshBootstrap)
   })
   removeStorageListener = runtime.storage.subscribe?.(handleExternalStorageChange) ?? null
   removeOfflineQueueListener = onOfflineQueueChanged(refreshPendingMutationsCount)
-  window.addEventListener('wheel', handleGroupWheel, { passive: false })
+  document.addEventListener('visibilitychange', handleVisibilityChange)
   window.addEventListener('online', handleBrowserOnline)
   window.addEventListener('offline', handleBrowserOffline)
   window.addEventListener('pagehide', flushPendingLayoutIfDirty)
@@ -1423,7 +1470,7 @@ onMounted(async () => {
 onUnmounted(() => {
   isDisposed = true
   flushPendingLayoutIfDirty()
-  if (clockTimer) clearInterval(clockTimer)
+  stopClockTimer()
   if (sideHideTimer) clearTimeout(sideHideTimer)
   if (wheelHintTimer) clearTimeout(wheelHintTimer)
   if (suppressCardClickTimer) clearTimeout(suppressCardClickTimer)
@@ -1431,7 +1478,7 @@ onUnmounted(() => {
   removeSyncConflictListener?.()
   removeStorageListener?.()
   removeOfflineQueueListener?.()
-  window.removeEventListener('wheel', handleGroupWheel)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
   window.removeEventListener('online', handleBrowserOnline)
   window.removeEventListener('offline', handleBrowserOffline)
   window.removeEventListener('pagehide', flushPendingLayoutIfDirty)
@@ -1522,7 +1569,7 @@ onUnmounted(() => {
     />
 
     <!-- 核心主体区 -->
-    <main class="main-content flex flex-col items-center justify-start overflow-y-auto px-4 pb-12 pt-6">
+    <main class="main-content flex flex-col items-center justify-start overflow-y-auto px-4 pb-12 pt-6" @wheel="handleGroupWheel">
       <div
         v-if="['cached', 'offline', 'error'].includes(extensionSyncStatus) || pendingMutationsCount > 0"
         class="sync-status-banner"

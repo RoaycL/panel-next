@@ -5,9 +5,11 @@ import { canResizeWidgetAxis, resizeInstanceToWithinBounds } from './registry'
 export type WidgetResizeDirection = 'columns' | 'rows' | 'both'
 
 interface GridResizeOptions {
+  onStart?: (instance: WidgetInstance) => void
   onPreview?: (instance: WidgetInstance) => void
   onCommit: (instance: WidgetInstance, previous: WidgetSize) => void | Promise<void>
   onCancel?: (instance: WidgetInstance) => void
+  onFinish?: (instance: WidgetInstance, changed: boolean, cancelled: boolean) => void
 }
 
 interface ResizeSession {
@@ -58,13 +60,18 @@ export function useWidgetGridResize(options: GridResizeOptions) {
     catch {
       // Pointer capture may already be released by the browser.
     }
-    if (cancelled) {
-      current.instance.size = { ...current.initial }
-      options.onCancel?.(current.instance)
-      return
+    try {
+      if (cancelled) {
+        current.instance.size = { ...current.initial }
+        options.onCancel?.(current.instance)
+      }
+      else if (current.changed) {
+        void options.onCommit(current.instance, current.initial)
+      }
     }
-    if (current.changed)
-      void options.onCommit(current.instance, current.initial)
+    finally {
+      options.onFinish?.(current.instance, current.changed, cancelled)
+    }
   }
 
   function handlePointerMove(event: PointerEvent) {
@@ -152,6 +159,7 @@ export function useWidgetGridResize(options: GridResizeOptions) {
       changed: false,
     }
     activeWidgetId.value = instance.id
+    options.onStart?.(instance)
     document.documentElement.classList.add('is-widget-resizing')
     window.addEventListener('pointermove', handlePointerMove, { passive: false })
     window.addEventListener('pointerup', handlePointerUp)
