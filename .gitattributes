@@ -10,3 +10,6 @@
 *.png binary -eol
 *.webp binary -eol
 *.zip binary -eol
+
+# Preserve downloaded official SVG bytes so provenance SHA-256 stays reproducible.
+src/assets/brand-icons/*.svg -text -eol
