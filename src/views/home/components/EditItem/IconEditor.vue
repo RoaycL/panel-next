@@ -67,6 +67,11 @@ function handleResetBackgroundColor() {
   handleChange()
 }
 
+function handleTransparentBackground() {
+  itemIconInfo.value.backgroundColor = '#00000000'
+  handleChange()
+}
+
 const handleUploadFinish = ({
   file,
   event,
@@ -208,6 +213,9 @@ function handleGallerySelect(url: string) {
               @update-value="handleChange"
             />
           </div>
+          <NButton size="small" :type="itemIconInfo.backgroundColor === '#00000000' ? 'primary' : 'default'" secondary @click="handleTransparentBackground">
+            {{ $t('iconItem.noBackground') }}
+          </NButton>
           <button
             v-if="itemIconInfo.backgroundColor !== initData.backgroundColor"
             type="button"

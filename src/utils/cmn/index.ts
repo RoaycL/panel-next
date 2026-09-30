@@ -2,6 +2,7 @@ import moment from 'moment'
 import { useAuthStore, useUserStore } from '@/store'
 import { getAuthInfo } from '@/api/system/user'
 import type { VisitMode } from '@/enums/auth'
+import { updateBootstrapAccount } from '@/sync/bootstrapCache'
 
 export function buildTimeString(format?: string): string {
   if (!format)
@@ -27,10 +28,15 @@ export async function updateLocalUserInfo() {
     visitMode: VisitMode
   }
 
-  const { data } = await getAuthInfo<Req>()
+  const { code, data, msg } = await getAuthInfo<Req>()
+  if (code !== 0 || !data?.user)
+    throw new Error(msg || '账户资料读取失败')
+  if (!await updateBootstrapAccount(data.user))
+    throw new Error('账户资料已更新，但本地快照保存失败，请重试')
   userStore.updateUserInfo({ headImage: data.user.headImage, name: data.user.name })
   authStore.setUserInfo(data.user)
   authStore.setVisitMode(data.visitMode)
+  return data.user
 }
 
 export function getFaviconUrl(url: string): string {

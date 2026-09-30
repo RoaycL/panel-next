@@ -1,6 +1,7 @@
 import { getBootstrap } from '@/api/sync'
+import { getAuthInfo } from '@/api/system/user'
 import { getRuntime } from '@/runtime'
-import { parseBootstrapSnapshot, serializeBootstrapSnapshot } from './bootstrapSnapshot'
+import { parseBootstrapSnapshot, serializeBootstrapSnapshot, withBootstrapAccount } from './bootstrapSnapshot'
 import { synchronizeBootstrap } from './changes'
 import { retryNetworkOperation } from './retry'
 
@@ -74,6 +75,17 @@ export function readBootstrapRevisionCursor(accountId: number): Sync.Revision | 
   return readBootstrapSnapshot(accountId)?.cursorRevision ?? null
 }
 
+export async function updateBootstrapAccount(user: User.Info) {
+  if (!user.id)
+    return true
+  const cached = readBootstrapSnapshot(user.id)
+  if (!cached)
+    return true
+  const data = withBootstrapAccount(cached.data, user)
+  const serialized = data && serializeBootstrapSnapshot(data, cached.serverOrigin, user.id)
+  return serialized ? persistSnapshot(cacheKey(user.id), serialized) : false
+}
+
 export interface BootstrapRefreshResult {
   data: Sync.BootstrapResponseV1 | null
   savedAt: string | null
@@ -90,8 +102,12 @@ export async function refreshBootstrapSnapshot(accountId: number): Promise<Boots
   const result = await retryNetworkOperation(async () => {
     if (cached) {
       const incremental = await synchronizeBootstrap(cached.data)
-      if (incremental)
-        return incremental.data
+      if (incremental) {
+        const profile = await getAuthInfo<{ user: User.Info }>()
+        if (profile.code !== 0 || !profile.data?.user)
+          return null
+        return withBootstrapAccount(incremental.data, profile.data.user)
+      }
     }
     const bootstrap = await getBootstrap()
     return bootstrap.code === 0 ? bootstrap.data : null

@@ -378,6 +378,7 @@
     "lanUrlInputPlaceholder": "http(s):// (LAN mode, will redirect to this address)",
     "localCacheUnavailable": "Icon saved, but this image could not be cached locally; a fallback will appear offline",
     "localCacheHint": "Readable images are cached in this browser and shown locally on later visits.",
+    "noBackground": "No background",
     "multipleIconsFound": "Found {count} candidate icon(s). Please pick one from the list.",
     "newWindowOpen": "Open in new window",
     "queuedOffline": "You are offline. The change has been added to the sync queue",

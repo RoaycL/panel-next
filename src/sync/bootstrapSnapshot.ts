@@ -151,6 +151,19 @@ export function isBootstrapResponseV1(value: unknown): value is Sync.BootstrapRe
   return true
 }
 
+/** Account fields are outside the panel change stream and need a separate refresh. */
+export function withBootstrapAccount(data: Sync.BootstrapResponseV1, user: User.Info): Sync.BootstrapResponseV1 | null {
+  if (user.id !== data.account.id)
+    return null
+  const account = { ...data.account }
+  for (const key of ['username', 'name', 'headImage', 'role', 'mail', 'status'] as const) {
+    if (user[key] !== undefined)
+      Object.assign(account, { [key]: user[key] })
+  }
+  const next = { ...data, account }
+  return isBootstrapResponseV1(next) ? next : null
+}
+
 function matchesSnapshotScope(value: unknown, expectedOrigin: string, expectedAccountId: number) {
   if (!isRecord(value))
     return false

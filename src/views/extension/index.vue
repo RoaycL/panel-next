@@ -548,6 +548,7 @@ async function executeRemoveExtensionWidget(instanceId: string) {
 
 function extensionWidgetCellStyle(instance: { size: WidgetInstance['size'] }) {
   return {
+    '--widget-columns': Math.min(12, Math.max(1, instance.size.columns)),
     gridColumn: `span ${Math.min(12, Math.max(1, instance.size.columns))}`,
     gridRow: `span ${Math.max(1, instance.size.rows)}`,
   }
@@ -1993,6 +1994,7 @@ onUnmounted(() => {
                   </span>
                 </div>
                 <WidgetStackHost :instances="item.group.members" />
+                <span class="dashboard-widget-caption">{{ widgetDefinitionTitle(widgetRegistry.get(item.group.members[0].type) ?? { type: item.group.members[0].type }) }}</span>
                 <template v-if="extensionWidgetEditMode && !item.group.stackId && !item.group.members[0].hidden">
                   <button type="button" class="widget-resize-handle is-right" data-no-drag :aria-label="t('widgetLayout.widen')" @pointerdown="startExtensionWidgetResize($event, item.group.members[0], 'columns', extensionWidgetGridRef)" />
                   <button type="button" class="widget-resize-handle is-bottom" data-no-drag :aria-label="t('widgetLayout.stretch')" @pointerdown="startExtensionWidgetResize($event, item.group.members[0], 'rows', extensionWidgetGridRef)" />
@@ -3242,6 +3244,12 @@ onUnmounted(() => {
 }
 .extension-dashboard-grid {
   --widget-grid-row-height: 100px;
+  --dashboard-columns: 12;
+  --dashboard-column-width: calc((100cqw - (var(--dashboard-columns) - 1) * 12px) / var(--dashboard-columns));
+  --dashboard-icon-size: min(64px, var(--dashboard-column-width));
+  --dashboard-icon-inset: max(0px, (var(--dashboard-column-width) - var(--dashboard-icon-size)) / 2);
+  --dashboard-caption-space: calc(var(--widget-grid-row-height) - var(--dashboard-icon-size));
+  container-type: inline-size;
   position: relative;
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
@@ -3259,7 +3267,12 @@ onUnmounted(() => {
 .dashboard-add-icon:focus-visible { outline: 2px solid var(--ext-accent); outline-offset: 3px; }
 .dashboard-add-icon-symbol { display: grid; width: 54px; height: 54px; place-items: center; border: 1px dashed var(--ext-border); border-radius: var(--pn-bookmark-icon-radius, 14px); background: var(--ext-surface); box-shadow: none; }
 .dashboard-add-icon-symbol svg { box-sizing: border-box; width: 36px; height: 36px; padding: 7px; border-radius: 50%; color: #fff; background: var(--ext-accent); }
-.extension-dashboard-grid .extension-widget-cell { height: 100%; border-radius: 20px; }
+.extension-dashboard-grid .extension-widget-cell { height: 100%; padding-inline: var(--dashboard-icon-inset); border-radius: 20px; }
+.extension-dashboard-grid .extension-widget-cell :deep(.widget-stack-host) { height: calc(100% - var(--dashboard-caption-space)); }
+.dashboard-widget-caption { display: block; height: var(--dashboard-caption-space); padding-top: 10px; overflow: hidden; color: var(--ext-text); font-size: 12px; font-weight: 500; line-height: 16px; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.extension-dashboard-grid .speed-card, .extension-dashboard-grid .dashboard-add-icon { padding: 0; gap: 10px; }
+.extension-dashboard-grid .card-icon-box, .extension-dashboard-grid .dashboard-add-icon-symbol { flex: none; width: var(--dashboard-icon-size); height: var(--dashboard-icon-size); }
+.extension-dashboard-grid .card-icon-box { overflow: visible; box-shadow: none; }
 .extension-dashboard-grid.is-editing .extension-widget-cell {
   outline: 1px dashed color-mix(in srgb, var(--ext-accent) 58%, transparent);
   outline-offset: 2px;
@@ -3294,8 +3307,8 @@ onUnmounted(() => {
 
 /* Keep the shared 12-column widget grid, but reserve usable icon width on laptops. */
 @media (min-width: 721px) and (max-width: 1000px) {
-  .extension-dashboard-grid .speed-card { grid-column: span calc(var(--bookmark-columns, 1) * 2) !important; }
-  .extension-dashboard-grid .dashboard-add-icon { grid-column: span 2; }
+  .extension-dashboard-grid { --dashboard-columns: 6; grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .extension-dashboard-grid .extension-widget-cell { grid-column: span min(var(--widget-columns), 6) !important; }
 }
 
 @media (max-width: 720px) {
@@ -3303,12 +3316,12 @@ onUnmounted(() => {
   .dashboard-canvas-header .active-group-meta { flex: 1; }
   .dashboard-canvas-header .extension-widget-toolbar { flex: none; max-width: 100%; margin-left: auto; padding: 5px; justify-content: flex-end; }
   .dashboard-canvas-section { min-width: 0; }
-  .extension-dashboard-grid { min-width: 0; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .extension-dashboard-grid { --dashboard-columns: 4; min-width: 0; grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .extension-dashboard-grid .extension-widget-cell { grid-column: 1 / -1 !important; }
 }
 
 @media (max-width: 430px) {
-  .extension-dashboard-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .extension-dashboard-grid { --dashboard-columns: 3; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -3353,6 +3366,7 @@ onUnmounted(() => {
 .has-wallpaper :is(.clock-eyebrow, .clock-seconds, .clock-period, .date-display, .active-group-meta small, .card-description) { color: rgba(255,255,255,.88); text-shadow: 0 1px 6px rgba(0,0,0,.55); }
 .has-wallpaper :is(.workspace-customize, .workspace-footer button) { color: var(--ext-text); background: var(--ext-surface); text-shadow: none; }
 .has-wallpaper .speed-card.is-expanded :is(.card-title, .card-description) { color: var(--ext-text); text-shadow: none; }
+.has-wallpaper .dashboard-widget-caption { color: #fff; text-shadow: 0 1px 6px rgba(0,0,0,.55); }
 
 @media (max-width: 720px) {
   .side-rail { width: 60px; padding: 10px 4px; }

@@ -47,6 +47,7 @@ const imageSrc = computed(() => {
 })
 const onlineIcon = computed(() => iconType.value === 3 && !brandIcon.value && !localSprite.value ? props.itemIcon?.text?.trim() || '' : '')
 const imageFailed = ref(false)
+const imageLoaded = ref(false)
 const displayImageSrc = ref('')
 watch(imageSrc, (source, _previous, onCleanup) => {
   let cancelled = false
@@ -57,6 +58,7 @@ watch(imageSrc, (source, _previous, onCleanup) => {
       clearTimeout(timer)
   })
   imageFailed.value = false
+  imageLoaded.value = false
   displayImageSrc.value = ''
   if (!source)
     return
@@ -92,13 +94,18 @@ const generatedColor = computed(() => {
 const backgroundColor = computed(() => {
   if (props.forceBackground)
     return props.forceBackground
+  const savedColor = props.itemIcon?.backgroundColor
+  if (savedColor && savedColor !== '#2a2a2a6b')
+    return savedColor
+  if (imageSrc.value && !imageFailed.value)
+    return 'transparent'
   if (brandIcon.value || (fallbackBrand.value && (!displayImageSrc.value || imageFailed.value)))
     return '#ffffff'
-  const savedColor = props.itemIcon?.backgroundColor
-  if (preset.value && (iconType.value === 2 || onlineIcon.value || !savedColor || savedColor === '#2a2a2a6b'))
+  if (preset.value)
     return preset.value.color
-  return savedColor && savedColor !== '#2a2a2a6b' ? savedColor : generatedColor.value
+  return generatedColor.value
 })
+const transparentBackground = computed(() => ['transparent', '#00000000'].includes(backgroundColor.value.toLowerCase()))
 const foregroundColor = computed(() => {
   const color = backgroundColor.value.toLowerCase()
   return color === '#fff' || color === '#ffffff' ? '#4285f4' : '#fff'
@@ -111,12 +118,15 @@ const markFontSize = computed(() => `${Math.round(props.size * (Array.from(fallb
     <slot>
       <div
         class="item-icon-surface"
+        :class="{ 'item-icon-surface-transparent': transparentBackground }"
         :style="{ backgroundColor, color: foregroundColor }"
       >
-        <img v-if="brandIcon || fallbackBrand" :src="brandIcon || fallbackBrand" alt="" class="item-icon-brand">
-        <SvgIcon v-else-if="fallbackSprite" :icon="fallbackSprite" class="item-icon-glyph" />
-        <span v-else class="item-icon-mark" :style="{ fontSize: markFontSize }">{{ fallbackMark }}</span>
-        <img v-if="displayImageSrc && !imageFailed" :src="displayImageSrc" alt="" class="item-icon-image" @error="imageFailed = true">
+        <template v-if="!imageLoaded || imageFailed">
+          <img v-if="brandIcon || fallbackBrand" :src="brandIcon || fallbackBrand" alt="" class="item-icon-brand">
+          <SvgIcon v-else-if="fallbackSprite" :icon="fallbackSprite" class="item-icon-glyph" />
+          <span v-else class="item-icon-mark" :style="{ fontSize: markFontSize }">{{ fallbackMark }}</span>
+        </template>
+        <img v-if="displayImageSrc && !imageFailed" :src="displayImageSrc" alt="" class="item-icon-image" @load="imageLoaded = true" @error="imageFailed = true">
         <SvgIconOnline v-if="onlineIcon" :icon="onlineIcon" class="item-icon-remote" />
       </div>
     </slot>
@@ -128,6 +138,8 @@ const markFontSize = computed(() => `${Math.round(props.size * (Array.from(fallb
 .item-icon-glyph { width: 56%; height: 56%; flex: none; }
 .item-icon-mark { max-width: 94%; overflow: hidden; font-weight: 800; line-height: 1; letter-spacing: -.05em; text-overflow: clip; white-space: nowrap; }
 .item-icon-image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.item-icon-surface-transparent { overflow: visible; border-radius: 0; }
+.item-icon-surface-transparent .item-icon-image { object-fit: contain; }
 .item-icon-brand { width: 78%; height: 78%; object-fit: contain; }
 .item-icon-remote { position: absolute; inset: 20%; width: 60%; height: 60%; }
 .item-icon-surface:has(> svg.item-icon-remote) > .item-icon-glyph,

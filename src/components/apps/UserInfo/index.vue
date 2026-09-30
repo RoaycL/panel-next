@@ -112,7 +112,13 @@ function isValidEmail(value: string) {
   return domain.length >= 3 && domain.includes('.') && !domain.startsWith('.') && !domain.endsWith('.')
 }
 
-watch(() => authStore.userInfo, resetProfileDraft, { deep: true })
+watch(() => authStore.userInfo, (_user, previous) => {
+  const hadDraft = nickName.value.trim() !== (previous?.name || previous?.username || '').trim()
+    || profileMail.value.trim() !== (previous?.mail || '').trim()
+    || profileHeadImage.value.trim() !== (previous?.headImage || '').trim()
+  if (!isSavingProfile.value && !hadDraft)
+    resetProfileDraft()
+})
 
 const themeSegments: { key: Theme; icon: string }[] = [
   { key: 'light', icon: 'material-symbols-light-mode-outline-rounded' },
@@ -186,9 +192,12 @@ async function handleSaveInfo() {
       ms.error(`${t('common.editFail')}:${msg}`)
       return
     }
-    if (authStore.userInfo)
-      authStore.setUserInfo({ ...authStore.userInfo, name, mail, headImage })
-    await updateLocalUserInfo()
+    const savedUser = await updateLocalUserInfo()
+    if ((savedUser.headImage || '') !== headImage) {
+      ms.error('头像保存结果与提交内容不一致，请重试；已保留当前编辑内容')
+      return
+    }
+    resetProfileDraft()
     ms.success(t('common.editSuccess'))
   }
   catch (error) {

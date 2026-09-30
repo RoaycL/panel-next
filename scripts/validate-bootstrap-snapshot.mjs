@@ -28,6 +28,7 @@ const {
   isSyncRevision,
   parseBootstrapSnapshot,
   serializeBootstrapSnapshot,
+  withBootstrapAccount,
 } = await importTypeScript(source, 'bootstrapSnapshot.ts')
 
 function validBootstrap() {
@@ -229,4 +230,17 @@ const exhausted = await retryNetworkOperation(async () => {
 }, [0, 1, 2], async () => {})
 assert.deepEqual(exhausted, { ok: false, attempts: 3 })
 
-console.log('Validated cache migration, atomic incremental sync, corruption fallback, and bounded offline retry')
+const profileSource = validBootstrap()
+const profileUpdated = withBootstrapAccount(profileSource, { id: 7, name: 'Updated', headImage: '/uploads/custom-avatar.png' })
+assert.equal(profileUpdated.account.headImage, '/uploads/custom-avatar.png')
+assert.equal(profileUpdated.revision, profileSource.revision, 'Profile changes must not change the panel cursor')
+assert.equal(profileUpdated.panel, profileSource.panel)
+assert.equal(profileSource.account.headImage, '', 'Trusted source must remain immutable')
+assert.equal(withBootstrapAccount(profileSource, { id: 8, headImage: '/uploads/other.png' }), null)
+assert.equal(withBootstrapAccount(profileSource, { id: 7, headImage: 12 }), null)
+const profileSerialized = serializeBootstrapSnapshot(profileUpdated, 'https://panel.example.com', 7)
+assert.equal(parseBootstrapSnapshot(profileSerialized, 'https://panel.example.com', 7).data.account.headImage, '/uploads/custom-avatar.png')
+const unchangedPanel = await synchronizeBootstrap(profileUpdated, async cursor => ({ schemaVersion: 1, fromRevision: cursor, nextRevision: cursor, currentRevision: cursor, hasMore: false, changes: [] }))
+assert.equal(unchangedPanel.data.account.headImage, '/uploads/custom-avatar.png', 'Incremental refresh must retain the saved avatar')
+
+console.log('Validated cache migration, atomic incremental sync, profile snapshot updates, corruption fallback, and bounded offline retry')
