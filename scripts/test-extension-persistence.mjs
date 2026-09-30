@@ -430,6 +430,32 @@ assert.equal(adapter.getItem('font'), 'sans')
 
 console.log('Passed ChromeStorageAdapter Concurrent Write & Rollback Safety Tests.')
 
+// Rapid A -> B -> A and remove -> restore must retain the final user intent.
+const quickDisk = {}
+let quickWriteCount = 0
+const quickAdapter = new ChromeStorageAdapter({
+  get: async () => ({ ...quickDisk }),
+  set: async (items) => { quickWriteCount++; Object.assign(quickDisk, items) },
+  remove: async (keys) => { for (const key of [keys].flat()) delete quickDisk[key] },
+}, mockOnChanged)
+quickAdapter.setOrigin('https://panel.example.com')
+quickAdapter.setItem('quick', 'A')
+await quickAdapter.flush()
+quickAdapter.setItem('quick', 'B')
+quickAdapter.setItem('quick', 'A')
+await quickAdapter.flush()
+assert.equal(quickAdapter.getItem('quick'), 'A')
+assert.equal(Object.values(quickDisk)[0], 'A')
+quickAdapter.removeItem('quick')
+quickAdapter.setItem('quick', 'A')
+await quickAdapter.flush()
+assert.equal(Object.values(quickDisk)[0], 'A')
+const countBeforeDuplicate = quickWriteCount
+quickAdapter.setItem('quick', 'A')
+quickAdapter.setItem('quick', 'A')
+await quickAdapter.flush()
+assert.equal(quickWriteCount, countBeforeDuplicate)
+
 console.log('--- Running Two-Stage Deletion & Retry Queue Production Flow Tests ---')
 
 // Setup widget instances and private storage

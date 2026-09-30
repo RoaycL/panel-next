@@ -238,7 +238,8 @@ export function buildProviderResult(
     console.error('[ThemeProvider] Theme resolution failed, using core.default.', error)
     loadResult = registry.loadSelection(null, 'auto', resolvedMode, surface)
   }
-  if (surface === 'extension' && loadResult.resolved.id === DEFAULT_THEME_ID) {
+  // Both surfaces use the same default palette; custom themes keep their tokens.
+  if (loadResult.resolved.id === DEFAULT_THEME_ID) {
     loadResult = {
       ...loadResult,
       resolved: {

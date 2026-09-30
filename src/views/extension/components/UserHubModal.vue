@@ -21,6 +21,7 @@ import { logout } from '@/api'
 import { openExtensionLogin } from '@/runtime/extensionLogin'
 
 const props = defineProps<{
+  groups: Panel.ItemIconGroup[]
   show: boolean
   syncStatus: 'idle' | 'syncing' | 'online' | 'cached' | 'offline' | 'error'
   syncRevision: Sync.Revision
@@ -40,6 +41,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
+  (e: 'groupIconSaved', group: Panel.ItemIconGroup, meta: { queued: boolean }): void
   (e: 'update:show', value: boolean): void
   (e: 'refresh'): void
   (e: 'update:sidebarPosition', value: 'left' | 'right'): void
@@ -169,6 +171,8 @@ const BackupRestoreApp = defineAsyncComponent(() => import('@/components/apps/Ba
 const ImportExportApp = defineAsyncComponent(() => import('@/components/apps/ImportExport/index.vue'))
 const ThemeSettingsModal = defineAsyncComponent(() => import('@/themes/ThemeSettingsModal.vue'))
 const ExtensionHistoryPanel = defineAsyncComponent(() => import('./ExtensionHistoryPanel.vue'))
+const WallpaperSettingsPanel = defineAsyncComponent(() => import('./WallpaperSettingsPanel.vue'))
+const GroupAppearancePanel = defineAsyncComponent(() => import('./GroupAppearancePanel.vue'))
 
 type NavKey = 'profile' | 'search' | 'time' | 'style' | 'layout' | 'sidebar' | 'gallery' | 'backup' | 'docker' | 'system' | 'server' | 'about'
 type NavSection = 'personal' | 'workspace' | 'data' | 'admin' | 'support'
@@ -283,7 +287,7 @@ const navItems = computed<HubNavItem[]>(() => {
       key: 'gallery',
       section: 'data',
       label: '图库素材中心',
-      desc: '管理个人壁纸、应用图标与图床',
+      desc: '管理上传的图标与图片素材',
       icon: 'mdi:image-multiple-outline',
     },
     {
@@ -663,21 +667,15 @@ async function handleLogout() {
             </section>
           </div>
 
-          <div v-else-if="currentTab === 'style'" class="view-panel max-w-2xl mx-auto py-2">
+          <div v-else-if="currentTab === 'style'" class="view-panel py-2 wallpaper-settings-page">
             <section class="settings-glass-card">
-              <div class="settings-section-heading">
-                <span class="settings-section-icon"><SvgIcon icon="ion:color-palette-outline" /></span>
-                <div><h3>主题与壁纸</h3><p>选择喜欢的配色与图标，搭配一张让你放松的壁纸。</p></div>
-              </div>
               <div class="settings-action-grid">
                 <button type="button" @click="themeCenterVisible = true">
                   <SvgIcon icon="ion:color-palette-outline" /><span><b>打开主题中心</b><small>选择、预览并应用主题</small></span><SvgIcon icon="mdi:chevron-right" />
                 </button>
-                <button type="button" @click="openWallpaperSettings">
-                  <SvgIcon icon="material-symbols:wallpaper" /><span><b>更换桌面壁纸</b><small>选择素材库中的壁纸并保存</small></span><SvgIcon icon="mdi:chevron-right" />
-                </button>
               </div>
             </section>
+            <WallpaperSettingsPanel @browse="openWallpaperSettings" />
             <ThemeSettingsModal
               :show="themeCenterVisible"
               surface="extension"
@@ -714,13 +712,14 @@ async function handleLogout() {
                 <label class="sidebar-setting-row"><span><SvgIcon icon="majesticons-applications" /><span><b>侧边栏密度</b><small>调整图标尺寸与栏宽</small></span></span><NSelect v-model:value="sidebarDensityModel" :options="sidebarDensityOptions" size="small" class="w-24" /></label>
               </div>
             </section>
+            <GroupAppearancePanel :groups="groups" @saved="(group, meta) => emit('groupIconSaved', group, meta)" />
           </div>
 
           <!-- 2. 图库与素材中心 -->
           <div v-else-if="currentTab === 'gallery'" class="view-panel">
             <Suspense>
               <template #default>
-                <UploadFileManagerApp />
+                <UploadFileManagerApp mode="assets" />
               </template>
               <template #fallback>
                 <div class="flex items-center justify-center py-20">
@@ -945,6 +944,7 @@ async function handleLogout() {
 .view-panel {
   animation: fadeIn 0.25s ease-out;
 }
+.wallpaper-settings-page { display: grid; gap: 20px; }
 
 .settings-glass-card {
   display: flex;
@@ -1175,7 +1175,9 @@ async function handleLogout() {
   border: 1px solid var(--hub-border);
   border-radius: var(--pn-radius-large, 18px) !important;
   background: var(--pn-glass-modal);
-  box-shadow: var(--pn-effect-shadow-high, 0 30px 100px rgba(2, 6, 23, .38)) !important;
+  box-shadow: var(--pn-glass-highlight), var(--pn-glass-shadow) !important;
+  -webkit-backdrop-filter: var(--pn-glass-filter);
+  backdrop-filter: var(--pn-glass-filter);
 }
 .hub-sidebar { width: 228px !important; padding: 24px 16px !important; backdrop-filter: none !important; box-shadow: none; }
 .sidebar-top { min-height: 0; flex: 1; overflow: hidden; }
@@ -1340,7 +1342,7 @@ async function handleLogout() {
 }
 .hub-login-button { background: var(--hub-accent); color: var(--pn-color-surface); min-height: 40px; }
 .hub-login-button:hover { filter: brightness(.95); }
-.hub-sidebar { background: var(--pn-color-page-background); }
+.hub-sidebar { background: var(--pn-glass-panel); }
 .hub-brand-mark { color: var(--pn-color-surface); }
 .nav-icon-wrap { background: transparent; }
 .hub-nav-caption { margin-top: 8px; color: var(--hub-text-muted); font-weight: 500; }

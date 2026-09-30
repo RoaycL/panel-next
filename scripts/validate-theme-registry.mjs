@@ -478,11 +478,11 @@ const autoSelection = { schemaVersion: THEME_SELECTION_SCHEMA_VERSION, themeId: 
 setPreferredDark(true)
 const viewDark = buildProviderResult(autoSelection, 'web', registry)
 assert.equal(viewDark.resolvedMode, 'dark')
-assert.match(viewDark.cssVariables['--pn-color-page-background'], /#020617/, 'dark tokens applied when system is dark')
+assert.equal(viewDark.cssVariables['--pn-color-page-background'], '#000000', 'dark tokens applied when system is dark')
 setPreferredDark(false)
 const viewLight = buildProviderResult(autoSelection, 'web', registry)
 assert.equal(viewLight.resolvedMode, 'light')
-assert.match(viewLight.cssVariables['--pn-color-page-background'], /#eef8ff/, 'light tokens restored')
+assert.equal(viewLight.cssVariables['--pn-color-page-background'], '#ffffff', 'light tokens restored')
 assert.notEqual(viewLight.cssVariables['--pn-color-page-background'], viewDark.cssVariables['--pn-color-page-background'], 'light and dark page backgrounds must remain visually distinct')
 // 显式 dark 选择不受系统影响
 setPreferredDark(true)
@@ -493,13 +493,15 @@ setPreferredDark(false)
 // Extension defaults must pass the same CSS validator and retain explicit overrides.
 for (const mode of ['light', 'dark']) {
   const extensionView = buildProviderResult({ ...autoSelection, mode }, 'extension', registry)
-  assert.equal(extensionView.cssVariables['--pn-color-page-background'], mode === 'dark' ? '#1c231f' : '#f3f5f0')
+  const webView = buildProviderResult({ ...autoSelection, mode }, 'web', registry)
+  assert.deepEqual(webView.cssVariables, extensionView.cssVariables, 'web and extension default materials and variants stay consistent')
+  assert.equal(extensionView.cssVariables['--pn-color-page-background'], mode === 'dark' ? '#000000' : '#ffffff')
   assert.ok(Object.isFrozen(extensionView.loadResult.resolved.tokens))
   const customView = buildProviderResult({ ...autoSelection, mode, overrides: { color: { accent: '#a05242' } } }, 'extension', registry)
   assert.equal(customView.cssVariables['--pn-color-accent'], '#a05242', 'extension palette preserves user accent')
 }
 const extensionFallback = buildProviderResult(null, 'extension', registry)
-assert.equal(extensionFallback.cssVariables['--pn-color-page-background'], '#f3f5f0')
+assert.equal(extensionFallback.cssVariables['--pn-color-page-background'], '#ffffff')
 assert.deepEqual(buildProviderResult({ ...nightSelection, mode: 'dark' }, 'extension', registry).loadResult.resolved.tokens, registry.loadSelection(nightSelection, 'dark', 'dark', 'extension').resolved.tokens, 'custom themes retain their own palette')
 
 /* ---- B4: 预览完整覆盖 Token/图标/Variant/主题 ID，且不污染全局状态 ---- */
@@ -1617,6 +1619,22 @@ function extractSpec(line) {
 }
 
 /* --------------------------------- 输出 --------------------------------- */
+
+// Structural acrylic must cover headers, sidebars and previews, not only shells.
+const acrylic = readSource('../src/styles/extensionGlass.less')
+for (const selector of ['.content-header', '.hub-sidebar', '.icon-gallery-sidebar', '.custom-icon-preview', '.group-icon-preview', '.material-image-preview'])
+  assert.ok(acrylic.includes(selector), `Missing structural glass coverage: ${selector}`)
+assert.match(acrylic, /backdrop-filter: var\(--pn-glass-control-filter\) !important/)
+assert.match(acrylic, /--pn-glass-detail: #262626/)
+assert.match(acrylic, /prefers-reduced-transparency: reduce/)
+const workspaceChrome = acrylic.match(/body[^\n]+:is\(\.app-starter-glass-modal > \.n-card-header[^\n]+\) \{([^}]+)\}/)?.[0]
+assert.ok(workspaceChrome, 'Web and extension settings chrome must share one material rule')
+for (const selector of ['.app-starter-sidebar', '.user-hub-modal .hub-sidebar', '.user-hub-modal .content-header'])
+  assert.ok(workspaceChrome.includes(selector), `Settings material parity missing: ${selector}`)
+assert.match(workspaceChrome, /background: var\(--pn-glass-sheen\), var\(--pn-glass-detail\) !important/)
+assert.match(workspaceChrome, /backdrop-filter: none !important/, 'Settings chrome must not double-blur the already frosted shell')
+assert.match(workspaceChrome, /box-shadow: none !important/)
+assert.doesNotMatch(readSource('../src/views/extension/components/IconGalleryModal.vue'), /background: var\(--pn-color-page-background\)/)
 
 console.log(`Validated theme registry: ${fixture.selections.length} shared wire samples,`)
 console.log('registration/quarantine/migration/serialize flows, package security, provider wiring and storage isolation.')

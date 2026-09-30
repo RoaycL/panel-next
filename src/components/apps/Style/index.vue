@@ -9,7 +9,11 @@ import { t } from '@/locales'
 import { getRuntime } from '@/runtime'
 import { saveExtensionAppearance } from '@/runtime/extensionAppearance'
 import { enqueueAppearanceSave } from '@/themes/appearanceSaveQueue'
+import { saveAndSyncExtensionWallpaper } from '@/runtime/extensionWallpaper'
+import { pickWallpaper } from '@/sync/wallpaper'
 import GallerySelector from '@/components/common/GallerySelector/index.vue'
+
+withDefaults(defineProps<{ hideWallpaper?: boolean }>(), { hideWallpaper: false })
 
 const showWallpaperGallery = ref(false)
 
@@ -44,6 +48,7 @@ function clonePanelConfig(config: Panel.panelConfig): Panel.panelConfig {
 }
 
 let lastConfirmedExtensionAppearance = isExtension ? clonePanelConfig(panelState.panelConfig) : null
+let wallpaperSyncFailed = false
 
 const iconTypeOptions = [
   {
@@ -99,9 +104,20 @@ async function uploadCloud() {
       const attempted = clonePanelConfig(panelState.panelConfig)
       const attemptedBytes = JSON.stringify(attempted)
       try {
-        await saveExtensionAppearance(attempted)
+        const wallpaperChanged = wallpaperSyncFailed || JSON.stringify(pickWallpaper(attempted)) !== JSON.stringify(pickWallpaper(lastConfirmedExtensionAppearance || {}))
+        if (wallpaperChanged) {
+          const result = await saveAndSyncExtensionWallpaper(attempted)
+          wallpaperSyncFailed = result.status === 'failed'
+          if (result.status === 'synced') ms.success('壁纸已保存并同步')
+          else if (result.status === 'queued') ms.warning(result.message || '壁纸已保存，恢复连接后自动同步')
+          else if (result.status === 'failed') ms.warning(result.message || '壁纸已保存在本机，但云端同步失败，请重试')
+          else ms.success('壁纸已保存在本机，登录后可同步')
+        }
+        else {
+          await saveExtensionAppearance(attempted)
+          ms.success(t('apps.baseSettings.extensionAppearanceSaved'))
+        }
         lastConfirmedExtensionAppearance = attempted
-        ms.success(t('apps.baseSettings.extensionAppearanceSaved'))
       }
       catch (err) {
         // A newer edit may already be visible and queued. Only roll the UI back
@@ -248,7 +264,7 @@ function resetPanelConfig() {
         </div>
       </div>
     </NCard>
-    <NCard class="pn-app-card" size="small">
+    <NCard v-if="!hideWallpaper" class="pn-app-card" size="small">
       <div class="pn-app-heading">
         {{ $t('apps.baseSettings.wallpaper') }}
       </div>

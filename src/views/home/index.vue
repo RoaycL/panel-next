@@ -49,6 +49,13 @@ const userStore = useUserStore()
 const runtime = getRuntime()
 const AppStarter = defineAsyncComponent(() => import('./components/AppStarter/index.vue'))
 const EditItem = defineAsyncComponent(() => import('./components/EditItem/index.vue'))
+// Presentation-only catalog: mutations and persistence still use the active web runtime.
+const IconGalleryModal = defineAsyncComponent(() => import('@/views/extension/components/IconGalleryModal.vue'))
+const LoginForm = defineAsyncComponent(() => import('@/views/login/index.vue'))
+const loginVisible = ref(false)
+const loginBusy = ref(false)
+const iconGalleryVisible = ref(false)
+const iconGalleryGroupId = ref<number | null>(null)
 const ThemeSettingsModal = defineAsyncComponent(() => import('@/themes/ThemeSettingsModal.vue'))
 
 const scrollContainerRef = ref<HTMLElement | null>(null)
@@ -79,6 +86,7 @@ const safeFooterHtml = computed(() => {
 })
 
 const items = ref<DashboardGroup[]>([])
+const catalogPages = computed(() => items.value.flatMap(group => typeof group.id === 'number' ? [{ id: group.id, title: group.title || '' }] : []))
 const filterItems = ref<DashboardGroup[]>([])
 const searchKeyword = ref('')
 const groupsLoaded = ref(false)
@@ -161,7 +169,11 @@ const sessionTitle = computed(() => authStore.accessExpiresAt
   ? t('panelHome.sessionExpiresAt', { time: new Date(authStore.accessExpiresAt).toLocaleString() })
   : sessionLabel.value)
 const headerClockWidget = computed(() => createHeaderClockWidget(!panelState.panelConfig.clockShowSecond))
-const headerSearchWidget = createHeaderSearchWidget()
+const homeIconTextColor = computed(() => !panelState.panelConfig.backgroundImageSrc && panelState.panelConfig.iconTextColor?.toLowerCase() === '#ffffff'
+  ? 'var(--pn-color-text-primary)'
+  : panelState.panelConfig.iconTextColor)
+// Header search follows the active palette; widget instances keep their own overrides.
+const headerSearchWidget = { ...createHeaderSearchWidget(), config: {} }
 const headerWeatherWidget = createHeaderWeatherWidget()
 
 const widgetInstances = ref<WidgetInstance[]>([])
@@ -988,15 +1000,22 @@ function handleEditItem(item: Panel.ItemInfo) {
 }
 
 function handleAddItem(itemIconGroupId?: number) {
-  editItemInfoData.value = null
-  editItemInfoShow.value = true
-  if (itemIconGroupId)
-    currentAddItenIconGroupId.value = itemIconGroupId
+  iconGalleryGroupId.value = itemIconGroupId ?? items.value[0]?.id ?? null
+  iconGalleryVisible.value = true
+}
+
+function addCatalogWidget(type: string) {
+  if (!canEdit.value || widgetLayoutLoadError.value)
+    return
+  if (!widgetEditMode.value)
+    enterWidgetLayoutEdit()
+  handleWidgetAdd(type)
+  iconGalleryVisible.value = false
 }
 </script>
 
 <template>
-  <div class="w-full h-full sun-main" :class="{ 'extension-home': layout === 'extension' }">
+  <div class="w-full h-full sun-main" :class="{ 'extension-home': layout === 'extension', 'web-home': layout === 'web', 'has-wallpaper': Boolean(panelState.panelConfig.backgroundImageSrc) }">
     <div
       class="cover wallpaper" :style="{
         filter: `blur(${panelState.panelConfig.backgroundBlur}px)`,
@@ -1273,9 +1292,6 @@ function handleAddItem(itemIconGroupId?: number) {
                 class="group-buttons ml-2 delay-100 transition-opacity flex"
                 :class="itemGroup.hoverStatus ? 'opacity-100' : 'opacity-0'"
               >
-                <button type="button" class="group-action" :title="t('common.add')" :aria-label="t('common.add')" @click="handleAddItem(itemGroup.id)">
-                  <span class="text-white font-xl"><ThemeIcon name="add" /></span>
-                </button>
                 <button type="button" class="group-action" :title="t('common.sort')" :aria-label="t('common.sort')" @click="handleSetSortStatus(itemGroup, !itemGroup.sortStatus)">
                   <span class="text-white font-xl"><ThemeIcon name="drag" /></span>
                 </button>
@@ -1303,7 +1319,7 @@ function handleAddItem(itemIconGroupId?: number) {
                     <AppIcon
                       :class="canDragBookmarks(itemGroup) ? 'cursor-grab' : 'cursor-pointer'"
                       :item-info="item"
-                      :icon-text-color="panelState.panelConfig.iconTextColor"
+                      :icon-text-color="homeIconTextColor"
                       :icon-text-info-hide-description="panelState.panelConfig.iconTextInfoHideDescription || false"
                       :icon-text-icon-hide-title="panelState.panelConfig.iconTextIconHideTitle || false"
                       :style="0"
@@ -1311,11 +1327,11 @@ function handleAddItem(itemIconGroupId?: number) {
                     />
                   </div>
 
-                  <div v-if="itemGroup.items.length === 0" class="not-drag">
+                  <div v-if="canEdit" class="not-drag">
                     <AppIcon
                       :class="canDragBookmarks(itemGroup) ? 'cursor-grab' : 'cursor-pointer'"
                       :item-info="{ icon: { itemType: 3, text: 'subway:add' }, title: t('common.add'), url: '', openMethod: 0 }"
-                      :icon-text-color="panelState.panelConfig.iconTextColor"
+                      :icon-text-color="homeIconTextColor"
                       :icon-text-info-hide-description="panelState.panelConfig.iconTextInfoHideDescription || false"
                       :icon-text-icon-hide-title="panelState.panelConfig.iconTextIconHideTitle || false"
                       :style="0"
@@ -1348,7 +1364,7 @@ function handleAddItem(itemIconGroupId?: number) {
                     <AppIcon
                       :class="canDragBookmarks(itemGroup) ? 'cursor-grab' : 'cursor-pointer'"
                       :item-info="item"
-                      :icon-text-color="panelState.panelConfig.iconTextColor"
+                      :icon-text-color="homeIconTextColor"
                       :icon-text-info-hide-description="!panelState.panelConfig.iconTextInfoHideDescription"
                       :icon-text-icon-hide-title="panelState.panelConfig.iconTextIconHideTitle || false"
                       :style="1"
@@ -1356,16 +1372,10 @@ function handleAddItem(itemIconGroupId?: number) {
                     />
                   </div>
 
-                  <div v-if="itemGroup.items.length === 0" class="not-drag">
-                    <AppIcon
-                      class="cursor-pointer"
-                      :item-info="{ icon: { itemType: 3, text: 'subway:add' }, title: $t('common.add'), url: '', openMethod: 0 }"
-                      :icon-text-color="panelState.panelConfig.iconTextColor"
-                      :icon-text-info-hide-description="!panelState.panelConfig.iconTextInfoHideDescription"
-                      :icon-text-icon-hide-title="panelState.panelConfig.iconTextIconHideTitle || false"
-                      :style="1"
-                      @click="handleAddItem(itemGroup.id)"
-                    />
+                  <div v-if="canEdit" class="not-drag">
+                    <button type="button" class="web-add-icon" @click="handleAddItem(itemGroup.id)">
+                      <span><ThemeIcon name="add" /></span><small>{{ t('iconGallery.title') }}</small>
+                    </button>
                   </div>
                 </VueDraggable>
               </div>
@@ -1438,7 +1448,7 @@ function handleAddItem(itemIconGroupId?: number) {
           </template>
         </NButton>
 
-        <NButton v-if="authStore.visitMode === VisitMode.VISIT_MODE_PUBLIC" color="#2a2a2a6b" :title="$t('panelHome.goToLogin')" @click="router.push('/login')">
+        <NButton v-if="authStore.visitMode === VisitMode.VISIT_MODE_PUBLIC" color="#2a2a2a6b" :title="$t('panelHome.goToLogin')" @click="loginVisible = true">
           <template #icon>
             <span class="text-white font-xl"><ThemeIcon name="user" /></span>
           </template>
@@ -1465,6 +1475,15 @@ function handleAddItem(itemIconGroupId?: number) {
     </NBackTop>
 
     <EditItem v-if="editItemInfoShow" v-model:visible="editItemInfoShow" :item-info="editItemInfoData" :item-group-id="currentAddItenIconGroupId" @done="handleEditSuccess" />
+    <IconGalleryModal
+      v-if="iconGalleryVisible" v-model:show="iconGalleryVisible" v-model:page-id="iconGalleryGroupId"
+      :pages="catalogPages" :can-add="canEdit"
+      :added-counts="Object.fromEntries(widgetInstances.map(widget => [widget.type, widgetInstances.filter(item => item.type === widget.type).length]))"
+      :busy="widgetLayoutSaving" @done="handleEditSuccess" @add-widget="addCatalogWidget" @login="loginVisible = true"
+    />
+    <NModal v-model:show="loginVisible" to=".pn-theme-root" preset="card" class="web-login-modal" :closable="!loginBusy" :mask-closable="!loginBusy" :close-on-esc="!loginBusy" style="width: min(460px, calc(100vw - 24px)); border-radius: 24px;" content-style="padding: 0;">
+      <LoginForm v-if="loginVisible" embedded @busy="loginBusy = $event" @close="loginVisible = false" @authenticated="loginVisible = false; router.go(0)" />
+    </NModal>
     <WidgetSettingsModal v-model:show="widgetSettingsVisible" :instance="widgetSettingsInstance" @save="applyWidgetSettings" />
     <ThemeSettingsModal
       :show="themeCenterVisible"
@@ -1520,6 +1539,40 @@ html {
 </style>
 
 <style scoped>
+.web-home { height: 100dvh; background: var(--pn-color-page-background); }
+.web-home .home-widgets, .web-home .home-groups { width: auto; max-width: 100%; }
+.web-home:not(.has-wallpaper) :is(.home-identity, .group-title, .group-action, .web-add-icon small) { color: var(--pn-color-text-primary); text-shadow: none; }
+.web-home:not(.has-wallpaper) .home-identity :deep(.clock), .web-home:not(.has-wallpaper) .group-action :deep(svg) { color: var(--pn-color-text-primary); }
+.web-home .home-content { padding: 24px 28px 32px; }
+.web-home .home-header { width: 100%; max-width: 720px; }
+.web-home .home-identity { position: relative; flex-direction: column; gap: 18px; }
+.web-home .home-identity > .text-shadow { width: 100%; }
+.web-home .home-header :deep(.pn-widget-shell) { height: auto; container-type: normal; }
+.web-home .home-header :deep(.pn-widget-shell > *) { height: auto; overflow: visible; }
+.web-home .home-identity :deep(.clock) { color: #fff; }
+.web-home .logo span { font-size: 14px; font-weight: 500; letter-spacing: .06em; }
+.web-home .divider { display: none; }
+.web-home .home-identity :deep(.clock-time) { font-size: clamp(48px, 6vw, 88px); font-weight: 300; line-height: 1.15; letter-spacing: -.035em; }
+.web-home .home-identity :deep(.clock-date), .web-home .home-identity :deep(.clock-week) { font-size: 13px; font-weight: 400; opacity: .8; }
+.web-home .header-weather { position: absolute; right: 0; bottom: 0; width: 190px; margin: 0; }
+.web-home .home-search { width: min(100%, 640px); margin-top: 26px; }
+.web-home .home-search :deep(.search-container) { border-radius: 20px; border: 1px solid var(--pn-glass-border); background: var(--pn-glass-surface) !important; backdrop-filter: var(--pn-glass-control-filter); box-shadow: var(--pn-glass-highlight); }
+.web-home .item-list { margin-top: 36px; }
+.web-home .group-title { font-size: 17px; font-weight: 600; }
+.web-home .icon-small-box { grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 24px 18px; }
+.web-home .fixed-element { right: 18px; bottom: 28px; padding: 6px; border: 1px solid var(--pn-glass-border); border-radius: 18px; background: var(--pn-glass-surface); backdrop-filter: var(--pn-glass-control-filter); box-shadow: var(--pn-glass-highlight); }
+.web-home .fixed-element :deep(.n-button) { color: var(--pn-color-text-primary) !important; background: transparent !important; border-radius: 12px !important; }
+.web-home .fixed-element :deep(.n-button svg) { color: var(--pn-color-text-primary); }
+.web-home .fixed-element :deep(.n-button__border), .web-home .fixed-element :deep(.n-button__state-border) { border: 0; }
+.web-add-icon { display: grid; justify-items: center; gap: 10px; width: 100%; border: 0; padding: 0; background: transparent; color: inherit; cursor: pointer; }
+.web-add-icon > span { display: grid; place-items: center; width: 70px; height: 70px; border: 1px dashed var(--pn-glass-border); border-radius: var(--pn-bookmark-icon-radius, 18px); background: var(--pn-glass-control); color: var(--pn-color-text-primary); }
+.web-add-icon svg { width: 26px; height: 26px; }
+.web-add-icon small { font-size: 12px; color: #fff; text-shadow: 0 1px 2px rgb(0 0 0 / 18%); }
+.web-add-icon:hover > span { background: var(--pn-glass-detail); }
+.web-add-icon:focus-visible { outline: 2px solid var(--pn-color-accent); outline-offset: 5px; border-radius: 12px; }
+@media (max-width: 800px) { .web-home .header-weather { position: static; width: 190px; } }
+@media (max-width: 640px) { .web-home .home-content { padding: 48px 16px 24px; } .web-home .icon-small-box { grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 20px 10px; } }
+
 .home-groups-empty {
   display: flex;
   flex-direction: column;
@@ -1557,6 +1610,7 @@ html {
 }
 
 .sun-main {
+  position: relative;
   overflow: hidden;
   user-select: none;
 }
@@ -1914,11 +1968,11 @@ html {
 }
 
 .text-shadow {
-  text-shadow: 2px 2px 50px rgb(0, 0, 0);
+  text-shadow: 0 1px 3px rgb(0 0 0 / 18%);
 }
 
 .app-icon-text-shadow {
-  text-shadow: 2px 2px 5px rgb(0, 0, 0);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 18%);
 }
 
 .fixed-element {

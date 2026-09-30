@@ -3,6 +3,10 @@ import { computed, ref } from 'vue'
 import { NButton, NEmpty, useDialog, useMessage } from 'naive-ui'
 import { readExtensionLayoutHistory, restoreExtensionLayoutHistory } from '@/runtime/extensionHistory'
 import type { ExtensionLayoutHistoryEntry } from '@/runtime/extensionHistory'
+import { readExtensionAppearance } from '@/runtime/extensionAppearance'
+import { saveAndSyncExtensionWallpaper } from '@/runtime/extensionWallpaper'
+import { pickWallpaper } from '@/sync/wallpaper'
+import { enqueueAppearanceSave } from '@/themes/appearanceSaveQueue'
 
 const message = useMessage()
 const dialog = useDialog()
@@ -38,7 +42,17 @@ function widgetCount(entry: ExtensionLayoutHistoryEntry) {
 async function restore(id: string) {
   restoring.value = id
   try {
+    const before = readExtensionAppearance()
     await restoreExtensionLayoutHistory(id)
+    const restored = readExtensionAppearance()
+    if (restored && JSON.stringify(pickWallpaper(restored)) !== JSON.stringify(pickWallpaper(before ?? {}))) {
+      const result = await enqueueAppearanceSave(() => saveAndSyncExtensionWallpaper(restored))
+      if (result.status === 'failed') {
+        message.warning(`布局已恢复，但壁纸同步失败：${result.message || '请重新选择壁纸'}`)
+        refresh()
+        return
+      }
+    }
     message.success('布局已恢复，正在重新加载页面')
     window.location.reload()
   }

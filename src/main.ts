@@ -10,6 +10,8 @@ import 'virtual:svg-icons-register' // svg图标注册
 async function bootstrap() {
   const runtime = getRuntime()
   await runtime.ready()
+  // Shared material rules also cover overlays teleported outside the theme root.
+  document.body.dataset.panelRuntime = runtime.kind
   const app = createApp(App)
   setupAssets()
 

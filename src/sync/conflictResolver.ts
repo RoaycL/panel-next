@@ -1,4 +1,5 @@
 import type { OfflineMutation } from './offlineQueue'
+import { isWallpaperMutation, pickWallpaper, WALLPAPER_FIELDS } from './wallpaper'
 
 export interface ConflictDescriptor {
   idempotencyKey: string
@@ -247,17 +248,22 @@ export function evaluateConflict(
     if (!hasTrustedBase(mutation))
       return null
     const payload = mutation.payload as { panel?: Panel.panelConfig }
-    const localPanel = payload.panel || {}
+    const wallpaperOnly = isWallpaperMutation(payload)
+    const localPanel = wallpaperOnly ? payload.wallpaper : payload.panel || {}
     const remotePanel = (remoteData.panel.config || {}) as Panel.panelConfig
 
-    const diffs = getObjectDiffFields(localPanel, remotePanel, [...PANEL_CONFIG_CONFLICT_FIELDS])
+    const diffs = wallpaperOnly
+      ? (JSON.stringify(pickWallpaper(remotePanel)) === JSON.stringify(payload.wallpaper)
+          ? []
+          : getObjectDiffFields(payload.wallpaperBase || localPanel, remotePanel, [...WALLPAPER_FIELDS]))
+      : getObjectDiffFields(localPanel, remotePanel, [...PANEL_CONFIG_CONFLICT_FIELDS])
 
     if (diffs.length > 0 && isRemoteAhead(remoteData.revision, mutation.baseRevision!)) {
       return {
         idempotencyKey: mutation.idempotencyKey,
         action: mutation.action,
         resourceType: 'panel',
-        resourceName: '系统面板样式与组件布局',
+        resourceName: wallpaperOnly ? '桌面壁纸' : '系统面板样式与组件布局',
         localVersion: {
           timestamp: mutation.createdAt,
           baseRevision: mutation.baseRevision,

@@ -23,7 +23,8 @@ async function importTypeScript(sourceText, fileName) {
 
 // 1. 测试 conflictResolver
 const conflictSrc = fs.readFileSync(new URL('../src/sync/conflictResolver.ts', import.meta.url), 'utf8')
-const { evaluateConflict, getObjectDiffFields } = await importTypeScript(conflictSrc, 'conflictResolver.ts')
+const wallpaperSrc = fs.readFileSync(new URL('../src/sync/wallpaper.ts', import.meta.url), 'utf8')
+const { evaluateConflict, getObjectDiffFields } = await importTypeScript(`${wallpaperSrc}\n${conflictSrc.replace(/^import .*$/gm, '')}`, 'conflictResolver.ts')
 const mutationSource = fs.readFileSync(new URL('../src/api/panel/mutation.ts', import.meta.url), 'utf8')
 const queueSource = fs.readFileSync(new URL('../src/sync/offlineQueue.ts', import.meta.url), 'utf8')
 const replaySource = fs.readFileSync(new URL('../src/sync/offlineReplay.ts', import.meta.url), 'utf8')

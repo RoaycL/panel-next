@@ -9,6 +9,7 @@ import { getList as getGroupList } from '@/api/panel/itemIconGroup'
 import { t } from '@/locales'
 import { createPresetIcon, findIconPresetForUrl } from '@/icons/presets'
 import { getRuntime } from '@/runtime'
+import ItemIcon from '@/components/common/ItemIcon/index.vue'
 
 interface Props {
   visible: boolean
@@ -250,13 +251,21 @@ async function getGroupListOptions() {
     v-bind="frameProps"
     :class="embedded ? 'edit-item-glass-modal edit-item-embedded' : 'edit-item-glass-modal'"
   >
-    <div class="edit-item-content">
+    <div class="edit-item-content" :class="{ 'custom-icon-layout': embedded }">
       <NForm ref="formRef" :model="model" :rules="rules" size="small">
         <!-- 基础信息 (分组 & 标题) -->
         <div class="form-glass-card mb-3.5">
           <div class="card-section-title">
             {{ t('common.basicInfo') }}
           </div>
+          <NFormItem v-if="embedded" path="url" :label="$t('iconItem.url')" :show-feedback="true">
+            <NInputGroup>
+              <NInput v-model:value="model.url" type="text" :maxlength="1000" placeholder="https://example.com" />
+              <NButton :disabled="!model.url" :loading="getIconLoading[0]" secondary @click="getIconByUrl(model.url, 0)">
+                {{ $t('iconItem.getIcon') }}
+              </NButton>
+            </NInputGroup>
+          </NFormItem>
           <NGrid cols="2" :x-gap="12" item-responsive class="mt-2">
             <NGridItem v-if="!embedded" span="2 500:1">
               <NFormItem path="itemIconGroupId" :label="t('iconItem.iconGroup')" :show-feedback="false">
@@ -264,7 +273,7 @@ async function getGroupListOptions() {
               </NFormItem>
             </NGridItem>
             <NGridItem :span="embedded ? 2 : '2 500:1'">
-              <NFormItem path="title" :label="$t('common.title')" :show-feedback="false">
+              <NFormItem path="title" :label="$t('common.title')" :show-feedback="embedded">
                 <NInput v-model:value="model.title" type="text" show-count :maxlength="20" placeholder="请输入名称" />
               </NFormItem>
             </NGridItem>
@@ -277,12 +286,12 @@ async function getGroupListOptions() {
             {{ $t('common.icon') }}
           </div>
           <div class="mt-2">
-            <IconEditor v-model:item-icon="model.icon" :fallback-text="model.title" :site-url="model.url" />
+            <IconEditor v-model:item-icon="model.icon" :fallback-text="model.title" :site-url="model.url" :show-preview="!embedded" />
           </div>
         </div>
 
         <!-- 链接配置区 -->
-        <div class="form-glass-card mb-3.5">
+        <div v-if="!embedded" class="form-glass-card mb-3.5">
           <div class="card-section-title">
             {{ t('iconItem.url') }}
           </div>
@@ -327,10 +336,24 @@ async function getGroupListOptions() {
           </div>
         </component>
       </NForm>
+      <aside v-if="embedded" class="custom-icon-preview" aria-label="图标实时预览">
+        <span class="custom-preview-label">实时预览</span>
+        <div class="custom-preview-stage">
+          <ItemIcon :item-icon="model.icon" :fallback-text="model.title" :site-url="model.url" :size="80" :cache-delay="450" />
+          <strong>{{ model.title || '网站名称' }}</strong>
+          <span>{{ model.description || '你的专属快捷入口' }}</span>
+        </div>
+        <p class="custom-preview-address">
+          {{ model.url || 'https://example.com' }}
+        </p>
+        <p class="custom-preview-note">
+          预览与桌面使用相同的图标样式，自动适配日间与夜间主题。
+        </p>
+      </aside>
     </div>
 
     <template #footer>
-      <div class="flex items-center justify-end gap-2.5 w-full">
+      <div class="edit-item-actions flex items-center justify-end gap-2.5 w-full">
         <NButton v-if="!embedded" :disabled="submitLoading" @click="show = false">
           {{ t('common.cancel') }}
         </NButton>
@@ -380,10 +403,25 @@ async function getGroupListOptions() {
 }
 .edit-item-embedded.n-card { margin: 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important; }
 .edit-item-embedded .form-glass-card { background: var(--pn-glass-panel); border-color: var(--pn-glass-border); padding: 16px; }
-.edit-item-embedded .form-glass-card:not(.edit-item-advanced) > .card-section-title { display: none; }
-.edit-item-embedded .n-form { display: flex; flex-direction: column; }
-.edit-item-embedded .form-glass-card:nth-child(3) { order: -2; }
-.edit-item-embedded .form-glass-card:first-child { order: -1; }
+.edit-item-embedded .card-section-title { display: block; margin-bottom: 16px; color: var(--pn-color-text-primary); font-size: 14px; }
+.custom-icon-layout { display: grid; grid-template-columns: minmax(0, 1fr) 230px; align-items: start; gap: 22px; }
+.custom-icon-layout .n-form { min-width: 0; }
+.custom-icon-preview { position: sticky; top: 0; display: grid; gap: 16px; padding: 20px; border: 1px solid var(--pn-glass-border); border-radius: 18px; background: var(--pn-glass-panel); }
+.custom-preview-label { color: var(--pn-color-text-muted); font-size: 11px; letter-spacing: .08em; }
+.custom-preview-stage { display: flex; min-height: 206px; align-items: center; justify-content: center; flex-direction: column; gap: 12px; padding: 20px 12px; border-radius: 14px; background: var(--pn-glass-control); }
+.custom-preview-stage strong { max-width: 100%; overflow-wrap: anywhere; color: var(--pn-color-text-primary); font-size: 14px; text-align: center; }
+.custom-preview-stage > span { color: var(--pn-color-text-muted); font-size: 12px; text-align: center; overflow-wrap: anywhere; }
+.custom-preview-address { margin: 0; color: var(--pn-color-text-secondary); font-size: 12px; overflow-wrap: anywhere; }
+.custom-preview-note { margin: 0; color: var(--pn-color-text-muted); font-size: 11px; line-height: 1.7; }
+.edit-item-embedded .edit-item-actions { justify-content: flex-start; padding: 0 4px; }
+.edit-item-embedded .edit-item-actions .n-button { min-width: 110px; height: 40px; }
+@media (max-width: 850px) {
+  .custom-icon-layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .custom-icon-preview { position: static; grid-row: 1; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px 16px; padding: 16px; }
+  .custom-preview-stage { grid-column: 1; grid-row: 2 / 4; min-height: 130px; padding: 12px; }
+  .custom-preview-label { grid-column: 1 / -1; }
+  .custom-preview-note { grid-column: 2; }
+}
 .edit-item-embedded .n-card__footer, .edit-item-embedded .n-card-footer { position: sticky; z-index: 1; bottom: 0; background: var(--pn-glass-panel); border-radius: 12px; backdrop-filter: var(--pn-glass-filter); }
 .edit-item-advanced summary { cursor: pointer; }
 .edit-item-advanced[open] summary { margin-bottom: 12px; }

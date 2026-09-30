@@ -139,7 +139,7 @@ function host(url: string) { return new URL(url).hostname.replace(/^www\./, '') 
 :global(.icon-gallery-modal .n-card-header) { padding: 16px 22px; border-bottom: 1px solid var(--pn-glass-border); }
 :global(.icon-gallery-modal .n-card__content), :global(.icon-gallery-modal .n-card-content) { padding: 0 !important; }
 .icon-gallery-layout { display: grid; grid-template-columns: 176px minmax(0, 1fr); height: min(680px, calc(100dvh - 100px)); min-height: 250px; color: var(--pn-color-text-primary); }
-.icon-gallery-sidebar { display: flex; flex-direction: column; gap: 7px; min-width: 0; padding: 24px 12px; border-right: 1px solid var(--pn-glass-border); background: var(--pn-color-page-background); }
+.icon-gallery-sidebar { display: flex; flex-direction: column; gap: 7px; min-width: 0; padding: 24px 12px; border-right: 1px solid var(--pn-glass-border); background: var(--pn-glass-panel); }
 .icon-gallery-sidebar p { margin: 0 10px 12px; color: var(--pn-color-text-muted); font-size: 11px; }
 .icon-gallery-sidebar button { display: flex; align-items: center; gap: 12px; min-height: 46px; padding: 10px 12px; border: 0; border-radius: 12px; color: var(--pn-color-text-secondary); background: transparent; cursor: pointer; font: inherit; font-size: 14px; text-align: left; }
 .icon-gallery-sidebar svg { width: 20px; height: 20px; flex: none; }

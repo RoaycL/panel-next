@@ -7,6 +7,8 @@ import { findIconPresetForUrl, resolveBundledPresetId } from '@/icons/presets'
 import { getBundledBrandIcon } from '@/icons/brandAssets'
 import { getRuntime } from '@/runtime'
 import { isIconifyName } from '@/themes/icons'
+import { readIconImageAppearance } from '@/icons/imageAppearance'
+import type { IconImageAppearance } from '@/icons/imageAppearance'
 
 interface Prop {
   itemIcon?: Panel.ItemIcon | null
@@ -49,6 +51,23 @@ const onlineIcon = computed(() => iconType.value === 3 && !brandIcon.value && !l
 const imageFailed = ref(false)
 const imageLoaded = ref(false)
 const displayImageSrc = ref('')
+const brandAppearance = ref<IconImageAppearance>({ transparent: false, darkMonochrome: false })
+const imageAppearance = ref<IconImageAppearance>({ transparent: false, darkMonochrome: false })
+watch([brandIcon, fallbackBrand], () => {
+  brandAppearance.value = { transparent: false, darkMonochrome: false }
+})
+const visibleAppearance = computed(() => imageLoaded.value && !imageFailed.value ? imageAppearance.value : brandAppearance.value)
+const hasImage = computed(() => Boolean((displayImageSrc.value && !imageFailed.value) || brandIcon.value || fallbackBrand.value))
+function inspectImage(event: Event, brand = false) {
+  const appearance = readIconImageAppearance(event.target as HTMLImageElement)
+  if (brand) {
+    brandAppearance.value = appearance
+  }
+  else {
+    imageAppearance.value = appearance
+    imageLoaded.value = true
+  }
+}
 watch(imageSrc, (source, _previous, onCleanup) => {
   let cancelled = false
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -59,6 +78,7 @@ watch(imageSrc, (source, _previous, onCleanup) => {
   })
   imageFailed.value = false
   imageLoaded.value = false
+  imageAppearance.value = { transparent: false, darkMonochrome: false }
   displayImageSrc.value = ''
   if (!source)
     return
@@ -118,15 +138,20 @@ const markFontSize = computed(() => `${Math.round(props.size * (Array.from(fallb
     <slot>
       <div
         class="item-icon-surface"
-        :class="{ 'item-icon-surface-transparent': transparentBackground }"
+        :class="{
+          'item-icon-surface-transparent': transparentBackground || (hasImage && visibleAppearance.transparent),
+          'item-icon-surface-image': hasImage,
+          'item-icon-image-transparent': hasImage && visibleAppearance.transparent,
+          'item-icon-image-dark-mark': hasImage && visibleAppearance.transparent && visibleAppearance.darkMonochrome,
+        }"
         :style="{ backgroundColor, color: foregroundColor }"
       >
         <template v-if="!imageLoaded || imageFailed">
-          <img v-if="brandIcon || fallbackBrand" :src="brandIcon || fallbackBrand" alt="" class="item-icon-brand">
+          <img v-if="brandIcon || fallbackBrand" :src="brandIcon || fallbackBrand" alt="" class="item-icon-brand" @load="inspectImage($event, true)">
           <SvgIcon v-else-if="fallbackSprite" :icon="fallbackSprite" class="item-icon-glyph" />
           <span v-else class="item-icon-mark" :style="{ fontSize: markFontSize }">{{ fallbackMark }}</span>
         </template>
-        <img v-if="displayImageSrc && !imageFailed" :src="displayImageSrc" alt="" class="item-icon-image" @load="imageLoaded = true" @error="imageFailed = true">
+        <img v-if="displayImageSrc && !imageFailed" :src="displayImageSrc" alt="" class="item-icon-image" @load="inspectImage($event)" @error="imageFailed = true">
         <SvgIconOnline v-if="onlineIcon" :icon="onlineIcon" class="item-icon-remote" />
       </div>
     </slot>
@@ -139,8 +164,13 @@ const markFontSize = computed(() => `${Math.round(props.size * (Array.from(fallb
 .item-icon-mark { max-width: 94%; overflow: hidden; font-weight: 800; line-height: 1; letter-spacing: -.05em; text-overflow: clip; white-space: nowrap; }
 .item-icon-image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .item-icon-surface-transparent .item-icon-image { object-fit: contain; }
-.item-icon-brand { width: 78%; height: 78%; object-fit: contain; }
+.item-icon-brand { width: 78%; height: 78%; object-fit: contain; border-radius: calc(var(--pn-bookmark-icon-radius, 16px) * .78); }
 .item-icon-remote { position: absolute; inset: 20%; width: 60%; height: 60%; }
+html.dark .item-icon-surface-image { background-color: #000 !important; }
+html.dark .item-icon-surface-image:not(.item-icon-image-transparent)::after { position: absolute; inset: 0; z-index: 1; border-radius: inherit; background: rgba(0, 0, 0, .14); pointer-events: none; content: ''; }
+html.dark .item-icon-image-transparent > img { filter: drop-shadow(0 0 1px rgba(255, 255, 255, .4)); }
+/* Only black monochrome transparent marks need a white night variant. */
+html.dark .item-icon-image-dark-mark > img { filter: brightness(0) invert(1); }
 .item-icon-surface:has(> svg.item-icon-remote) > .item-icon-glyph,
 .item-icon-surface:has(> svg.item-icon-remote) > .item-icon-mark,
 .item-icon-surface:has(> svg.item-icon-remote) > .item-icon-brand { visibility: hidden; }

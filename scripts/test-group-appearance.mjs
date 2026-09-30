@@ -1,0 +1,39 @@
+import assert from 'node:assert/strict'
+import { Buffer } from 'node:buffer'
+import fs from 'node:fs'
+import ts from 'typescript'
+
+const source = fs.readFileSync('src/icons/groupAppearance.ts', 'utf8')
+const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText
+const { GROUP_ICON_PRESETS, GROUP_ICON_CATEGORIES, filterGroupIcons, encodeGroupAppearance, decodeGroupAppearance, isGroupImageSource } = await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`)
+assert.ok(GROUP_ICON_PRESETS.length >= 80)
+assert.equal(new Set(GROUP_ICON_PRESETS.map(item => item.icon)).size, GROUP_ICON_PRESETS.length)
+for (const category of GROUP_ICON_CATEGORIES)
+  assert.ok(filterGroupIcons(category, '').length >= 8)
+assert.equal(filterGroupIcons('全部', ' NAS ')[0].label, 'NAS')
+assert.equal(filterGroupIcons('全部', '音乐')[0].icon, 'mdi-music')
+assert.equal(filterGroupIcons('全部', 'SERVER')[0].label, '服务器')
+assert.equal(filterGroupIcons('开发', '音乐').length, 0)
+assert.equal(filterGroupIcons('全部', '不存在的图标').length, 0)
+for (const preset of GROUP_ICON_PRESETS) {
+  assert.ok(fs.existsSync(`src/assets/svg-icons/${preset.icon}.svg`), 'Built-in group icons must work offline')
+  assert.deepEqual(decodeGroupAppearance(encodeGroupAppearance({ mode: 'builtin', value: preset.icon })), { mode: 'builtin', value: preset.icon })
+}
+for (const value of ['工', 'PT', '📚', '学业'])
+  assert.deepEqual(decodeGroupAppearance(encodeGroupAppearance({ mode: 'text', value })), { mode: 'text', value })
+for (const value of ['/uploads/icon.png', 'https://example.com/icon.webp'])
+  assert.deepEqual(decodeGroupAppearance(encodeGroupAppearance({ mode: 'image', value })), { mode: 'image', value })
+for (const value of ['javascript:alert(1)', '//example.com/icon.svg', 'data:image/svg+xml,test', 'https://user:pass@example.com/icon', '/bad\\image', `https://example.com/${  'a'.repeat(250)}`])
+  assert.equal(isGroupImageSource(value), false, 'Unsafe or overlong image sources must not be persisted')
+assert.throws(() => encodeGroupAppearance({ mode: 'text', value: 'ABC' }))
+assert.throws(() => encodeGroupAppearance({ mode: 'text', value: ' ' }))
+assert.equal(decodeGroupAppearance('mdi:home').value, 'mdi:home', 'Existing Iconify groups remain compatible')
+assert.equal(decodeGroupAppearance('group-text:%zz').mode, 'builtin', 'Corrupt encoded icons safely fall back')
+assert.equal(decodeGroupAppearance('group-image:javascript:alert(1)').mode, 'builtin')
+const panel = fs.readFileSync('src/views/extension/components/GroupAppearancePanel.vue', 'utf8')
+assert.match(panel, /description: group\.description/)
+assert.match(panel, /sort: group\.sort/)
+assert.match(panel, /result\.queued/)
+assert.match(panel, /auth\.userInfo\?\.id !== accountId/)
+assert.match(panel, /fileType: 'icon'/)
+console.log('Group appearance codecs, offline built-ins, safe images and metadata-preserving sync passed.')

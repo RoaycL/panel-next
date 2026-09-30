@@ -1,4 +1,5 @@
 import { getRuntime } from '@/runtime'
+import { isWallpaperMutation } from './wallpaper'
 
 export type OfflineMutationAction =
   | 'item.add'
@@ -112,12 +113,23 @@ export async function enqueueOfflineMutation<T = any>(
   origin?: string,
 ): Promise<OfflineMutation<T>> {
   const persist = async () => {
-    const queue = readOfflineQueue(accountId, origin)
+    let queue = readOfflineQueue(accountId, origin)
     const fullMutation: OfflineMutation<T> = {
       ...mutation,
       idempotencyKey: mutation.idempotencyKey || generateIdempotencyKey(),
       createdAt: mutation.createdAt || new Date().toISOString(),
       status: 'pending',
+    }
+
+    // The latest explicit wallpaper choice supersedes earlier unsent choices.
+    // Keep the original cloud baseline so a real remote change still conflicts.
+    if (fullMutation.action === 'panel.set' && isWallpaperMutation(fullMutation.payload)) {
+      const previous = queue.find(item => item.action === 'panel.set' && item.status !== 'applied' && isWallpaperMutation(item.payload))
+      if (previous && isWallpaperMutation(previous.payload)) {
+        fullMutation.payload = { ...fullMutation.payload, wallpaperBase: previous.payload.wallpaperBase }
+        fullMutation.baseRevision = previous.baseRevision
+      }
+      queue = queue.filter(item => item.action !== 'panel.set' || !isWallpaperMutation(item.payload))
     }
 
     // 幂等防重：若已存在相同 idempotencyKey，则更新内容
@@ -143,13 +155,14 @@ async function runWithQueueLock<T>(accountId: number, task: () => Promise<T>, or
 }
 
 export async function removeOfflineMutation(accountId: number, idempotencyKey: string, origin?: string): Promise<boolean> {
-  return runWithQueueLock(accountId, async () => {
-    const queue = readOfflineQueue(accountId, origin)
-    const nextQueue = queue.filter(m => m.idempotencyKey !== idempotencyKey)
-    if (nextQueue.length !== queue.length)
-      return writeOfflineQueue(accountId, nextQueue, origin)
-    return true
-  }, origin)
+  return runWithQueueLock(accountId, () => removeOfflineMutationUnderLock(accountId, idempotencyKey, origin), origin)
+}
+
+/** Replay already holds the same Web Lock; requesting it again would deadlock. */
+export async function removeOfflineMutationUnderLock(accountId: number, idempotencyKey: string, origin?: string): Promise<boolean> {
+  const queue = readOfflineQueue(accountId, origin)
+  const nextQueue = queue.filter(m => m.idempotencyKey !== idempotencyKey)
+  return nextQueue.length !== queue.length ? writeOfflineQueue(accountId, nextQueue, origin) : true
 }
 
 export async function clearOfflineQueue(accountId: number, origin?: string): Promise<boolean> {

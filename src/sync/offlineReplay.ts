@@ -9,7 +9,7 @@ import {
   normalizeReplayableQueue,
   getOfflineQueueLockName,
   readOfflineQueue,
-  removeOfflineMutation,
+  removeOfflineMutationUnderLock,
   writeOfflineQueue,
 } from './offlineQueue'
 import {
@@ -17,6 +17,7 @@ import {
 } from './conflictResolver'
 import type { OfflineMutation } from './offlineQueue'
 import type { ConflictDescriptor, ConflictResolutionChoice } from './conflictResolver'
+import { isWallpaperMutation, mergeWallpaper } from './wallpaper'
 
 export interface ReplayQueueResult {
   total: number
@@ -109,7 +110,7 @@ async function replayOfflineQueueInternal(
           const choice = await onConflict(conflict)
           if (choice === 'keep_remote') {
             // 放弃本地离线修改，从队列中删除
-            if (!await removeOfflineMutation(accountId, mutation.idempotencyKey, origin)) {
+            if (!await removeOfflineMutationUnderLock(accountId, mutation.idempotencyKey, origin)) {
               result.interrupted = true
               result.error = '已选择云端版本，但无法更新本地离线队列'
               break
@@ -156,7 +157,7 @@ async function replayOfflineQueueInternal(
     mutation.status = 'replaying'
     let outcome: MutationOutcome
     try {
-      outcome = await executeMutationAction(mutation)
+      outcome = await executeMutationAction(mutation, currentRemoteBootstrap.panel.config)
     }
     catch (err) {
       if (err instanceof HttpRequestError && !err.retryable) {
@@ -189,7 +190,7 @@ async function replayOfflineQueueInternal(
 
     mutation.status = 'applied'
     result.succeeded++
-    if (!await removeOfflineMutation(accountId, mutation.idempotencyKey, origin)) {
+    if (!await removeOfflineMutationUnderLock(accountId, mutation.idempotencyKey, origin)) {
       // 最终持久化阶段会剔除 applied 项，这里仅提示存储异常
       result.interrupted = true
       result.error = '云端已接受修改，但无法立即更新本地离线队列，请勿清除浏览器数据'
@@ -272,11 +273,14 @@ export async function replayOfflineQueue(
   onConflict?: ConflictHandler,
   origin?: string,
 ): Promise<ReplayQueueResult> {
-  const run = () => replayOfflineQueueInternal(accountId, onConflict, origin)
-  if (typeof navigator !== 'undefined' && navigator.locks) {
-    return navigator.locks.request(getOfflineQueueLockName(accountId, origin), run)
-  }
-  return run()
+  // Keep the same lock order as appearance saves that enqueue offline changes:
+  // process-local appearance queue first, then the cross-tab queue lock.
+  return enqueueAppearanceSave(() => {
+    const run = () => replayOfflineQueueInternal(accountId, onConflict, origin)
+    if (typeof navigator !== 'undefined' && navigator.locks)
+      return navigator.locks.request(getOfflineQueueLockName(accountId, origin), run)
+    return run()
+  })
 }
 
 /**
@@ -287,7 +291,7 @@ export async function replayOfflineQueue(
  * - 业务失败（code!==0）→ 可能以普通响应对象 reject，或正常 resolve；
  *   统一收敛为 MutationOutcome 交由上层决定「跳过继续」还是「暂停」。
  */
-async function executeMutationAction(mutation: OfflineMutation): Promise<MutationOutcome> {
+async function executeMutationAction(mutation: OfflineMutation, remotePanel: Panel.panelConfig): Promise<MutationOutcome> {
   const send = async (): Promise<MutationOutcome> => {
     const payload = mutation.payload
 
@@ -333,7 +337,9 @@ async function executeMutationAction(mutation: OfflineMutation): Promise<Mutatio
       case 'panel.set': {
         // panel.set 是整份 panelConfig 写入，必须与实时主题/壁纸/布局保存共用进程内队列；
         // navigator.locks 继续负责跨 Extension 标签页的重放互斥。
-        const res = await enqueueAppearanceSave(() => setUserConfig(payload as Panel.userConfig, false))
+        const res = isWallpaperMutation(payload)
+          ? await setUserConfig({ panel: mergeWallpaper(remotePanel, payload.wallpaper) }, false)
+          : await setUserConfig(payload as Panel.userConfig, false)
         return toOutcome(res)
       }
 

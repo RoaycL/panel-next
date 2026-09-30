@@ -6,6 +6,7 @@ import { VueDraggable } from 'vue-draggable-plus'
 import { deletes, edit, getList, saveSort } from '@/api/panel/itemIconGroup'
 import { RoundCardModal, SvgIcon } from '@/components/common'
 import { t } from '@/locales'
+import GroupIcon from '@/components/common/GroupIcon/index.vue'
 
 interface EditModalArg {
   show: boolean
@@ -156,8 +157,7 @@ onMounted(() => {
             <div class="flex" :class="sortStatus ? 'cursor-move' : ''">
               <div class="flex items-center">
                 <span class="mr-[10px]">
-                  <SvgIcon class="text-[20px]" icon="material-symbols:ad-group-outline-rounded" />
-                  <!-- <SvgIcon class="text-[20px]" :icon="item.icon" /> -->
+                  <GroupIcon :icon="item.icon" :title="item.title" :size="24" />
                 </span>
                 <span>
                   {{ item.title }}

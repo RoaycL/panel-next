@@ -220,20 +220,20 @@ export function freezeTokens(tokens: Record<string, unknown>): Readonly<ThemeTok
 /** Extension default surfaces. User overrides and third-party themes remain authoritative. */
 export function extensionDefaultTokens(mode: ResolvedThemeMode, overrides?: ThemeTokenOverrides): Readonly<ThemeTokens> {
   const dark = mode === 'dark'
-  const text = dark ? '#e9edea' : '#283831'
-  const secondary = dark ? '#bcc6c0' : '#55665d'
-  const muted = dark ? '#98a79e' : '#728078'
-  const surface = dark ? '#252d29' : '#ffffff'
-  const raised = dark ? '#303a34' : '#f2f5f1'
-  const border = dark ? '#3b4740' : '#e0e6df'
-  const accent = dark ? '#97bba4' : '#466b56'
-  const soft = dark ? '#35483c' : '#e7eee6'
+  const text = dark ? '#f5f5f5' : '#171717'
+  const secondary = dark ? '#d4d4d4' : '#404040'
+  const muted = dark ? '#a3a3a3' : '#737373'
+  const surface = dark ? '#141414' : '#ffffff'
+  const raised = dark ? '#262626' : '#f5f5f5'
+  const border = dark ? '#383838' : '#e5e5e5'
+  const accent = dark ? '#e5e5e5' : '#262626'
+  const soft = dark ? '#303030' : '#eeeeee'
   const shadow = dark ? '0 6px 24px rgba(0,0,0,0.12)' : '0 6px 24px rgba(35,53,42,0.04)'
   const palette: ThemeTokenOverrides = {
     color: {
-      pageBackground: dark ? '#1c231f' : '#f3f5f0', surface,
+      pageBackground: dark ? '#000000' : '#ffffff', surface,
       surfaceHover: raised, border, textPrimary: text, textSecondary: secondary,
-      textMuted: muted, accent, success: dark ? '#97bba4' : '#466b56',
+      textMuted: muted, accent, success: dark ? '#86c8a1' : '#26734b',
       warning: dark ? '#d1b27c' : '#92713c', danger: dark ? '#dfa09a' : '#b05248',
     },
     font: { family: 'Aptos,"Segoe UI Variable","PingFang SC","Microsoft YaHei",sans-serif', weightHeading: '600' },
@@ -242,7 +242,7 @@ export function extensionDefaultTokens(mode: ResolvedThemeMode, overrides?: Them
     bookmark: { cardBackground: surface, cardBorder: border, cardShadow: shadow, titleColor: text, descriptionColor: muted, iconBackground: surface, iconRadius: '16px' },
     widget: { background: surface, border, shadow, textColor: text, mutedText: muted, loadingColor: muted, retryBackground: raised, retryBorder: border, chartColors: ['#72977e', '#9aaca0', '#b4a788', '#758c92', '#b3867f'] },
     sidebar: { background: surface, border, hoverBackground: raised, activeBackground: soft, textColor: secondary, activeTextColor: accent },
-    modal: { background: surface, overlay: 'rgba(20,30,24,0.28)', border, titleTextColor: text, contentTextColor: secondary },
+    modal: { background: surface, overlay: 'rgba(0,0,0,0.28)', border, titleTextColor: text, contentTextColor: secondary },
     notification: { background: surface, titleTextColor: text, contentTextColor: secondary, boxShadow: shadow },
     icon: { defaultColor: secondary, activeColor: accent },
   }

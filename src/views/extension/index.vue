@@ -28,14 +28,16 @@ import { VisitMode } from '@/enums/auth'
 import { getRuntime } from '@/runtime'
 import { extensionLoginVisible, openExtensionLogin } from '@/runtime/extensionLogin'
 import type { StorageChangeEvent } from '@/runtime/types'
-import { EXTENSION_APPEARANCE_KEY, EXTENSION_WIDGETS_KEY, processPendingWidgetCleanups, readExtensionAppearance, readExtensionWidgets, removeExtensionWidgetFlow, saveExtensionAppearance, saveExtensionWidgets } from '@/runtime/extensionAppearance'
+import { EXTENSION_APPEARANCE_KEY, EXTENSION_WIDGETS_KEY, processPendingWidgetCleanups, readExtensionAppearance, readExtensionWidgets, removeExtensionWidgetFlow, saveExtensionWidgets } from '@/runtime/extensionAppearance'
 import type { ExtensionBookmarkLayout, ExtensionPageLayout, ExtensionSearchEngineId } from '@/runtime/extensionAppearance'
 import { enqueueAppearanceSave } from '@/themes/appearanceSaveQueue'
+import { resolveSyncedWallpaper, saveAndSyncExtensionWallpaper } from '@/runtime/extensionWallpaper'
 import ThemeIcon from '@/themes/ThemeIcon.vue'
 import { BOOTSTRAP_SNAPSHOT_KEY_PREFIX, readBootstrapSnapshot, refreshBootstrapSnapshot } from '@/sync/bootstrapCache'
 import { onSyncConflict, setSyncRevision } from '@/sync/revision'
 import { replayOfflineQueue } from '@/sync/offlineReplay'
-import { getPendingMutationCount, OFFLINE_QUEUE_KEY_PREFIX, onOfflineQueueChanged } from '@/sync/offlineQueue'
+import { getPendingMutationCount, OFFLINE_QUEUE_KEY_PREFIX, onOfflineQueueChanged, readOfflineQueue } from '@/sync/offlineQueue'
+import GroupIcon from '@/components/common/GroupIcon/index.vue'
 import type { ConflictDescriptor, ConflictResolutionChoice } from '@/sync/conflictResolver'
 import { getBootstrap, waitForSyncChange } from '@/api/sync'
 import { getList as getGroupList } from '@/api/panel/itemIconGroup'
@@ -563,9 +565,13 @@ async function handleWallpaperSelect(url: string) {
   // 经统一外观保存队列串行化，避免与主题/墙纸/布局整份写入交错覆盖。
   await enqueueAppearanceSave(async () => {
     try {
-      await saveExtensionAppearance(panelState.panelConfig)
+      const result = await saveAndSyncExtensionWallpaper(panelState.panelConfig)
       showWallpaperModal.value = false
-      ms.success('已切换背景壁纸')
+      if (result.status === 'synced') ms.success('壁纸已保存并同步')
+      else if (result.status === 'local') ms.success('壁纸已保存在本机，登录后可同步')
+      else if (result.status === 'queued') ms.warning(result.message || '壁纸已保存，恢复连接后自动同步')
+      else ms.warning(result.message || '壁纸已保存在本机，但云端同步失败，请重试')
+      if (result.status === 'synced') void refreshBootstrap()
     }
     catch (error) {
       // Do not overwrite a newer appearance change that happened while this
@@ -797,7 +803,8 @@ async function applyBootstrapData(data: Sync.BootstrapResponseV1) {
   // 并只在 Extension 端把清理/迁移后的配置写回 EXTENSION_APPEARANCE_KEY（自带字节去重）。
   let writeBack: Promise<boolean> | undefined
   if (localAppearance) {
-    writeBack = panelState.applyPanelConfig(localAppearance, { surface: 'extension', mode: appStore.theme ?? 'auto', writeBack: true }).writeBack
+    const syncedAppearance = resolveSyncedWallpaper(localAppearance, dashboard.panelConfig, dashboard.revision, dashboard.account.id)
+    writeBack = panelState.applyPanelConfig(syncedAppearance, { surface: 'extension', mode: appStore.theme ?? 'auto', writeBack: true }).writeBack
   }
   else {
     // Use the cloud appearance only as a first-run starting point, then fork it
@@ -809,6 +816,13 @@ async function applyBootstrapData(data: Sync.BootstrapResponseV1) {
   userStore.updateUserInfo(dashboard.account)
   refreshPendingMutationsCount()
   groups.value = dashboard.groups || []
+  // Preserve a queued icon choice while a cached/remote bootstrap refreshes.
+  for (const mutation of readOfflineQueue(dashboard.account.id)) {
+    if (mutation.action !== 'group.edit' || mutation.status === 'applied') continue
+    const payload = mutation.payload as Panel.ItemIconGroup
+    const group = groups.value.find(item => item.id === payload?.id)
+    if (group && typeof payload.icon === 'string') group.icon = payload.icon
+  }
   groupsReady.value = true
   // 等待 Extension 回写真正持久化完成，失败时不假装同步成功。
   if (writeBack && (await writeBack) === false)
@@ -1557,6 +1571,12 @@ function handleEditSuccess(updated: Panel.Info, meta: { queued: boolean } = { qu
     void refreshBootstrap()
 }
 
+function handleGroupIconSaved(updated: Panel.ItemIconGroup, meta: { queued: boolean }) {
+  const group = groups.value.find(item => item.id === updated.id)
+  if (group) group.icon = updated.icon
+  if (!meta.queued) void refreshBootstrap()
+}
+
 function handleBrowserOffline() {
   extensionSyncStatus.value = 'offline'
 }
@@ -1770,7 +1790,7 @@ onUnmounted(() => {
           @click="selectGroup(group.id)"
         >
           <span class="rail-group-icon" aria-hidden="true">
-            <ItemIcon v-if="group.icon && !['material-symbols:folder-outline', 'material-symbols-folder-outline'].includes(group.icon)" :item-icon="{ itemType: 3, text: group.icon }" :size="28" :fallback-text="group.title" />
+            <GroupIcon v-if="group.icon && !['material-symbols:folder-outline', 'material-symbols-folder-outline'].includes(group.icon)" :icon="group.icon" :size="28" :title="group.title" />
             <ThemeIcon v-else name="folder" class="rail-icon" />
           </span>
           <span class="rail-group-label">{{ group.title }}</span>
@@ -2176,9 +2196,11 @@ onUnmounted(() => {
       v-model:sidebar-auto-hide="sidebarAutoHide"
       v-model:sidebar-wheel-switch="sidebarWheelSwitch"
       v-model:sidebar-density="sidebarDensity"
+      :groups="groups"
       :search-history-count="widgetPreferences.searchHistory.length"
       :sync-status="extensionSyncStatus"
       :sync-revision="syncRevision"
+      @group-icon-saved="handleGroupIconSaved"
       @refresh="refreshBootstrap"
       @open-wallpaper="settingsModalVisible = false; showWallpaperModal = true"
       @open-widget-manager="settingsModalVisible = false; showWidgetManager = true"
@@ -2840,7 +2862,7 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85), 0 1px 6px rgba(0, 0, 0, 0.55);
+  text-shadow: none;
 }
 
 @media (max-width: 700px) {
@@ -3304,10 +3326,11 @@ onUnmounted(() => {
 .dashboard-canvas-item { min-width: 0; min-height: 0; }
 .dashboard-add-icon { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 7px; grid-column: span 1; grid-row: span 1; min-width: 0; min-height: 0; padding: 3px 2px 6px; border: 0; border-radius: 14px; color: var(--ext-text-muted); background: transparent; cursor: pointer; font: inherit; font-size: 12px; font-weight: 500; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85), 0 1px 6px rgba(0, 0, 0, 0.55); transition: none; }
 .dashboard-add-icon:hover { transform: none; }
+.dashboard-add-icon { text-shadow: none; }
 .dashboard-add-icon:hover .dashboard-add-icon-symbol { transform: translateY(-4px) scale(1.045); box-shadow: 0 12px 26px rgba(0, 0, 0, 0.38); }
 .dashboard-add-icon:focus-visible { outline: 2px solid var(--ext-accent); outline-offset: 3px; }
 .dashboard-add-icon-symbol { display: grid; width: 54px; height: 54px; place-items: center; border: 1px dashed var(--ext-border); border-radius: var(--pn-bookmark-icon-radius, 14px); background: var(--ext-surface); box-shadow: none; transition: transform 180ms ease, box-shadow 180ms ease; }
-.dashboard-add-icon-symbol svg { box-sizing: border-box; width: 36px; height: 36px; padding: 7px; border-radius: 50%; color: #fff; background: var(--ext-accent); }
+.dashboard-add-icon-symbol svg { box-sizing: border-box; width: 36px; height: 36px; padding: 7px; border-radius: 50%; color: var(--pn-color-surface); background: var(--ext-accent); }
 .extension-dashboard-grid .extension-widget-cell { height: 100%; padding-inline: var(--dashboard-icon-inset); border-radius: 20px; }
 .extension-dashboard-grid .extension-widget-cell :deep(.widget-stack-host) { height: calc(100% - var(--dashboard-caption-space)); }
 .dashboard-widget-caption { display: block; height: var(--dashboard-caption-space); padding-top: 10px; overflow: hidden; color: var(--ext-text); font-size: 12px; font-weight: 500; line-height: 16px; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
@@ -3418,10 +3441,10 @@ onUnmounted(() => {
 .main-content { scrollbar-width: thin; scrollbar-color: var(--ext-border) transparent; }
 
 /* Wallpaper changes the canvas contrast, never the contrast inside controls. */
-.has-wallpaper :is(.clock-hero, .active-group-meta, .workspace-brand, .card-title, .dashboard-add-icon, .workspace-footer) { color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85), 0 1px 6px rgba(0, 0, 0, 0.55); }
-.has-wallpaper :is(.clock-eyebrow, .clock-seconds, .clock-period, .date-display, .active-group-meta small, .card-description) { color: rgba(255, 255, 255, 0.92); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85), 0 1px 6px rgba(0, 0, 0, 0.55); }
+.has-wallpaper :is(.clock-hero, .active-group-meta, .workspace-brand, .card-title, .dashboard-add-icon, .workspace-footer) { color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); }
+.has-wallpaper :is(.clock-eyebrow, .clock-seconds, .clock-period, .date-display, .active-group-meta small, .card-description) { color: rgba(255, 255, 255, 0.92); text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); }
 .has-wallpaper .speed-card.is-expanded :is(.card-title, .card-description) { color: var(--ext-text); text-shadow: none; }
-.has-wallpaper .dashboard-widget-caption { color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85), 0 1px 6px rgba(0, 0, 0, 0.55); }
+.has-wallpaper .dashboard-widget-caption { color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); }
 .has-wallpaper .sync-status-banner { color: var(--ext-text); background: var(--ext-surface); text-shadow: none; }
 
 @media (max-width: 720px) {

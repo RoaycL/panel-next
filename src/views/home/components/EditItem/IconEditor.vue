@@ -14,6 +14,7 @@ const props = defineProps<{
   itemIcon: Panel.ItemIcon | null
   fallbackText?: string
   siteUrl?: string
+  showPreview?: boolean
 }>()
 const emit = defineEmits<{
   (e: 'update:itemIcon', visible: Panel.ItemIcon): void // 定义修改父组件（prop内）的值的事件
@@ -138,7 +139,7 @@ function handleGallerySelect(url: string) {
     <!-- 核心编辑区 (预览与表单) -->
     <div class="icon-editor-body flex gap-4 items-start">
       <!-- 实时预览区 -->
-      <div class="icon-preview-frame">
+      <div v-if="showPreview !== false" class="icon-preview-frame">
         <ItemIcon :item-icon="itemIconInfo" :fallback-text="fallbackText" :site-url="siteUrl" :cache-delay="450" />
       </div>
 
@@ -206,6 +207,7 @@ function handleGallerySelect(url: string) {
           <div class="w-[120px]">
             <NColorPicker
               v-model:value="itemIconInfo.backgroundColor"
+              class="icon-background-color-picker"
               size="small"
               :modes="['hex']"
               :swatches="defautSwatchesBackground"
@@ -279,7 +281,7 @@ function handleGallerySelect(url: string) {
 
 .type-pill-btn.active {
   background: var(--pn-color-accent, #0f9f75);
-  color: #ffffff;
+  color: var(--pn-color-surface, #ffffff);
   box-shadow: 0 2px 8px color-mix(in srgb, var(--pn-color-accent, #0f9f75) 25%, transparent);
 }
 .type-pill-btn:focus-visible { outline: 2px solid var(--pn-color-accent, #0f9f75); outline-offset: 2px; }
@@ -303,6 +305,13 @@ function handleGallerySelect(url: string) {
 .icon-color-controls, .icon-upload-actions { flex-wrap: wrap; }
 .icon-upload-actions :deep(.n-upload) { width: auto; flex: none; }
 .icon-color-controls > div { flex: 0 0 120px; }
+.icon-background-color-picker { border-radius: 8px; overflow: hidden; }
+.icon-background-color-picker :deep(.n-color-picker__fill) { inset: 0; border-radius: inherit; }
+.icon-background-color-picker :deep(.n-color-picker__value) { padding: 0 8px; font-size: 12px; font-weight: 600; }
 .icon-color-controls button { flex: none; white-space: nowrap; }
+.icon-editor-container :deep(.text-slate-400) { color: var(--pn-color-text-muted); }
+.icon-editor-container .icon-color-controls { border-color: var(--pn-color-border); padding-top: 16px; margin-top: 16px; }
+.type-selector-bar { display: flex; margin-bottom: 18px; padding: 4px; }
+.type-pill-btn { flex: 1; justify-content: center; min-height: 34px; }
 
 </style>

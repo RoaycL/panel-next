@@ -73,6 +73,8 @@ function queuedResponse<T>(data: unknown, conflict = false): Response<T> {
 
 export interface MutationOptions {
   queueOnFailure?: boolean
+  /** Local replay metadata; never included in the server request. */
+  queuePayload?: unknown
 }
 
 export async function mutationPost<T>(url: string, data: unknown, options: MutationOptions = {}): Promise<Response<T>> {
@@ -108,7 +110,7 @@ export async function mutationPost<T>(url: string, data: unknown, options: Mutat
     })
   }
   catch (error) {
-    if (queueOnFailure && error instanceof HttpRequestError && error.retryable && await enqueueIfSupported(data, url, revisionTrusted ? expectedRevision : null))
+    if (queueOnFailure && error instanceof HttpRequestError && error.retryable && await enqueueIfSupported(options.queuePayload ?? data, url, revisionTrusted ? expectedRevision : null))
       return queuedResponse<T>(data)
     throw error
   }
@@ -116,7 +118,7 @@ export async function mutationPost<T>(url: string, data: unknown, options: Mutat
   // Never replay a stale write automatically: doing so with a fresh revision
   // would silently overwrite a concurrent edit made on another device.
   if (response.code === 1502) {
-    if (queueOnFailure && await enqueueIfSupported(data, url, revisionTrusted ? expectedRevision : null)) {
+    if (queueOnFailure && await enqueueIfSupported(options.queuePayload ?? data, url, revisionTrusted ? expectedRevision : null)) {
       notifySyncConflict()
       return queuedResponse<T>(data, true)
     }

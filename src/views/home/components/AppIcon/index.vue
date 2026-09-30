@@ -87,6 +87,11 @@ const textColor = computed(() => {
 </template>
 
 <style scoped>
+.app-icon-small { display: grid; gap: 10px; justify-items: center; }
+.app-icon-small-title { max-width: 100%; margin-top: 0; font-size: 12px; line-height: 1.5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-shadow: 0 1px 2px rgb(0 0 0 / 18%); }
+.app-icon-small-icon { transition: transform 160ms ease; }
+.app-icon-small:hover .app-icon-small-icon { transform: translateY(-3px); box-shadow: var(--pn-effect-shadow-low); }
+@media (prefers-reduced-motion: reduce) { .app-icon-small-icon { transition: none; } }
 .app-icon-info {
   border-radius: var(--pn-radius-large, 16px);
 }

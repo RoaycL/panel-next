@@ -255,15 +255,16 @@ export class ChromeStorageAdapter implements StorageAdapter {
     const scopedKey = this.scopedKey(key)
     if (!scopedKey)
       return
-    this.values.set(scopedKey, value)
-    if (this.lastPersistedValues.get(scopedKey) === value)
-      return
     const opId = ++this.latestOpId
     const version = (this.keyVersions.get(scopedKey) ?? 0) + 1
     this.keyVersions.set(scopedKey, version)
     this.values.set(scopedKey, value)
     this.enqueue(opId, async () => {
       try {
+        // Deduplicate at execution time: queued B must not swallow a later A
+        // merely because A was the last durable value when both were queued.
+        if (this.lastPersistedValues.get(scopedKey) === value)
+          return
         await this.mutateStorage([[scopedKey, value]], () => this.area.set({ [scopedKey]: value }))
         this.lastPersistedValues.set(scopedKey, value)
       }

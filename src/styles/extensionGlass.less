@@ -1,17 +1,21 @@
-/* One material contract for the extension, including teleported overlays.
+/* One material contract for web and extension, including teleported overlays.
    Derive tint from the active theme instead of applying opacity to the content. */
-body[data-panel-runtime='extension'],
-.pn-theme-root[data-surface='extension'] {
-  --pn-glass-modal: color-mix(in srgb, var(--pn-modal-background, rgba(255, 255, 255, .98)) 98%, transparent);
-  --pn-glass-surface: color-mix(in srgb, var(--pn-color-surface, rgba(255, 255, 255, .92)) 94%, transparent);
-  --pn-glass-panel: color-mix(in srgb, var(--pn-color-surface, rgba(255, 255, 255, .92)) 70%, transparent);
-  --pn-glass-control: color-mix(in srgb, var(--pn-color-surface, rgba(255, 255, 255, .92)) 88%, transparent);
-  --pn-glass-border: color-mix(in srgb, var(--pn-color-border, rgba(148, 163, 184, .28)) 70%, rgba(255, 255, 255, .28));
-  --pn-glass-filter: blur(16px) saturate(105%);
-  --pn-glass-control-filter: blur(12px);
-  --pn-glass-highlight: inset 0 1px 0 rgba(255, 255, 255, .12);
-  --pn-glass-shadow: var(--pn-effect-shadow-high, 0 22px 60px rgba(2, 6, 23, .24));
-  --pn-glass-mask: rgba(20, 30, 24, .28);
+body:is([data-panel-runtime='extension'], [data-panel-runtime='web']),
+.pn-theme-root:is([data-surface='extension'], [data-surface='web']) {
+  --pn-glass-modal: color-mix(in srgb, var(--pn-modal-background, #fff) 70%, transparent);
+  --pn-glass-surface: color-mix(in srgb, var(--pn-color-surface, #fff) 70%, transparent);
+  /* Inner layers tint the already blurred shell; avoid stacking opaque cards. */
+  --pn-glass-panel: color-mix(in srgb, var(--pn-color-surface, #fff) 20%, transparent);
+  --pn-glass-control: color-mix(in srgb, var(--pn-color-surface, #fff) 42%, transparent);
+  --pn-glass-detail: color-mix(in srgb, var(--pn-color-surface, #fff) 32%, transparent);
+  --pn-glass-floating: color-mix(in srgb, var(--pn-modal-background, #fff) 90%, transparent);
+  --pn-glass-border: color-mix(in srgb, var(--pn-color-border, #ddd) 30%, rgba(255, 255, 255, .58));
+  --pn-glass-filter: blur(32px) saturate(125%);
+  --pn-glass-control-filter: blur(18px) saturate(115%);
+  --pn-glass-sheen: linear-gradient(145deg, rgba(255,255,255,.16), rgba(255,255,255,0) 55%);
+  --pn-glass-highlight: inset 0 1px 0 rgba(255,255,255,.45), inset 0 -1px 0 rgba(0,0,0,.025);
+  --pn-glass-shadow: 0 20px 64px rgba(0,0,0,.15), 0 4px 16px rgba(0,0,0,.06);
+  --pn-glass-mask: rgba(0, 0, 0, .22);
   --ext-canvas: var(--pn-color-page-background, #09111d);
   --ext-text: var(--pn-color-text-primary, #f4f7fb);
   --ext-text-muted: var(--pn-color-text-secondary, #9cabc0);
@@ -29,102 +33,156 @@ body[data-panel-runtime='extension'],
 
 }
 
-html.dark body[data-panel-runtime='extension'] {
+html.dark body:is([data-panel-runtime='extension'], [data-panel-runtime='web']),
+html.dark .pn-theme-root:is([data-surface='extension'], [data-surface='web']) {
   /* Fallbacks for menus and feedback teleported outside ThemeProvider. */
-  --pn-glass-modal: rgba(37, 45, 41, .98);
-  --pn-glass-surface: rgba(37, 45, 41, .94);
-  --pn-glass-panel: rgba(37, 45, 41, .7);
-  --pn-glass-control: rgba(37, 45, 41, .88);
-  --pn-glass-border: #3b4740;
-  --pn-glass-highlight: inset 0 1px 0 rgba(255, 255, 255, .14);
+  --pn-glass-modal: rgba(18,18,18,.74);
+  --pn-glass-surface: rgba(18,18,18,.7);
+  --pn-glass-panel: rgba(255,255,255,.035);
+  --pn-glass-control: rgba(255,255,255,.065);
+  --pn-glass-detail: rgba(255,255,255,.055);
+  --pn-glass-floating: rgba(24,24,24,.92);
+  --pn-glass-border: rgba(255,255,255,.13);
+  --pn-glass-sheen: linear-gradient(145deg, rgba(255,255,255,.045), rgba(255,255,255,0) 55%);
+  --pn-glass-highlight: inset 0 1px 0 rgba(255,255,255,.12), inset 0 -1px 0 rgba(0,0,0,.12);
+  --pn-glass-shadow: 0 20px 64px rgba(0,0,0,.34), 0 4px 16px rgba(0,0,0,.16);
+  --pn-glass-mask: rgba(0,0,0,.32);
 }
 
-body[data-panel-runtime='extension'] :is(.n-modal.n-card, .round-card-modal.n-card, .n-dialog, .n-dropdown-menu, .n-base-select-menu, .n-popover:not(.n-popover--raw), .n-message, .n-notification) {
-  background: var(--pn-glass-modal) !important;
+body:is([data-panel-runtime='extension'], [data-panel-runtime='web']) :is(.n-modal.n-card, .round-card-modal.n-card, .n-dialog, .n-dropdown-menu, .n-base-select-menu, .n-popover:not(.n-popover--raw), .n-message, .n-notification) {
+  background: var(--pn-glass-sheen), var(--pn-glass-modal) !important;
   border: 1px solid var(--pn-glass-border) !important;
   box-shadow: var(--pn-glass-highlight), var(--pn-glass-shadow) !important;
   -webkit-backdrop-filter: var(--pn-glass-filter) !important;
   backdrop-filter: var(--pn-glass-filter) !important;
 }
 
-body[data-panel-runtime='extension'] .n-modal-mask {
+/* Small floating surfaces need stronger tint for text contrast over busy wallpaper. */
+body:is([data-panel-runtime='extension'], [data-panel-runtime='web']) :is(.n-dialog, .n-dropdown-menu, .n-base-select-menu, .n-popover:not(.n-popover--raw), .n-message, .n-notification, .n-color-picker-panel, .n-date-panel, .n-time-picker-panel) {
+  background: var(--pn-glass-sheen), var(--pn-glass-floating) !important;
+}
+
+body:is([data-panel-runtime='extension'], [data-panel-runtime='web']) :is(.side-rail, .search-bar-capsule, .sync-status-banner, .wheel-switch-hint, .speed-card.is-expanded) {
+  background: var(--pn-glass-sheen), var(--pn-glass-surface) !important;
+  border-color: var(--pn-glass-border);
+  -webkit-backdrop-filter: var(--pn-glass-control-filter) !important;
+  backdrop-filter: var(--pn-glass-control-filter) !important;
+}
+
+body:is([data-panel-runtime='extension'], [data-panel-runtime='web']) .n-modal-mask {
   background: var(--pn-glass-mask) !important;
 }
 
-body[data-panel-runtime='extension'] :is(.n-card-header, .n-card__footer, .n-card__action) {
+body:is([data-panel-runtime='extension'], [data-panel-runtime='web']) :is(.n-card-header, .n-card__footer, .n-card__action) {
   background: var(--pn-glass-panel) !important;
   border-color: var(--pn-glass-border) !important;
 }
 
-body[data-panel-runtime='extension'] :is(.pn-app-card.n-card, .pn-app-panel, .pn-app-empty, .settings-glass-card) {
+body:is([data-panel-runtime='extension'], [data-panel-runtime='web']) :is(.pn-app-card.n-card, .pn-app-panel, .pn-app-empty, .settings-glass-card) {
   background: var(--pn-glass-panel) !important;
   border-color: var(--pn-glass-border) !important;
   box-shadow: var(--pn-glass-highlight), var(--pn-effect-shadow-low) !important;
 }
 
-body[data-panel-runtime='extension'] :is(.n-input, .n-base-selection, .n-upload-dragger) {
+body:is([data-panel-runtime='extension'], [data-panel-runtime='web']) :is(.n-input, .n-base-selection, .n-upload-dragger) {
   background: var(--pn-glass-control) !important;
 }
 
+/* Bounded structural surfaces share acrylic, including nested/sticky previews.
+   Backdrop filtering never applies blur to the text, icons or preview images. */
+body:is([data-panel-runtime='extension'], [data-panel-runtime='web']) :is(.content-header, .n-card-header, .hub-sidebar, .icon-gallery-sidebar, .custom-icon-preview, .group-icon-preview, .gallery-preview, .material-image-preview, .profile-preview) {
+  background: var(--pn-glass-sheen), var(--pn-glass-detail) !important;
+  -webkit-backdrop-filter: var(--pn-glass-control-filter) !important;
+  backdrop-filter: var(--pn-glass-control-filter) !important;
+  border-color: var(--pn-glass-border);
+  box-shadow: var(--pn-glass-highlight);
+}
+
+/* Settings chrome uses the web menu's material on both surfaces. The modal
+   already blurs the wallpaper: a second backdrop on just the header/sidebar
+   flattens its tint and makes adjacent areas look like different materials. */
+body:is([data-panel-runtime='extension'], [data-panel-runtime='web']) :is(.app-starter-glass-modal > .n-card-header, .app-starter-sidebar, .user-hub-modal .hub-sidebar, .user-hub-modal .content-header) {
+  background: var(--pn-glass-sheen), var(--pn-glass-detail) !important;
+  border-color: var(--pn-glass-border) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  box-shadow: none !important;
+}
+
+/* The icon stage is a transparent inner well, not an opaque second card. */
+body:is([data-panel-runtime='extension'], [data-panel-runtime='web']) .custom-preview-stage {
+  background: var(--pn-glass-panel);
+  border: 1px solid var(--pn-glass-border);
+  box-shadow: var(--pn-glass-highlight);
+}
+
+body:is([data-panel-runtime='extension'], [data-panel-runtime='web']) .edit-item-glass-modal.n-card:not(.edit-item-embedded) {
+  background: var(--pn-glass-sheen), var(--pn-glass-modal) !important;
+  border-color: var(--pn-glass-border) !important;
+  box-shadow: var(--pn-glass-highlight), var(--pn-glass-shadow) !important;
+  -webkit-backdrop-filter: var(--pn-glass-filter);
+  backdrop-filter: var(--pn-glass-filter);
+}
+
 /* Inner settings surfaces must not revert to near-opaque SDK defaults. */
-body[data-panel-runtime='extension'] :is(.session-summary-grid > div, .avatar-preset-button, .profile-avatar, .profile-preview, .profile-theme-segment.active) {
+body:is([data-panel-runtime='extension'], [data-panel-runtime='web']) :is(.session-summary-grid > div, .avatar-preset-button, .profile-avatar, .profile-preview, .profile-theme-segment.active) {
   background: var(--pn-glass-control) !important;
   border-color: var(--pn-glass-border);
   box-shadow: var(--pn-glass-highlight);
 }
 
-body[data-panel-runtime='extension'] .avatar-preset-button:is(:hover, .active) {
+body:is([data-panel-runtime='extension'], [data-panel-runtime='web']) .avatar-preset-button:is(:hover, .active) {
   border-color: var(--pn-color-accent);
   background: color-mix(in srgb, var(--pn-color-accent) 14%, var(--pn-glass-control)) !important;
 }
 
-body[data-panel-runtime='extension'] .user-info-page .profile-hero {
+body:is([data-panel-runtime='extension'], [data-panel-runtime='web']) .user-info-page .profile-hero {
   background: var(--pn-glass-panel) !important;
   border-color: var(--pn-glass-border) !important;
   box-shadow: var(--pn-glass-highlight) !important;
 }
 
-body[data-panel-runtime='extension'] .n-alert {
+body:is([data-panel-runtime='extension'], [data-panel-runtime='web']) .n-alert {
   background: var(--pn-glass-panel) !important;
 }
 
-body[data-panel-runtime='extension'] .pn-app-dropzone {
+body:is([data-panel-runtime='extension'], [data-panel-runtime='web']) .pn-app-dropzone {
   background: linear-gradient(color-mix(in srgb, var(--pn-color-accent) 6%, transparent), color-mix(in srgb, var(--pn-color-accent) 6%, transparent)), var(--pn-glass-control);
 }
 
-body[data-panel-runtime='extension'] .pn-app-dropzone:is(:hover, :focus-within) {
+body:is([data-panel-runtime='extension'], [data-panel-runtime='web']) .pn-app-dropzone:is(:hover, :focus-within) {
   background: linear-gradient(color-mix(in srgb, var(--pn-color-accent) 12%, transparent), color-mix(in srgb, var(--pn-color-accent) 12%, transparent)), var(--pn-glass-control);
 }
 
-body[data-panel-runtime='extension'] :is(.n-color-picker-panel, .n-date-panel, .n-time-picker-panel) {
-  background: var(--pn-glass-modal) !important;
+body:is([data-panel-runtime='extension'], [data-panel-runtime='web']) :is(.n-color-picker-panel, .n-date-panel, .n-time-picker-panel) {
+  background: var(--pn-glass-sheen), var(--pn-glass-floating) !important;
   border: 1px solid var(--pn-glass-border);
   -webkit-backdrop-filter: var(--pn-glass-filter);
   backdrop-filter: var(--pn-glass-filter);
   box-shadow: var(--pn-glass-highlight), var(--pn-glass-shadow);
 }
 
-body[data-panel-runtime='extension'] :is(.n-base-selection-label, .n-base-selection-tags) {
+body:is([data-panel-runtime='extension'], [data-panel-runtime='web']) :is(.n-base-selection-label, .n-base-selection-tags) {
   background: transparent !important;
 }
 
-body[data-panel-runtime='extension'] :is(.n-data-table-th, .n-data-table-td) {
+body:is([data-panel-runtime='extension'], [data-panel-runtime='web']) :is(.n-data-table-th, .n-data-table-td) {
   background: var(--pn-glass-panel) !important;
 }
 
-body[data-panel-runtime='extension'] .pn-widget-shell[data-widget='glass'] {
+body:is([data-panel-runtime='extension'], [data-panel-runtime='web']) .pn-widget-shell[data-widget='glass'] {
   --pn-widget-background: var(--pn-glass-surface);
   --pn-widget-border: var(--pn-glass-border);
   --pn-effect-blur: 22px;
 }
 
-body[data-panel-runtime='extension'] .pn-widget-shell[data-widget='glass'] > :is(.weather-card, .trending-card, .notes-card, .todo-card, .calendar-card, .countdown-card, .workday-card) {
+body:is([data-panel-runtime='extension'], [data-panel-runtime='web']) .pn-widget-shell[data-widget='glass'] > :is(.weather-card, .trending-card, .notes-card, .todo-card, .calendar-card, .countdown-card, .workday-card) {
   -webkit-backdrop-filter: var(--pn-glass-filter);
   backdrop-filter: var(--pn-glass-filter);
   box-shadow: var(--pn-glass-highlight), var(--pn-widget-shadow);
 }
 
-body[data-panel-runtime='extension'] :is(.login-card, .status-card) {
+body:is([data-panel-runtime='extension'], [data-panel-runtime='web']) :is(.login-card, .status-card) {
   background: var(--pn-glass-modal) !important;
   border-color: var(--pn-glass-border) !important;
   box-shadow: var(--pn-glass-highlight), var(--pn-glass-shadow) !important;
@@ -132,57 +190,70 @@ body[data-panel-runtime='extension'] :is(.login-card, .status-card) {
   backdrop-filter: var(--pn-glass-filter) !important;
 }
 
-body[data-panel-runtime='extension'] .icon-editor-container :is(.text-slate-400, .text-zinc-400) {
+body:is([data-panel-runtime='extension'], [data-panel-runtime='web']) .icon-editor-container :is(.text-slate-400, .text-zinc-400) {
   color: var(--pn-color-text-muted, #64748b);
 }
 
-body[data-panel-runtime='extension'] .icon-editor-container a {
+body:is([data-panel-runtime='extension'], [data-panel-runtime='web']) .icon-editor-container a {
   color: var(--pn-color-accent, #059669);
 }
 
 /* Keep content usable when acrylic is unavailable or transparency is reduced. */
 @supports not ((background: color-mix(in srgb, white, transparent)) and ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)))) {
-  body[data-panel-runtime='extension'],
-  .pn-theme-root[data-surface='extension'] {
+  body:is([data-panel-runtime='extension'], [data-panel-runtime='web']),
+  .pn-theme-root:is([data-surface='extension'], [data-surface='web']) {
     --pn-glass-modal: #f8fafc;
     --pn-glass-surface: #f8fafc;
-    --pn-glass-panel: #f3f5f0;
+    --pn-glass-panel: #f5f5f5;
     --pn-glass-control: #ffffff;
+    --pn-glass-detail: #f5f5f5;
+    --pn-glass-floating: #ffffff;
+    --pn-glass-sheen: none;
+    --pn-glass-filter: none;
+    --pn-glass-control-filter: none;
   }
-  html.dark body[data-panel-runtime='extension'],
-  html.dark .pn-theme-root[data-surface='extension'] {
-    --pn-glass-modal: #252d29;
-    --pn-glass-surface: #252d29;
-    --pn-glass-panel: #303a34;
-    --pn-glass-control: #303a34;
+  html.dark body:is([data-panel-runtime='extension'], [data-panel-runtime='web']),
+  html.dark .pn-theme-root:is([data-surface='extension'], [data-surface='web']) {
+    --pn-glass-modal: #141414;
+    --pn-glass-surface: #141414;
+    --pn-glass-panel: #262626;
+    --pn-glass-control: #262626;
+    --pn-glass-detail: #262626;
+    --pn-glass-floating: #262626;
   }
 }
 
 @media (prefers-reduced-transparency: reduce) {
-  body[data-panel-runtime='extension'],
-  .pn-theme-root[data-surface='extension'] {
+  body:is([data-panel-runtime='extension'], [data-panel-runtime='web']),
+  .pn-theme-root:is([data-surface='extension'], [data-surface='web']) {
     --pn-glass-modal: #f8fafc;
     --pn-glass-surface: #f8fafc;
-    --pn-glass-panel: #f3f5f0;
+    --pn-glass-panel: #f5f5f5;
     --pn-glass-control: #ffffff;
+    --pn-glass-detail: #f5f5f5;
+    --pn-glass-floating: #ffffff;
+    --pn-glass-sheen: none;
     --pn-glass-filter: none;
     --pn-glass-control-filter: none;
   }
-  html.dark body[data-panel-runtime='extension'],
-  html.dark .pn-theme-root[data-surface='extension'] {
-    --pn-glass-modal: #252d29;
-    --pn-glass-surface: #252d29;
-    --pn-glass-panel: #303a34;
-    --pn-glass-control: #303a34;
+  html.dark body:is([data-panel-runtime='extension'], [data-panel-runtime='web']),
+  html.dark .pn-theme-root:is([data-surface='extension'], [data-surface='web']) {
+    --pn-glass-modal: #141414;
+    --pn-glass-surface: #141414;
+    --pn-glass-panel: #262626;
+    --pn-glass-control: #262626;
+    --pn-glass-detail: #262626;
+    --pn-glass-floating: #262626;
+    --pn-glass-sheen: none;
   }
 }
 
-body[data-panel-runtime='extension'] .login-submit-item .n-button {
+body:is([data-panel-runtime='extension'], [data-panel-runtime='web']) .login-submit-item .n-button {
   box-shadow: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  body[data-panel-runtime='extension'] :is(.gallery-card, .view-panel, .n-modal, .icon-gallery-tile) {
+  body:is([data-panel-runtime='extension'], [data-panel-runtime='web']) :is(.gallery-card, .view-panel, .n-modal, .icon-gallery-tile) {
     animation: none !important;
     transition: none !important;
   }
