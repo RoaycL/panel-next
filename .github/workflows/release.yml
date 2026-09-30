@@ -2,20 +2,30 @@ name: release
 
 on:
   workflow_dispatch:
+    inputs:
+      publish_docker:
+        description: Also publish Docker images
+        type: boolean
+        default: false
   push:
     tags:
       - 'v*'
+  release:
+    types: [published]
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.VERSION }}
+      tag: ${{ steps.version.outputs.TAG }}
+      prerelease: ${{ steps.version.outputs.PRERELEASE }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Read version
-        id: version
-        run: echo "VERSION=$(cut -d '|' -f 2 ./service/assets/version)" >> $GITHUB_OUTPUT
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -30,16 +40,42 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install
 
-      - name: Build frontend
-        run: pnpm run build
+      - name: Validate release version
+        id: version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name || (github.ref_type == 'tag' && github.ref_name) || '' }}
+        run: |
+          node scripts/validate-version.mjs
+          VERSION=$(cut -d '|' -f 2 ./service/assets/version)
+          TAG="v$VERSION"
+          if [ -n "$RELEASE_TAG" ] && [ "$RELEASE_TAG" != "$TAG" ]; then
+            echo "Release tag $RELEASE_TAG does not match committed version $TAG" >&2
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "TAG=$TAG" >> "$GITHUB_OUTPUT"
+          echo "PRERELEASE=$(node -p "require('./version-policy.json').stage === 'testing'")" >> "$GITHUB_OUTPUT"
 
-      - name: Build extension
-        run: pnpm run build:extension
+      - name: Validate and build both runtimes
+        run: pnpm run build:all
+
+      - name: Validate themes and icon cache
+        run: |
+          pnpm run validate:theme-registry
+          pnpm run test:icon-cache
 
       - name: Package extension
         # Tag/CI builds reproduce the committed version. Local test packaging
         # uses package:extension, which advances the patch version once.
         run: node ./scripts/package-extension.mjs
+
+      - name: Verify extension archive
+        working-directory: artifacts
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          sha256sum -c "panel-next-extension-v$VERSION.zip.sha256"
+          unzip -t "panel-next-extension-v$VERSION.zip"
 
       - name: Upload extension artifact
         uses: actions/upload-artifact@v4
@@ -55,9 +91,63 @@ jobs:
           path: artifacts/panel-next-extension-v${{ steps.version.outputs.VERSION }}.zip.sha256
           if-no-files-found: error
 
+  publish:
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: write
+    concurrency:
+      group: extension-release-${{ needs.build.outputs.tag }}
+      cancel-in-progress: false
+    steps:
+      - name: Checkout release notes
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download extension archive and checksum
+        uses: actions/download-artifact@v4
+        with:
+          pattern: panel-next-extension-v${{ needs.build.outputs.version }}*
+          path: artifacts
+          merge-multiple: true
+
+      - name: Publish extension assets to GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.build.outputs.version }}
+          TAG: ${{ needs.build.outputs.tag }}
+          PRERELEASE: ${{ needs.build.outputs.prerelease }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          cd artifacts
+          sha256sum -c "panel-next-extension-v$VERSION.zip.sha256"
+          cd ..
+          if git rev-parse --verify "refs/tags/$TAG" >/dev/null 2>&1; then
+            if [ "$(git rev-parse "refs/tags/$TAG^{commit}")" != "$RELEASE_SHA" ]; then
+              echo "Refusing to publish assets over a different commit for $TAG" >&2
+              exit 1
+            fi
+          fi
+          ZIP="artifacts/panel-next-extension-v$VERSION.zip"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$ZIP" "$ZIP.sha256" --clobber
+          else
+            OPTIONS=()
+            if [ "$PRERELEASE" = true ]; then OPTIONS+=(--prerelease); fi
+            NOTES="doc/github_release_template.md"
+            if [ -f "doc/releases/$TAG.md" ]; then NOTES="doc/releases/$TAG.md"; fi
+            gh release create "$TAG" "$ZIP" "$ZIP.sha256" \
+              --target "$RELEASE_SHA" --title "Panel Next $TAG" \
+              --generate-notes --notes-file "$NOTES" "${OPTIONS[@]}"
+          fi
+
   docker:
     runs-on: ubuntu-latest
     needs: build
+    # Attaching extension assets must not unexpectedly publish Docker images.
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish_docker)
     steps:
       - name: Checkout
         uses: actions/checkout@v4

@@ -83,6 +83,16 @@ corepack pnpm run build:all
 
 发布到 Chrome Web Store 前必须完成手工验收，并在发布记录中注明 Chrome 版本、扩展 ID、安装结果和已知错误；发布检查项见 `doc/chrome_store_release.md`。
 
+## GitHub Releases 自动附带扩展包
+
+`.github/workflows/release.yml` 在推送 `v<版本号>` 标签、发布 GitHub Release 或手动运行时，执行完整校验和两端构建，再把扩展 ZIP 与 SHA-256 上传到对应 Release 的 Assets；CI 复现提交版本，不执行会递增版本号的 `package:extension`。
+
+- 标签必须与 `service/assets/version` 等版本文件一致，否则停止发布；同一标签不能换成另一提交的包。
+- 测试阶段自动创建预发布版本；已有 Release 只补充附件，不覆盖用户编写的说明。
+- 发布作业只授予 `contents: write`；构建作业保持只读。Docker 作业独立，推送版本标签仍按原流程发布镜像，手动运行默认不发布 Docker，发布 Release 事件也不触发镜像发布。
+- 用户下载 Releases 的扩展 ZIP，而不是 GitHub 自动提供的源码 ZIP。可选择对应版本的 `.zip.sha256` 检查下载完整性。
+- 版本说明可保存为 `doc/releases/v<版本号>.md`；未提供时使用 `doc/github_release_template.md` 和自动生成的变更列表。
+
 ## 产物安全检查
 
 - `manifest.json` 必须为 Manifest V3。

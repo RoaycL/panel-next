@@ -106,7 +106,7 @@ docker compose up -d
 
 Panel Next 扩展将彻底接管浏览器的新标签页，提供如同原生桌面般强大的操作体验。
 
-1. 前往 GitHub [Releases 页面](https://github.com/RoaycL/panel-next/releases) 下载最新的测试包 `panel-next-extension-v0.0.1.zip`；
+1. 前往 GitHub [Releases 页面](https://github.com/RoaycL/panel-next/releases) 下载对应版本的 `panel-next-extension-v<版本号>.zip`（在 Assets 中选择扩展 ZIP，而不是 Source code）；每个新版同时提供 `.zip.sha256` 校验文件，测试版请展开预发布版本查看；
 2. 解压 ZIP 压缩包到本地目录；
 3. 打开 Chrome 浏览器，访问 `chrome://extensions/`；
 4. 开启右上角的 **「开发者模式 (Developer mode)」**；
