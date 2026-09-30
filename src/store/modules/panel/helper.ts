@@ -3,11 +3,12 @@ import { defaultFooterHtml } from '@/utils/defaultFooter'
 import { migrateLegacyFooterHtml } from '@/utils/branding'
 import { PanelPanelConfigStyleEnum, PanelStateNetworkModeEnum } from '@/enums'
 import defaultBackground from '@/assets/defaultBackground.webp'
+import { getRuntime } from '@/runtime'
 const LOCAL_NAME = 'panelStorage'
 
 export function defaultStatePanelConfig(): Panel.panelConfig {
   return {
-    backgroundImageSrc: defaultBackground,
+    backgroundImageSrc: getRuntime().kind === 'extension' ? '' : defaultBackground,
     backgroundBlur: 0,
     backgroundMaskNumber: 0,
     iconStyle: PanelPanelConfigStyleEnum.icon,

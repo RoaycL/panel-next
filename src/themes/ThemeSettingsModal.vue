@@ -6,7 +6,7 @@ import { t } from '@/locales'
 import { DEFAULT_ICON_PACK_ID, DEFAULT_THEME_ID } from './constants'
 import { themeRegistry } from './registry'
 import { persistThemeSelection, saveLastKnownGood } from './storage'
-import { setThemePreview, getThemePreview, getThemeRuntimeState } from './runtime'
+import { setThemePreview, getThemePreview, getThemeRuntimeState, buildProviderResult } from './runtime'
 import { coerceVariant, DEFAULT_VARIANTS, VARIANT_LABEL_KEYS } from './variants'
 import { cloneJson } from './clone'
 
@@ -94,7 +94,7 @@ const visualPreview = computed(() => {
   try {
     const runtimeMode = getThemeRuntimeState().resolvedMode
     const resolvedMode = draft.mode === 'auto' ? runtimeMode : draft.mode
-    const tokens = themeRegistry.resolve(buildDraftSelection(), resolvedMode).tokens
+    const tokens = buildProviderResult({ ...buildDraftSelection(), mode: resolvedMode }, props.surface, themeRegistry).loadResult.resolved.tokens
     return {
       canvas: tokens.color.pageBackground,
       surface: tokens.color.surface,

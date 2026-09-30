@@ -10,7 +10,7 @@ import type {
 import type { ThemeContextValue } from './context'
 import { reactive, ref } from 'vue'
 import { DEFAULT_THEME_ID, THEME_ROOT_CLASS } from './constants'
-import { DEFAULT_DARK_TOKENS, DEFAULT_LIGHT_TOKENS, deepFreezeTokens } from './tokens'
+import { DEFAULT_DARK_TOKENS, DEFAULT_LIGHT_TOKENS, deepFreezeTokens, extensionDefaultTokens } from './tokens'
 import { DEFAULT_ICON_SET } from './icons'
 import { DEFAULT_VARIANTS, resolveVariantCssVariables } from './variants'
 import { tokensToCssVariables } from './cssVariables'
@@ -237,6 +237,15 @@ export function buildProviderResult(
     // 解析异常回退默认主题，禁止白屏。
     console.error('[ThemeProvider] Theme resolution failed, using core.default.', error)
     loadResult = registry.loadSelection(null, 'auto', resolvedMode, surface)
+  }
+  if (surface === 'extension' && loadResult.resolved.id === DEFAULT_THEME_ID) {
+    loadResult = {
+      ...loadResult,
+      resolved: {
+        ...loadResult.resolved,
+        tokens: extensionDefaultTokens(resolvedMode, loadResult.quarantined ? undefined : loadResult.selection?.overrides),
+      },
+    }
   }
   const cssVariables = tokensToCssVariables(loadResult.resolved.tokens)
   const variants = loadResult.resolved.variants

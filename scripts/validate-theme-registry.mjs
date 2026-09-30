@@ -490,6 +490,18 @@ const viewExplicitLight = buildProviderResult({ ...autoSelection, mode: 'light' 
 assert.equal(viewExplicitLight.resolvedMode, 'light')
 setPreferredDark(false)
 
+// Extension defaults must pass the same CSS validator and retain explicit overrides.
+for (const mode of ['light', 'dark']) {
+  const extensionView = buildProviderResult({ ...autoSelection, mode }, 'extension', registry)
+  assert.equal(extensionView.cssVariables['--pn-color-page-background'], mode === 'dark' ? '#1c231f' : '#f3f5f0')
+  assert.ok(Object.isFrozen(extensionView.loadResult.resolved.tokens))
+  const customView = buildProviderResult({ ...autoSelection, mode, overrides: { color: { accent: '#a05242' } } }, 'extension', registry)
+  assert.equal(customView.cssVariables['--pn-color-accent'], '#a05242', 'extension palette preserves user accent')
+}
+const extensionFallback = buildProviderResult(null, 'extension', registry)
+assert.equal(extensionFallback.cssVariables['--pn-color-page-background'], '#f3f5f0')
+assert.deepEqual(buildProviderResult({ ...nightSelection, mode: 'dark' }, 'extension', registry).loadResult.resolved.tokens, registry.loadSelection(nightSelection, 'dark', 'dark', 'extension').resolved.tokens, 'custom themes retain their own palette')
+
 /* ---- B4: 预览完整覆盖 Token/图标/Variant/主题 ID，且不污染全局状态 ---- */
 commitLoadResult(registry.loadSelection(autoSelection), 'web')
 const stateBefore = JSON.stringify(getThemeRuntimeState().resolved.id)

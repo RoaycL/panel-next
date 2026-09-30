@@ -5,6 +5,7 @@ import type { ThemeTokens } from '@/themes'
 export function createThemeOverrides(tokens: Readonly<ThemeTokens>): GlobalThemeOverrides {
   return {
     common: {
+      fontFamily: tokens.font.family,
       primaryColor: tokens.color.accent,
       primaryColorHover: tokens.icon.activeColor,
       primaryColorPressed: tokens.color.accent,

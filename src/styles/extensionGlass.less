@@ -2,25 +2,40 @@
    Derive tint from the active theme instead of applying opacity to the content. */
 body[data-panel-runtime='extension'],
 .pn-theme-root[data-surface='extension'] {
-  --pn-glass-modal: color-mix(in srgb, var(--pn-modal-background, rgba(255, 255, 255, .98)) 74%, transparent);
-  --pn-glass-surface: color-mix(in srgb, var(--pn-color-surface, rgba(255, 255, 255, .92)) 68%, transparent);
-  --pn-glass-panel: color-mix(in srgb, var(--pn-color-surface, rgba(255, 255, 255, .92)) 32%, transparent);
-  --pn-glass-control: color-mix(in srgb, var(--pn-color-surface, rgba(255, 255, 255, .92)) 48%, transparent);
+  --pn-glass-modal: color-mix(in srgb, var(--pn-modal-background, rgba(255, 255, 255, .98)) 98%, transparent);
+  --pn-glass-surface: color-mix(in srgb, var(--pn-color-surface, rgba(255, 255, 255, .92)) 94%, transparent);
+  --pn-glass-panel: color-mix(in srgb, var(--pn-color-surface, rgba(255, 255, 255, .92)) 70%, transparent);
+  --pn-glass-control: color-mix(in srgb, var(--pn-color-surface, rgba(255, 255, 255, .92)) 88%, transparent);
   --pn-glass-border: color-mix(in srgb, var(--pn-color-border, rgba(148, 163, 184, .28)) 70%, rgba(255, 255, 255, .28));
-  --pn-glass-filter: blur(28px) saturate(155%);
-  --pn-glass-control-filter: blur(18px) saturate(145%);
-  --pn-glass-highlight: inset 0 1px 0 rgba(255, 255, 255, .32);
+  --pn-glass-filter: blur(16px) saturate(105%);
+  --pn-glass-control-filter: blur(12px);
+  --pn-glass-highlight: inset 0 1px 0 rgba(255, 255, 255, .12);
   --pn-glass-shadow: var(--pn-effect-shadow-high, 0 22px 60px rgba(2, 6, 23, .24));
-  --pn-glass-mask: rgba(2, 6, 23, .24);
+  --pn-glass-mask: rgba(20, 30, 24, .28);
+  --ext-canvas: var(--pn-color-page-background, #09111d);
+  --ext-text: var(--pn-color-text-primary, #f4f7fb);
+  --ext-text-muted: var(--pn-color-text-secondary, #9cabc0);
+  --ext-text-soft: var(--pn-color-text-muted, #75859b);
+  --ext-rail: var(--pn-glass-surface, var(--pn-sidebar-background));
+  --ext-surface: var(--pn-glass-surface, var(--pn-color-surface));
+  --ext-surface-raised: var(--pn-color-surface-hover, #1a2536);
+  --ext-border: var(--pn-glass-border, var(--pn-color-border));
+  --ext-divider: var(--pn-color-border, #2b3547);
+  --ext-accent: var(--pn-color-accent, #2eb8f0);
+  --ext-accent-soft: var(--pn-sidebar-active-background, var(--pn-color-surface-hover, #17354a));
+  --ext-danger: var(--pn-color-danger, #ef705c);
+  --ext-shadow: rgba(2, 6, 23, .28);
+  --ext-elevation: var(--pn-effect-shadow-medium, 0 14px 40px rgba(0, 0, 0, .38));
+
 }
 
 html.dark body[data-panel-runtime='extension'] {
   /* Fallbacks for menus and feedback teleported outside ThemeProvider. */
-  --pn-glass-modal: rgba(15, 23, 42, .74);
-  --pn-glass-surface: rgba(15, 23, 42, .64);
-  --pn-glass-panel: rgba(15, 23, 42, .28);
-  --pn-glass-control: rgba(15, 23, 42, .48);
-  --pn-glass-border: rgba(226, 232, 240, .18);
+  --pn-glass-modal: rgba(37, 45, 41, .98);
+  --pn-glass-surface: rgba(37, 45, 41, .94);
+  --pn-glass-panel: rgba(37, 45, 41, .7);
+  --pn-glass-control: rgba(37, 45, 41, .88);
+  --pn-glass-border: #3b4740;
   --pn-glass-highlight: inset 0 1px 0 rgba(255, 255, 255, .14);
 }
 
@@ -64,7 +79,7 @@ body[data-panel-runtime='extension'] .avatar-preset-button:is(:hover, .active) {
 }
 
 body[data-panel-runtime='extension'] .user-info-page .profile-hero {
-  background: linear-gradient(120deg, color-mix(in srgb, var(--pn-color-accent) 12%, transparent), transparent 75%), var(--pn-glass-panel) !important;
+  background: var(--pn-glass-panel) !important;
   border-color: var(--pn-glass-border) !important;
   box-shadow: var(--pn-glass-highlight) !important;
 }
@@ -131,15 +146,15 @@ body[data-panel-runtime='extension'] .icon-editor-container a {
   .pn-theme-root[data-surface='extension'] {
     --pn-glass-modal: #f8fafc;
     --pn-glass-surface: #f8fafc;
-    --pn-glass-panel: #f1f5f9;
+    --pn-glass-panel: #f3f5f0;
     --pn-glass-control: #ffffff;
   }
   html.dark body[data-panel-runtime='extension'],
   html.dark .pn-theme-root[data-surface='extension'] {
-    --pn-glass-modal: #0f172a;
-    --pn-glass-surface: #0f172a;
-    --pn-glass-panel: #1e293b;
-    --pn-glass-control: #1e293b;
+    --pn-glass-modal: #252d29;
+    --pn-glass-surface: #252d29;
+    --pn-glass-panel: #303a34;
+    --pn-glass-control: #303a34;
   }
 }
 
@@ -148,16 +163,27 @@ body[data-panel-runtime='extension'] .icon-editor-container a {
   .pn-theme-root[data-surface='extension'] {
     --pn-glass-modal: #f8fafc;
     --pn-glass-surface: #f8fafc;
-    --pn-glass-panel: #f1f5f9;
+    --pn-glass-panel: #f3f5f0;
     --pn-glass-control: #ffffff;
     --pn-glass-filter: none;
     --pn-glass-control-filter: none;
   }
   html.dark body[data-panel-runtime='extension'],
   html.dark .pn-theme-root[data-surface='extension'] {
-    --pn-glass-modal: #0f172a;
-    --pn-glass-surface: #0f172a;
-    --pn-glass-panel: #1e293b;
-    --pn-glass-control: #1e293b;
+    --pn-glass-modal: #252d29;
+    --pn-glass-surface: #252d29;
+    --pn-glass-panel: #303a34;
+    --pn-glass-control: #303a34;
+  }
+}
+
+body[data-panel-runtime='extension'] .login-submit-item .n-button {
+  box-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body[data-panel-runtime='extension'] :is(.gallery-card, .view-panel, .n-modal, .icon-gallery-tile) {
+    animation: none !important;
+    transition: none !important;
   }
 }

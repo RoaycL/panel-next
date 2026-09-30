@@ -262,7 +262,7 @@ const navItems = computed<HubNavItem[]>(() => {
       key: 'style',
       section: 'workspace',
       label: '主题与壁纸',
-      desc: '主题 Token、图标包与桌面背景',
+      desc: '主题配色、图标与桌面背景',
       icon: 'ion:color-palette-outline',
     },
     {
@@ -429,7 +429,7 @@ async function handleLogout() {
         <div class="sidebar-top flex flex-col">
           <button type="button" class="hub-brand" aria-label="返回个人中心" @click="currentTab = 'profile'">
             <span class="hub-brand-mark">PN</span>
-            <span class="hub-brand-copy"><b>Panel Next</b><small>Extension 控制中心</small></span>
+            <span class="hub-brand-copy"><b>Panel Next</b><small>让空间，顺你心意</small></span>
             <span class="hub-revision">R{{ syncRevision }}</span>
           </button>
 
@@ -523,7 +523,7 @@ async function handleLogout() {
           <button
             v-else
             type="button"
-            class="w-full flex items-center justify-center space-x-2 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-medium shadow-md transition-all"
+            class="w-full flex items-center justify-center space-x-2 py-2 rounded-xl hub-login-button text-xs font-medium transition-all"
             @click="showLogin"
           >
             <SvgIcon icon="ph:user-bold" class="text-sm" />
@@ -667,7 +667,7 @@ async function handleLogout() {
             <section class="settings-glass-card">
               <div class="settings-section-heading">
                 <span class="settings-section-icon"><SvgIcon icon="ion:color-palette-outline" /></span>
-                <div><h3>主题与壁纸</h3><p>主题控制颜色、图标包与组件 Token；壁纸设置控制背景、模糊和遮罩。</p></div>
+                <div><h3>主题与壁纸</h3><p>选择喜欢的配色与图标，搭配一张让你放松的壁纸。</p></div>
               </div>
               <div class="settings-action-grid">
                 <button type="button" @click="themeCenterVisible = true">
@@ -705,7 +705,7 @@ async function handleLogout() {
             <section class="settings-glass-card">
               <div class="settings-section-heading">
                 <span class="settings-section-icon"><SvgIcon icon="tabler:layout-sidebar-left-collapse-filled" /></span>
-                <div><h3>侧边栏</h3><p>头像、分组、新增和底部设置始终使用同一条功能栏。</p></div>
+                <div><h3>侧边栏</h3><p>让常用分组和设置出现在顺手的位置。</p></div>
               </div>
               <div class="grid gap-3 sm:grid-cols-2">
                 <label class="sidebar-setting-row"><span><SvgIcon icon="panel-next:swap-horizontal" /><span><b>侧边栏位置</b><small>固定在屏幕左侧或右侧</small></span></span><NSelect v-model:value="sidebarPositionModel" :options="sidebarPositionOptions" size="small" class="w-24" /></label>
@@ -735,7 +735,7 @@ async function handleLogout() {
             <section class="settings-glass-card">
               <div class="settings-section-heading">
                 <span class="settings-section-icon"><SvgIcon icon="icon-park-outline:import-and-export" /></span>
-                <div><h3>备份与恢复</h3><p>这里的操作会真实读写书签、分组与账号备份，不提供仅改变外观的占位按钮。</p></div>
+                <div><h3>备份与恢复</h3><p>导出书签和设置，或从已有备份恢复你的空间。</p></div>
               </div>
               <div v-if="syncStatus === 'offline' || syncStatus === 'error'" class="settings-effective-state">
                 当前离线：云端操作会在连接恢复后继续。
@@ -909,7 +909,7 @@ async function handleLogout() {
 }
 
 .nav-item-btn.active-nav {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.08) 100%);
+  background: var(--hub-accent-soft);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
 }
 
@@ -950,12 +950,12 @@ async function handleLogout() {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 22px;
+  padding: 24px;
   border: 1px solid var(--hub-border);
   border-radius: 20px;
   background: var(--hub-surface);
-  box-shadow: 0 18px 46px var(--hub-shadow);
-  backdrop-filter: blur(22px);
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .account-center-shell {
@@ -991,9 +991,9 @@ async function handleLogout() {
   padding: 0 16px;
   border: 1px solid rgba(52,211,153,.42);
   border-radius: 12px;
-  color: #ecfdf5;
-  background: linear-gradient(135deg, rgba(16,185,129,.9), rgba(5,150,105,.9));
-  box-shadow: 0 10px 26px rgba(5,150,105,.22);
+  color: var(--pn-color-surface);
+  background: var(--hub-accent);
+  box-shadow: none;
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
@@ -1017,7 +1017,7 @@ async function handleLogout() {
 .settings-action-grid button > svg:first-child { color: #67e8f9; font-size: 20px; }
 .settings-action-grid button > span { display: flex; min-width: 0; flex-direction: column; }
 .settings-action-grid b { color: #f8fafc; font-size: 12px; }
-.settings-action-grid small { margin-top: 3px; color: #64748b; font-size: 10px; }
+.settings-action-grid small { margin-top: 3px; color: #64748b; font-size: 11px; }
 .sync-queue-action { display: inline-flex; width: max-content; align-items: center; gap: 6px; padding: 9px 12px; border: 1px solid rgba(45,212,191,.28); border-radius: 11px; color: #99f6e4; background: rgba(13,148,136,.12); font-size: 11px; }
 
 .sidebar-setting-row {
@@ -1042,7 +1042,7 @@ async function handleLogout() {
 
 .sidebar-setting-row > span > span { display: flex; min-width: 0; flex-direction: column; }
 .sidebar-setting-row b { color: #f8fafc; font-size: 12px; }
-.sidebar-setting-row small { margin-top: 2px; color: #64748b; font-size: 10px; }
+.sidebar-setting-row small { margin-top: 2px; color: #64748b; font-size: 11px; }
 
 /* 深度重载所有子组件的浅色卡片与白底，实现100%暗夜玻璃质感统一 */
 :global(html.dark) .content-body :deep(.n-card),
@@ -1150,7 +1150,7 @@ async function handleLogout() {
   }
 }
 
-/* Aurora Control Center：与扩展主页使用同一套分层、圆角和语义色。 */
+/* The settings workspace shares the dashboard material and color tokens. */
 :global(.user-hub-modal) {
   --hub-canvas: transparent;
   --hub-sidebar: var(--pn-glass-panel);
@@ -1177,7 +1177,7 @@ async function handleLogout() {
   background: var(--pn-glass-modal);
   box-shadow: var(--pn-effect-shadow-high, 0 30px 100px rgba(2, 6, 23, .38)) !important;
 }
-.hub-sidebar { width: 260px !important; padding: 18px 14px !important; backdrop-filter: none !important; box-shadow: none; }
+.hub-sidebar { width: 228px !important; padding: 24px 16px !important; backdrop-filter: none !important; box-shadow: none; }
 .sidebar-top { min-height: 0; flex: 1; overflow: hidden; }
 .hub-brand {
   min-height: 44px;
@@ -1200,24 +1200,24 @@ async function handleLogout() {
   place-items: center;
   border-radius: 11px;
   color: white;
-  background: linear-gradient(145deg, #2eb8f0, #5367db 56%, #8d58d1);
-  box-shadow: 0 7px 18px rgba(25,76,123,.3);
-  font-size: 10px;
+  background: var(--hub-accent);
+  box-shadow: none;
+  font-size: 11px;
   font-weight: 800;
 }
 .hub-brand-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; }
 .hub-brand-copy b { font-size: 13px; }
-.hub-brand-copy small { margin-top: 2px; color: var(--hub-text-muted); font-size: 9px; }
+.hub-brand-copy small { margin-top: 2px; color: var(--hub-text-muted); font-size: 11px; }
 .hub-revision { color: var(--hub-text-muted); font: 600 9px/1 ui-monospace, monospace; }
 
 .profile-hero { border: 1px solid var(--hub-border) !important; background: var(--hub-surface-strong) !important; box-shadow: none !important; }
 .profile-hero:hover { border-color: var(--hub-accent) !important; }
 .hub-brand:focus-visible, .profile-hero:focus-visible, .nav-item-btn:focus-visible, .hub-header-action:focus-visible, .hub-close-button:focus-visible { outline: 2px solid var(--hub-accent); outline-offset: 2px; }
-.hub-profile-avatar { --pn-profile-avatar-color: #fff; border: 2px solid rgba(46, 184, 240, .5) !important; color: #fff !important; background: linear-gradient(145deg, #55cce4, #5467d9 55%, #9458d3) !important; }
-.profile-config-link { color: var(--hub-accent); font-size: 10px; font-weight: 700; }
+.hub-profile-avatar { --pn-profile-avatar-color: #fff; border: 1px solid var(--hub-border) !important; color: var(--pn-color-surface) !important; background: var(--hub-accent) !important; }
+.profile-config-link { color: var(--hub-accent); font-size: 11px; font-weight: 700; }
 .profile-name { overflow: hidden; margin: 0; color: var(--hub-text-strong); font-size: 14px; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; }
 .profile-subtitle { overflow: hidden; margin: 2px 0 0; color: var(--hub-text-muted); font-size: 11px; white-space: nowrap; text-overflow: ellipsis; }
-.profile-connection { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--hub-border); color: var(--hub-text-muted); font-size: 10px; }
+.profile-connection { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--hub-border); color: var(--hub-text-muted); font-size: 11px; }
 .profile-origin-wrap { display: flex; min-width: 0; align-items: center; gap: 6px; }
 .profile-status-dot { width: 6px; height: 6px; flex: none; border-radius: 999px; }
 .profile-origin { overflow: hidden; max-width: 130px; white-space: nowrap; text-overflow: ellipsis; }
@@ -1281,10 +1281,10 @@ async function handleLogout() {
 .settings-action-grid small, .sidebar-setting-row small { color: var(--hub-text-muted); font-size: 12px; line-height: 1.5; }
 .settings-effective-state { font-size: 12px; line-height: 1.6; }
 .setting-select-wide { width: 144px; }
-.settings-inline-action { margin-top: 10px; padding: 7px 10px; border: 1px solid var(--hub-border); border-radius: 10px; color: var(--hub-accent); background: var(--hub-surface-strong); font-size: 10px; cursor: pointer; }
+.settings-inline-action { margin-top: 10px; padding: 7px 10px; border: 1px solid var(--hub-border); border-radius: 10px; color: var(--hub-accent); background: var(--hub-surface-strong); font-size: 11px; cursor: pointer; }
 .settings-inline-action:hover { border-color: var(--hub-accent); background: var(--hub-accent-soft); }
 .sync-queue-action { color: var(--hub-accent); border-color: rgba(46, 184, 240, .35); background: var(--hub-accent-soft); }
-.guest-login-action { border-color: var(--hub-accent); color: white; background: var(--hub-accent); box-shadow: 0 8px 22px rgba(20, 127, 192, .25); }
+.guest-login-action { border-color: var(--hub-accent); color: var(--pn-color-surface); background: var(--hub-accent); box-shadow: none; }
 
 :global(html:not(.dark)) .user-hub-container :deep(.text-white),
 :global(html:not(.dark)) .user-hub-container :deep(.text-slate-100),
@@ -1338,4 +1338,23 @@ async function handleLogout() {
   .nav-item-btn { min-height: 36px; padding: 7px 10px !important; }
   .content-heading-icon { width: 30px; height: 30px; font-size: 15px; }
 }
+.hub-login-button { background: var(--hub-accent); color: var(--pn-color-surface); min-height: 40px; }
+.hub-login-button:hover { filter: brightness(.95); }
+.hub-sidebar { background: var(--pn-color-page-background); }
+.hub-brand-mark { color: var(--pn-color-surface); }
+.nav-icon-wrap { background: transparent; }
+.hub-nav-caption { margin-top: 8px; color: var(--hub-text-muted); font-weight: 500; }
+.nav-item-label { font-size: 13px; font-weight: 500; }
+.nav-item-btn { min-height: 40px; }
+.nav-item-btn.active-nav .nav-item-label { font-weight: 600; }
+.settings-section-heading p, .sidebar-setting-row small { font-size: 12px; line-height: 1.7; }
+.sidebar-setting-row { min-height: 74px; }
+.sidebar-setting-row > span > svg { width: 18px; height: 18px; flex: none; }
+.sidebar-setting-row :deep(.n-select) { width: 144px; flex: none; }
+.content-body[data-settings-page='sidebar'] .settings-glass-card > .grid { grid-template-columns: minmax(0, 1fr); }
+.content-description { font-size: 12px; }
+.content-header { min-height: 82px; }
+.hub-close-button { width: 36px; height: 36px; }
+@media (max-width: 820px) { .hub-sidebar { width: 100% !important; padding: 12px !important; } .content-header { min-height: 68px; } }
+@media (prefers-reduced-motion: reduce) { .view-panel { animation: none; } }
 </style>
