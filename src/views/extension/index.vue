@@ -2623,9 +2623,16 @@ onUnmounted(() => {
   transition: opacity .18s ease, background .18s ease, transform .18s ease;
 }
 .speed-card:hover .speed-card-edit,
-.speed-card-edit:focus-visible { opacity: 1; }
+.speed-card-edit:focus-visible {
+  opacity: 1;
+  transform: translate(17px, -4px);
+}
 
 .speed-card:hover {
+  transform: none;
+}
+
+.speed-card.is-expanded:hover {
   transform: translateY(-2px);
   filter: brightness(1.06);
 }
@@ -2794,12 +2801,13 @@ onUnmounted(() => {
   background: transparent;
   box-shadow: 0 7px 18px rgba(2,6,23,.28);
   overflow: hidden;
-  transition: transform .2s cubic-bezier(.2,.8,.2,1), box-shadow .2s ease;
+  transition: transform .2s cubic-bezier(.2,.8,.2,1), box-shadow .2s ease, filter .2s ease;
 }
 
 .speed-card:hover .card-icon-box {
-  transform: scale(1.045);
-  box-shadow: 0 10px 24px rgba(2,6,23,.34);
+  transform: translateY(-4px) scale(1.045);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.38);
+  filter: brightness(1.06);
 }
 
 .card-icon-box :deep(.item-icon),
@@ -2832,7 +2840,7 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  text-shadow: 0 1px 5px rgba(0,0,0,.65);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85), 0 1px 6px rgba(0, 0, 0, 0.55);
 }
 
 @media (max-width: 700px) {
@@ -3157,11 +3165,11 @@ onUnmounted(() => {
 
 .cards-grid { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); grid-auto-rows: 90px; gap: 18px 12px; padding: 5px 0 18px; }
 .speed-card { gap: 7px; border-radius: 14px; color: var(--ext-text); }
-.speed-card:hover { background: var(--ext-surface-raised); }
+.speed-card.is-expanded:hover { background: var(--ext-surface-raised); }
 .speed-card.is-expanded { background: var(--ext-surface); border: 1px solid var(--ext-border); box-shadow: 0 10px 28px var(--ext-shadow); backdrop-filter: none; }
 .card-icon-box { width: 56px; height: 56px; border-radius: var(--pn-bookmark-icon-radius, 16px); box-shadow: var(--pn-effect-shadow-low); }
-.card-title { color: var(--ext-text); font-size: 12px; font-weight: 500; text-shadow: none; }
-.card-description { color: var(--ext-text-soft); text-shadow: none; }
+.card-title { color: var(--ext-text); font-size: 12px; font-weight: 550; }
+.card-description { color: var(--ext-text-soft); }
 .speed-card-edit { border-color: var(--ext-border); color: var(--ext-text); background: var(--ext-surface-raised); box-shadow: 0 3px 10px var(--ext-shadow); }
 
 .extension-context-menu {
@@ -3293,17 +3301,18 @@ onUnmounted(() => {
 }
 .extension-dashboard-track { display: contents; }
 .dashboard-canvas-item { min-width: 0; min-height: 0; }
-.dashboard-add-icon { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 7px; grid-column: span 1; grid-row: span 1; min-width: 0; min-height: 0; padding: 3px 2px 6px; border: 0; border-radius: 14px; color: var(--ext-text-muted); background: transparent; cursor: pointer; font: inherit; font-size: 12px; font-weight: 500; text-shadow: none; transition: transform .18s ease; }
-.dashboard-add-icon:hover { transform: translateY(-2px); }
+.dashboard-add-icon { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 7px; grid-column: span 1; grid-row: span 1; min-width: 0; min-height: 0; padding: 3px 2px 6px; border: 0; border-radius: 14px; color: var(--ext-text-muted); background: transparent; cursor: pointer; font: inherit; font-size: 12px; font-weight: 500; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85), 0 1px 6px rgba(0, 0, 0, 0.55); transition: none; }
+.dashboard-add-icon:hover { transform: none; }
+.dashboard-add-icon:hover .dashboard-add-icon-symbol { transform: translateY(-4px) scale(1.045); box-shadow: 0 12px 26px rgba(0, 0, 0, 0.38); }
 .dashboard-add-icon:focus-visible { outline: 2px solid var(--ext-accent); outline-offset: 3px; }
-.dashboard-add-icon-symbol { display: grid; width: 54px; height: 54px; place-items: center; border: 1px dashed var(--ext-border); border-radius: var(--pn-bookmark-icon-radius, 14px); background: var(--ext-surface); box-shadow: none; }
+.dashboard-add-icon-symbol { display: grid; width: 54px; height: 54px; place-items: center; border: 1px dashed var(--ext-border); border-radius: var(--pn-bookmark-icon-radius, 14px); background: var(--ext-surface); box-shadow: none; transition: transform 180ms ease, box-shadow 180ms ease; }
 .dashboard-add-icon-symbol svg { box-sizing: border-box; width: 36px; height: 36px; padding: 7px; border-radius: 50%; color: #fff; background: var(--ext-accent); }
 .extension-dashboard-grid .extension-widget-cell { height: 100%; padding-inline: var(--dashboard-icon-inset); border-radius: 20px; }
 .extension-dashboard-grid .extension-widget-cell :deep(.widget-stack-host) { height: calc(100% - var(--dashboard-caption-space)); }
 .dashboard-widget-caption { display: block; height: var(--dashboard-caption-space); padding-top: 10px; overflow: hidden; color: var(--ext-text); font-size: 12px; font-weight: 500; line-height: 16px; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
 .extension-dashboard-grid .speed-card, .extension-dashboard-grid .dashboard-add-icon { padding: 0; gap: 10px; }
 .extension-dashboard-grid .card-icon-box, .extension-dashboard-grid .dashboard-add-icon-symbol { flex: none; width: var(--dashboard-icon-size); height: var(--dashboard-icon-size); }
-.extension-dashboard-grid .card-icon-box { overflow: hidden; box-shadow: none; }
+.extension-dashboard-grid .card-icon-box { overflow: hidden; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18); }
 .extension-dashboard-grid.is-editing .extension-widget-cell {
   outline: 1px dashed color-mix(in srgb, var(--ext-accent) 58%, transparent);
   outline-offset: 2px;
@@ -3398,19 +3407,19 @@ onUnmounted(() => {
 .extension-widget-toolbar .modal-secondary-action:hover { color: var(--ext-accent); border-color: var(--ext-accent); }
 .canvas-add-action svg { width: 16px; height: 16px; }
 .speed-card { gap: 10px; }
-.speed-card:hover { background: color-mix(in srgb, var(--ext-surface) 70%, transparent); }
-.speed-card:hover .card-icon-box { transform: translateY(-3px); }
-.card-icon-box { transition: transform 180ms ease; }
+.speed-card.is-expanded:hover { background: color-mix(in srgb, var(--ext-surface) 70%, transparent); }
+.speed-card:hover .card-icon-box { transform: translateY(-4px) scale(1.045); box-shadow: 0 12px 26px rgba(0, 0, 0, 0.38); filter: brightness(1.06); }
+.card-icon-box { transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease; }
 .dashboard-add-icon-symbol svg { background: transparent; color: var(--ext-text-soft); width: 32px; height: 32px; padding: 4px; }
 .workspace-footer { display: flex; align-items: center; justify-content: space-between; flex: none; gap: 16px; width: min(100%, 1080px); margin-top: auto; padding-top: 40px; color: var(--ext-text-soft); font-size: 11px; letter-spacing: .04em; }
 .modal-secondary-action:focus-visible, .search-submit-btn:focus-visible, .engine-select-btn:focus-visible, .bookmark-search-trigger:focus-visible { outline: 2px solid var(--ext-accent); outline-offset: 3px; }
 .main-content { scrollbar-width: thin; scrollbar-color: var(--ext-border) transparent; }
 
 /* Wallpaper changes the canvas contrast, never the contrast inside controls. */
-.has-wallpaper :is(.clock-hero, .active-group-meta, .workspace-brand, .card-title, .dashboard-add-icon, .workspace-footer) { color: #fff; text-shadow: 0 1px 6px rgba(0,0,0,.55); }
-.has-wallpaper :is(.clock-eyebrow, .clock-seconds, .clock-period, .date-display, .active-group-meta small, .card-description) { color: rgba(255,255,255,.88); text-shadow: 0 1px 6px rgba(0,0,0,.55); }
+.has-wallpaper :is(.clock-hero, .active-group-meta, .workspace-brand, .card-title, .dashboard-add-icon, .workspace-footer) { color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85), 0 1px 6px rgba(0, 0, 0, 0.55); }
+.has-wallpaper :is(.clock-eyebrow, .clock-seconds, .clock-period, .date-display, .active-group-meta small, .card-description) { color: rgba(255, 255, 255, 0.92); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85), 0 1px 6px rgba(0, 0, 0, 0.55); }
 .has-wallpaper .speed-card.is-expanded :is(.card-title, .card-description) { color: var(--ext-text); text-shadow: none; }
-.has-wallpaper .dashboard-widget-caption { color: #fff; text-shadow: 0 1px 6px rgba(0,0,0,.55); }
+.has-wallpaper .dashboard-widget-caption { color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85), 0 1px 6px rgba(0, 0, 0, 0.55); }
 
 @media (max-width: 720px) {
   .side-rail { width: 60px; padding: 10px 4px; }
