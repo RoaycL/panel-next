@@ -1798,20 +1798,20 @@ onUnmounted(() => {
         <button type="button" class="workspace-brand" title="打开设置" aria-label="打开设置" @click="openSettings">
           <span class="workspace-brand-mark" aria-hidden="true"><ThemeIcon name="dashboard" /></span><span>Panel <b>Next</b></span>
         </button>
+        <div
+          v-if="['cached', 'offline', 'error'].includes(extensionSyncStatus) || pendingMutationsCount > 0"
+          class="sync-status-banner"
+          :class="`is-${extensionSyncPresentation.tone}`"
+          role="status"
+        >
+          <SvgIcon icon="material-symbols:sync" />
+          <span>{{ extensionSyncPresentation.label }}</span>
+          <small v-if="pendingMutationsCount">{{ pendingMutationsCount }} 项修改等待同步</small>
+          <button v-if="authStore.token" type="button" @click="queueManagerVisible = true">
+            查看
+          </button>
+        </div>
       </header>
-      <div
-        v-if="['cached', 'offline', 'error'].includes(extensionSyncStatus) || pendingMutationsCount > 0"
-        class="sync-status-banner"
-        :class="`is-${extensionSyncPresentation.tone}`"
-        role="status"
-      >
-        <SvgIcon icon="material-symbols:sync" />
-        <span>{{ extensionSyncPresentation.label }}</span>
-        <small v-if="pendingMutationsCount">{{ pendingMutationsCount }} 项修改等待同步</small>
-        <button v-if="authStore.token" type="button" @click="queueManagerVisible = true">
-          查看
-        </button>
-      </div>
 
       <!-- 极简大数字时钟与日期 -->
       <section v-if="widgetPreferences.clock" class="clock-hero flex flex-col items-center mb-6 text-shadow-md">
@@ -2981,23 +2981,24 @@ onUnmounted(() => {
 .clock-hero.text-shadow-md { text-shadow: none; }
 
 .sync-status-banner {
-  width: min(100%, 620px);
-  min-height: 34px;
-  margin: 12px 0 0;
-  padding: 7px 10px;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
+  min-height: 28px;
+  margin: 0;
+  padding: 3px 10px;
   border: 1px solid var(--ext-border);
-  border-radius: 12px;
+  border-radius: 20px;
   color: var(--ext-text-muted);
   background: var(--ext-surface);
   box-shadow: var(--ext-elevation);
-  font-size: 10px;
+  font-size: 11px;
+  width: auto;
 }
-.sync-status-banner > svg { color: var(--ext-accent); font-size: 15px; }
-.sync-status-banner small { flex: 1; color: var(--ext-text-soft); }
-.sync-status-banner button { padding: 3px 8px; border: 0; border-radius: 8px; color: var(--ext-accent); background: var(--ext-accent-soft); cursor: pointer; }
+.sync-status-banner > svg { color: var(--ext-accent); font-size: 14px; }
+.sync-status-banner small { color: var(--ext-text-soft); }
+.sync-status-banner button { padding: 2px 7px; border: 0; border-radius: 6px; color: var(--ext-accent); background: var(--ext-accent-soft); font-size: 11px; cursor: pointer; transition: opacity .15s ease; }
+.sync-status-banner button:hover { opacity: .85; }
 .sync-status-banner.is-error { border-color: var(--ext-danger); }
 .sync-status-banner.is-error > svg { color: var(--ext-danger); }
 
@@ -3375,6 +3376,7 @@ onUnmounted(() => {
   flex: none;
   width: 100%;
   gap: 16px;
+  min-height: 36px;
 }
 .workspace-brand {
   display: inline-flex;
@@ -3420,8 +3422,10 @@ onUnmounted(() => {
 .has-wallpaper :is(.clock-eyebrow, .clock-seconds, .clock-period, .date-display, .active-group-meta small, .card-description) { color: rgba(255, 255, 255, 0.92); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85), 0 1px 6px rgba(0, 0, 0, 0.55); }
 .has-wallpaper .speed-card.is-expanded :is(.card-title, .card-description) { color: var(--ext-text); text-shadow: none; }
 .has-wallpaper .dashboard-widget-caption { color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85), 0 1px 6px rgba(0, 0, 0, 0.55); }
+.has-wallpaper .sync-status-banner { color: var(--ext-text); background: var(--ext-surface); text-shadow: none; }
 
 @media (max-width: 720px) {
+  .sync-status-banner small { display: none; }
   .side-rail { width: 60px; padding: 10px 4px; }
   .rail-avatar, .rail-group-button, .rail-settings { flex-direction: column; justify-content: center; gap: 4px; padding-inline: 2px; }
   .rail-avatar-label, .rail-group-label { max-width: 48px; text-align: center; font-size: 10px; }
