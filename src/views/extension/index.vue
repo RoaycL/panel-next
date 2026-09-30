@@ -19,6 +19,9 @@ import SvgIcon from '@/components/common/SvgIcon/index.vue'
 import ItemIcon from '@/components/common/ItemIcon/index.vue'
 import ProfileAvatar from '@/components/common/ProfileAvatar/index.vue'
 import { useAppStore, useAuthStore, usePanelState, useUserStore } from '@/store'
+import { getStorage as getAuthStorage } from '@/store/modules/auth/helper'
+import type { AuthState } from '@/store/modules/auth'
+import { getLocalState as getLocalUserState } from '@/store/modules/user/helper'
 import { getLocalState as getLocalPanelState } from '@/store/modules/panel/helper'
 import { PanelStateNetworkModeEnum } from '@/enums'
 import { VisitMode } from '@/enums/auth'
@@ -1602,11 +1605,45 @@ async function applyExternalStorageChanges() {
 }
 
 function handleExternalStorageChange(change: StorageChangeEvent) {
-  // A server, account or store switch changes the scope of every cached key;
+  // A server switch changes the scope of every cached key;
   // a clean reload is safer than mixing two scopes in one running tab.
-  if (change.scope === 'runtime'
-    || ['AUTH_TOKEN', 'userStorage'].includes(change.key)) {
+  if (change.scope === 'runtime') {
     window.location.reload()
+    return
+  }
+
+  if (change.key === 'AUTH_TOKEN') {
+    const currentToken = authStore.token
+    const currentAccountId = authStore.userInfo?.id
+    const newStorage = getAuthStorage() as Partial<AuthState> | null
+    const newToken = newStorage?.token ?? null
+    const newAccountId = newStorage?.userInfo?.id
+
+    // Only reload when login status actually changes (login, logout, or account switch).
+    const isLoginStatusChanged = Boolean(currentToken) !== Boolean(newToken)
+      || (Boolean(currentAccountId && newAccountId) && currentAccountId !== newAccountId)
+
+    if (isLoginStatusChanged) {
+      window.location.reload()
+      return
+    }
+
+    // Same account: sync in-memory session (e.g. token refreshed by another tab) without destroying running tab
+    if (newStorage && newToken && (newToken !== currentToken || newStorage.refreshToken !== authStore.refreshToken)) {
+      authStore.$patch({
+        token: newToken,
+        refreshToken: newStorage.refreshToken ?? authStore.refreshToken,
+        accessExpiresAt: newStorage.accessExpiresAt ?? authStore.accessExpiresAt,
+        refreshExpiresAt: newStorage.refreshExpiresAt ?? authStore.refreshExpiresAt,
+      })
+    }
+    return
+  }
+
+  if (change.key === 'userStorage') {
+    const localUser = getLocalUserState()
+    if (localUser?.userInfo && JSON.stringify(userStore.userInfo) !== JSON.stringify(localUser.userInfo))
+      userStore.userInfo = { ...userStore.userInfo, ...localUser.userInfo }
     return
   }
 
@@ -1704,7 +1741,6 @@ onUnmounted(() => {
       class="side-rail"
       :class="{ revealed: sideRailVisible }"
       :inert="!sideRailVisible"
-      :aria-hidden="!sideRailVisible"
       @mouseenter="revealSideArea"
       @mouseleave="scheduleSideAreaHide"
       @focusin="revealSideArea"
@@ -1759,11 +1795,8 @@ onUnmounted(() => {
     <!-- 核心主体区 -->
     <main class="main-content flex flex-col items-center justify-start overflow-y-auto px-4 pb-12 pt-6" @wheel="handleGroupWheel">
       <header class="workspace-heading">
-        <div class="workspace-brand">
+        <button type="button" class="workspace-brand" title="打开设置" aria-label="打开设置" @click="openSettings">
           <span class="workspace-brand-mark" aria-hidden="true"><ThemeIcon name="dashboard" /></span><span>Panel <b>Next</b></span>
-        </div>
-        <button type="button" class="workspace-customize" aria-label="自定义你的空间" @click="openSettings">
-          <ThemeIcon name="settings" /><span>自定义你的空间</span>
         </button>
       </header>
       <div
@@ -1915,17 +1948,14 @@ onUnmounted(() => {
             <span>{{ activeGroup?.title }}</span>
             <small>{{ activeGroup?.count || 0 }} 个书签 · {{ buildWidgetDisplayGroups(extensionWidgetInstances).length }} 个组件</small>
           </div>
-          <div class="extension-widget-toolbar">
-            <div v-if="extensionWidgetEditMode" class="extension-edit-mode-copy">
+          <div v-if="extensionWidgetEditMode" class="extension-widget-toolbar">
+            <div class="extension-edit-mode-copy">
               <strong>正在编辑当前页面</strong>
               <small>拖动调整位置，拖拽边缘改变大小</small>
             </div>
-            <button type="button" class="modal-secondary-action canvas-add-action" @click="openAddCenter()">
-              <ThemeIcon name="add" /><span>添加</span>
-            </button>
-            <button type="button" class="modal-secondary-action flex items-center gap-1" :title="extensionWidgetEditMode ? t('widgetLayout.done') : t('widgetLayout.edit')" :aria-label="extensionWidgetEditMode ? t('widgetLayout.done') : t('widgetLayout.edit')" @click="extensionWidgetEditMode = !extensionWidgetEditMode">
-              <SvgIcon :icon="extensionWidgetEditMode ? 'material-symbols:check-rounded' : 'material-symbols:dashboard-customize-outline-rounded'" class="w-4 h-4" />
-              <span>{{ extensionWidgetEditMode ? t('widgetLayout.done') : t('widgetLayout.edit') }}</span>
+            <button type="button" class="modal-secondary-action flex items-center gap-1" :title="t('widgetLayout.done')" :aria-label="t('widgetLayout.done')" @click="extensionWidgetEditMode = false">
+              <SvgIcon icon="material-symbols:check-rounded" class="w-4 h-4" />
+              <span>{{ t('widgetLayout.done') }}</span>
             </button>
           </div>
         </div>
@@ -2017,9 +2047,7 @@ onUnmounted(() => {
         </div>
       </section>
       <footer class="workspace-footer">
-        <span>属于你的每一次开始</span><button type="button" @click="showWallpaperModal = true">
-          <SvgIcon icon="material-symbols:wallpaper" /><span>更换壁纸</span>
-        </button>
+        <span>属于你的每一次开始</span>
       </footer>
     </main>
 
@@ -2124,6 +2152,9 @@ onUnmounted(() => {
       </button>
       <button type="button" class="context-menu-row" role="menuitem" @click="showWidgetManager = true; closeContextMenus()">
         <ThemeIcon name="dashboard" /><span>编辑主页组件</span>
+      </button>
+      <button type="button" class="context-menu-row" role="menuitem" @click="extensionWidgetEditMode = true; closeContextMenus()">
+        <ThemeIcon name="drag" /><span>自由排版</span>
       </button>
       <button type="button" class="context-menu-row danger" role="menuitem" @click="removeActiveWidgetFromMenu">
         <ThemeIcon name="delete" /><span>删除</span>
@@ -3336,13 +3367,27 @@ onUnmounted(() => {
   width: 100%;
   gap: 16px;
 }
-.workspace-brand { display: flex; align-items: center; gap: 10px; font-size: 15px; letter-spacing: -.03em; }
+.workspace-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 15px;
+  letter-spacing: -.03em;
+  cursor: pointer;
+  text-align: left;
+  transition: opacity 150ms ease;
+}
+.workspace-brand:hover { opacity: 0.85; }
+.workspace-brand:hover .workspace-brand-mark { border-color: var(--ext-accent); background: var(--ext-accent-soft); }
+.workspace-brand:focus-visible { outline: 2px solid var(--ext-accent); outline-offset: 3px; border-radius: 9px; }
 .workspace-brand b { font-weight: 650; }
-.workspace-brand-mark { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--ext-border); border-radius: 9px; color: var(--ext-accent); background: var(--ext-surface); }
+.workspace-brand-mark { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--ext-border); border-radius: 9px; color: var(--ext-accent); background: var(--ext-surface); transition: border-color 150ms ease, background-color 150ms ease; }
 .workspace-brand-mark svg { width: 17px; height: 17px; }
-.workspace-customize, .workspace-footer button { display: flex; align-items: center; gap: 7px; min-height: 36px; padding: 6px 10px; border: 0; border-radius: 10px; background: transparent; color: var(--ext-text-muted); font: inherit; font-size: 12px; cursor: pointer; transition: background 150ms ease; }
-.workspace-customize:hover, .workspace-footer button:hover { background: var(--ext-accent-soft); color: var(--ext-accent); }
-.workspace-customize svg, .workspace-footer svg { width: 16px; height: 16px; }
 .clock-eyebrow { margin: 0 0 18px; color: var(--ext-text-soft); font-size: 12px; letter-spacing: .22em; }
 .extension-search-input { min-width: 0; }
 .search-submit-btn { display: grid; place-items: center; width: 40px; height: 40px; flex: none; border-radius: 13px; color: var(--pn-color-surface); }
@@ -3358,13 +3403,12 @@ onUnmounted(() => {
 .card-icon-box { transition: transform 180ms ease; }
 .dashboard-add-icon-symbol svg { background: transparent; color: var(--ext-text-soft); width: 32px; height: 32px; padding: 4px; }
 .workspace-footer { display: flex; align-items: center; justify-content: space-between; flex: none; gap: 16px; width: min(100%, 1080px); margin-top: auto; padding-top: 40px; color: var(--ext-text-soft); font-size: 11px; letter-spacing: .04em; }
-.workspace-customize:focus-visible, .workspace-footer button:focus-visible, .modal-secondary-action:focus-visible, .search-submit-btn:focus-visible, .engine-select-btn:focus-visible, .bookmark-search-trigger:focus-visible { outline: 2px solid var(--ext-accent); outline-offset: 3px; }
+.modal-secondary-action:focus-visible, .search-submit-btn:focus-visible, .engine-select-btn:focus-visible, .bookmark-search-trigger:focus-visible { outline: 2px solid var(--ext-accent); outline-offset: 3px; }
 .main-content { scrollbar-width: thin; scrollbar-color: var(--ext-border) transparent; }
 
 /* Wallpaper changes the canvas contrast, never the contrast inside controls. */
 .has-wallpaper :is(.clock-hero, .active-group-meta, .workspace-brand, .card-title, .dashboard-add-icon, .workspace-footer) { color: #fff; text-shadow: 0 1px 6px rgba(0,0,0,.55); }
 .has-wallpaper :is(.clock-eyebrow, .clock-seconds, .clock-period, .date-display, .active-group-meta small, .card-description) { color: rgba(255,255,255,.88); text-shadow: 0 1px 6px rgba(0,0,0,.55); }
-.has-wallpaper :is(.workspace-customize, .workspace-footer button) { color: var(--ext-text); background: var(--ext-surface); text-shadow: none; }
 .has-wallpaper .speed-card.is-expanded :is(.card-title, .card-description) { color: var(--ext-text); text-shadow: none; }
 .has-wallpaper .dashboard-widget-caption { color: #fff; text-shadow: 0 1px 6px rgba(0,0,0,.55); }
 
@@ -3381,8 +3425,6 @@ onUnmounted(() => {
   .search-section { margin-bottom: 32px !important; }
   .search-bar-capsule { min-height: 54px; padding-inline: 6px !important; }
   .extension-search-input { padding-inline: 6px; font-size: 13px; }
-  .workspace-customize span { display: none; }
-  .workspace-customize { background: var(--ext-surface); }
   .workspace-brand { font-size: 13px; }
   .dashboard-canvas-header { margin-bottom: 16px; }
   .workspace-footer { padding-top: 24px; }

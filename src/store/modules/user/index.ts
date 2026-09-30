@@ -6,6 +6,8 @@ export const useUserStore = defineStore('user-store', {
   state: (): UserState => getLocalState(),
   actions: {
     updateUserInfo(userInfo: User.Info) {
+      if (this.userInfo && JSON.stringify(this.userInfo) === JSON.stringify({ ...this.userInfo, ...userInfo }))
+        return
       this.userInfo = { ...this.userInfo, ...userInfo }
       this.recordState()
     },

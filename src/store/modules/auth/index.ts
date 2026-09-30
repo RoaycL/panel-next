@@ -186,11 +186,15 @@ export const useAuthStore = defineStore('auth-store', {
     },
 
     setUserInfo(userInfo: User.Info) {
+      if (this.userInfo && JSON.stringify(this.userInfo) === JSON.stringify(userInfo))
+        return
       this.userInfo = userInfo
       this.saveStorage()
     },
 
     setVisitMode(visitMode: VisitMode) {
+      if (this.visitMode === visitMode)
+        return
       this.visitMode = visitMode
       this.saveStorage()
     },

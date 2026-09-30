@@ -255,6 +255,9 @@ export class ChromeStorageAdapter implements StorageAdapter {
     const scopedKey = this.scopedKey(key)
     if (!scopedKey)
       return
+    this.values.set(scopedKey, value)
+    if (this.lastPersistedValues.get(scopedKey) === value)
+      return
     const opId = ++this.latestOpId
     const version = (this.keyVersions.get(scopedKey) ?? 0) + 1
     this.keyVersions.set(scopedKey, version)
