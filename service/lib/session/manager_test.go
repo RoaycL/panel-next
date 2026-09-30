@@ -273,6 +273,49 @@ func TestRotationDoesNotExtendAbsoluteExpiry(t *testing.T) {
 	}
 }
 
+func TestExtensionSessionHasNoTimeBasedExpiryButCanBeRevoked(t *testing.T) {
+	manager, now := testManager(t)
+	stored, first, err := manager.Create(context.Background(), CreateRequest{
+		UserID: 16, DeviceID: "extension-persistent", DeviceName: "Chrome", ClientType: models.SessionClientChromeExtension,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !first.RefreshExpiresAt.Equal(extensionRefreshExpiry) {
+		t.Fatalf("extension refresh expiry = %v", first.RefreshExpiresAt)
+	}
+	*now = now.Add(20 * 365 * 24 * time.Hour)
+	second, err := manager.RotateRefresh(context.Background(), first.RefreshToken)
+	if err != nil || !second.RefreshExpiresAt.Equal(extensionRefreshExpiry) {
+		t.Fatalf("extension did not silently refresh after years: pair=%+v err=%v", second, err)
+	}
+	if err := manager.RevokeDevice(context.Background(), 16, stored.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.RotateRefresh(context.Background(), second.RefreshToken); !errors.Is(err, ErrSessionRevoked) {
+		t.Fatalf("logout/revocation did not stop refresh: %v", err)
+	}
+}
+
+func TestExistingExtensionSessionUpgradesOnRefresh(t *testing.T) {
+	manager, now := testManager(t)
+	stored, first, err := manager.Create(context.Background(), CreateRequest{
+		UserID: 17, DeviceID: "old-extension", DeviceName: "Chrome", ClientType: models.SessionClientChromeExtension,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.DB.Model(&models.UserSession{}).Where("id = ?", stored.ID).
+		Update("refresh_expires_at", now.Add(time.Hour)).Error; err != nil {
+		t.Fatal(err)
+	}
+	*now = now.Add(30 * time.Minute)
+	upgraded, err := manager.RotateRefresh(context.Background(), first.RefreshToken)
+	if err != nil || !upgraded.RefreshExpiresAt.Equal(extensionRefreshExpiry) {
+		t.Fatalf("existing extension was not upgraded: pair=%+v err=%v", upgraded, err)
+	}
+}
+
 func TestListAndRevokeDevicesAreScopedToUser(t *testing.T) {
 	manager, now := testManager(t)
 	first, firstPair, err := manager.Create(context.Background(), CreateRequest{

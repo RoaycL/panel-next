@@ -49,9 +49,17 @@ type Current struct {
 	WindSpeedUnit       string  `json:"windSpeedUnit"`
 }
 
+type Daily struct {
+	Date           string  `json:"date"`
+	WeatherCode    int     `json:"weatherCode"`
+	TemperatureMax float64 `json:"temperatureMax"`
+	TemperatureMin float64 `json:"temperatureMin"`
+}
+
 type Result struct {
 	Location  Location  `json:"location"`
 	Current   Current   `json:"current"`
+	Daily     []Daily   `json:"daily,omitempty"`
 	Units     string    `json:"units"`
 	FetchedAt time.Time `json:"fetchedAt"`
 	Cached    bool      `json:"cached"`
@@ -164,11 +172,11 @@ func (client *Client) fetch(ctx context.Context, city, units, language string) (
 	if err != nil {
 		return Result{}, err
 	}
-	current, err := client.forecast(ctx, location, units)
+	current, daily, err := client.forecast(ctx, location, units)
 	if err != nil {
 		return Result{}, err
 	}
-	return Result{Location: location, Current: current, Units: units}, nil
+	return Result{Location: location, Current: current, Daily: daily, Units: units}, nil
 }
 
 func containsHan(s string) bool {
@@ -220,12 +228,13 @@ func (client *Client) doGeocode(ctx context.Context, city, language string) (Loc
 	return response.Results[0], nil
 }
 
-func (client *Client) forecast(ctx context.Context, location Location, units string) (Current, error) {
+func (client *Client) forecast(ctx context.Context, location Location, units string) (Current, []Daily, error) {
 	query := url.Values{
 		"latitude":      {fmt.Sprintf("%.6f", location.Latitude)},
 		"longitude":     {fmt.Sprintf("%.6f", location.Longitude)},
 		"current":       {"temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m"},
-		"forecast_days": {"1"},
+		"daily":         {"weather_code,temperature_2m_max,temperature_2m_min"},
+		"forecast_days": {"6"},
 		"timezone":      {"auto"},
 	}
 	if units == "imperial" {
@@ -246,12 +255,33 @@ func (client *Client) forecast(ctx context.Context, location Location, units str
 			Temperature string `json:"temperature_2m"`
 			WindSpeed   string `json:"wind_speed_10m"`
 		} `json:"current_units"`
+		Daily struct {
+			Time           []string  `json:"time"`
+			WeatherCode    []int     `json:"weather_code"`
+			TemperatureMax []float64 `json:"temperature_2m_max"`
+			TemperatureMin []float64 `json:"temperature_2m_min"`
+		} `json:"daily"`
 	}
 	if err := client.getJSON(ctx, client.forecastURL+"?"+query.Encode(), &response); err != nil {
-		return Current{}, fmt.Errorf("forecast request: %w", err)
+		return Current{}, nil, fmt.Errorf("forecast request: %w", err)
 	}
 	if response.Current.Time == "" || response.CurrentUnits.Temperature == "" || response.CurrentUnits.WindSpeed == "" {
-		return Current{}, errors.New("forecast response is incomplete")
+		return Current{}, nil, errors.New("forecast response is incomplete")
+	}
+	var daily []Daily
+	if count := len(response.Daily.Time); count > 0 && count <= 6 && len(response.Daily.WeatherCode) == count && len(response.Daily.TemperatureMax) == count && len(response.Daily.TemperatureMin) == count {
+		candidate := make([]Daily, 0, count)
+		for index, date := range response.Daily.Time {
+			if _, err := time.Parse("2006-01-02", date); err != nil {
+				candidate = nil
+				break
+			}
+			candidate = append(candidate, Daily{
+				Date: date, WeatherCode: response.Daily.WeatherCode[index],
+				TemperatureMax: response.Daily.TemperatureMax[index], TemperatureMin: response.Daily.TemperatureMin[index],
+			})
+		}
+		daily = candidate
 	}
 	return Current{
 		Time: response.Current.Time, Temperature: response.Current.Temperature,
@@ -259,7 +289,7 @@ func (client *Client) forecast(ctx context.Context, location Location, units str
 		RelativeHumidity:    response.Current.RelativeHumidity, WeatherCode: response.Current.WeatherCode,
 		WindSpeed: response.Current.WindSpeed, IsDay: response.Current.IsDay == 1,
 		TemperatureUnit: response.CurrentUnits.Temperature, WindSpeedUnit: response.CurrentUnits.WindSpeed,
-	}, nil
+	}, daily, nil
 }
 
 func (client *Client) getJSON(ctx context.Context, endpoint string, target interface{}) error {

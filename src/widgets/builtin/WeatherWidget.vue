@@ -3,6 +3,7 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { WeatherResponse } from '@/api/weather'
 import { getWeather } from '@/api/weather'
+import { useWidgetContext } from '@/widgets/context'
 
 const props = withDefaults(defineProps<{
   city?: string
@@ -13,13 +14,13 @@ const props = withDefaults(defineProps<{
 })
 
 const { locale, t } = useI18n()
+const widgetContext = useWidgetContext()
 const weather = ref<WeatherResponse | null>(null)
 const loading = ref(false)
 const failed = ref(false)
 let requestController: AbortController | null = null
 
-const weatherKind = computed(() => {
-  const code = weather.value?.current.weatherCode
+function kindFromCode(code?: number) {
   if (code === undefined)
     return 'unknown'
   if (code === 0)
@@ -39,11 +40,13 @@ const weatherKind = computed(() => {
   if ([95, 96, 99].includes(code))
     return 'thunderstorm'
   return 'unknown'
-})
+}
 
-const weatherIcon = computed(() => {
+const weatherKind = computed(() => kindFromCode(weather.value?.current.weatherCode))
+
+function iconForKind(kind: string, isDay = true) {
   const icons: Record<string, string> = {
-    clear: weather.value?.current.isDay === false ? '🌙' : '☀️',
+    clear: isDay ? '☀️' : '🌙',
     partlyCloudy: '🌤️',
     cloudy: '☁️',
     fog: '🌫️',
@@ -53,8 +56,24 @@ const weatherIcon = computed(() => {
     thunderstorm: '⛈️',
     unknown: '🌡️',
   }
-  return icons[weatherKind.value]
-})
+  return icons[kind]
+}
+
+const weatherIcon = computed(() => iconForKind(weatherKind.value, weather.value?.current.isDay !== false))
+const forecast = computed(() => weather.value?.daily?.slice(0, 6) ?? [])
+const showForecast = computed(() => (widgetContext?.size.columns ?? 5) >= 4 && (widgetContext?.size.rows ?? 2) >= 2 && forecast.value.length > 0)
+
+function forecastDay(date: string, index: number) {
+  if (index === 0)
+    return t('weather.today')
+  const parsed = new Date(`${date}T12:00:00`)
+  return Number.isNaN(parsed.getTime()) ? date : new Intl.DateTimeFormat(locale.value, { weekday: 'short' }).format(parsed)
+}
+
+function forecastDate(date: string) {
+  const [, month, day] = date.split('-')
+  return `${Number(month)}/${Number(day)}`
+}
 
 const condition = computed(() => t(`weather.conditions.${weatherKind.value}`))
 const locationLabel = computed(() => {
@@ -95,7 +114,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <section class="weather-card" :aria-label="t('weather.title')">
+  <section class="weather-card" :class="{ 'is-expanded': showForecast }" :aria-label="t('weather.title')">
     <div v-if="weather" class="weather-current">
       <span class="weather-icon" aria-hidden="true">{{ weatherIcon }}</span>
       <div class="weather-reading">
@@ -112,6 +131,14 @@ onUnmounted(() => {
       <span aria-hidden="true">{{ failed ? '⚠️' : '🌤️' }}</span>
       <span>{{ failed ? t('weather.unavailable') : t('weather.loading') }}</span>
     </div>
+    <ol v-if="showForecast" class="weather-forecast" :aria-label="t('weather.forecast')">
+      <li v-for="(day, index) in forecast" :key="day.date">
+        <span class="forecast-day">{{ forecastDay(day.date, index) }}</span>
+        <span class="forecast-icon" aria-hidden="true">{{ iconForKind(kindFromCode(day.weatherCode)) }}</span>
+        <span class="forecast-temperatures">{{ Math.round(day.temperatureMax) }}°<small>{{ Math.round(day.temperatureMin) }}°</small></span>
+        <span class="forecast-date">{{ forecastDate(day.date) }}</span>
+      </li>
+    </ol>
     <button class="weather-refresh" type="button" :disabled="loading" :title="t('weather.refresh')" @click="refresh">
       <span aria-hidden="true">↻</span>
       <span class="sr-only">{{ t('weather.refresh') }}</span>
@@ -123,6 +150,11 @@ onUnmounted(() => {
 <style scoped>
 .weather-card {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 9px;
+  height: 100%;
   min-width: 190px;
   padding: 10px 34px 15px 13px;
   border: 1px solid var(--pn-widget-border, rgb(255 255 255 / 16%));
@@ -133,6 +165,15 @@ onUnmounted(() => {
   backdrop-filter: blur(var(--pn-effect-blur, 14px));
   text-shadow: none;
 }
+
+.weather-card.is-expanded { justify-content: flex-start; padding: 14px 14px 18px; }
+.weather-card.is-expanded .weather-icon { font-size: 34px; }
+.weather-forecast { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; min-width: 0; margin: auto 0 0; padding: 10px 0 0; border-top: 1px solid var(--pn-widget-border, rgb(255 255 255 / 16%)); list-style: none; }
+.weather-forecast li { display: flex; align-items: center; flex-direction: column; gap: 3px; min-width: 0; white-space: nowrap; }
+.forecast-day { overflow: hidden; max-width: 100%; color: var(--pn-widget-muted-text, rgb(255 255 255 / 75%)); font-size: 10px; text-overflow: ellipsis; }
+.forecast-icon { font-size: 18px; line-height: 1.2; }
+.forecast-temperatures { display: flex; gap: 3px; font-size: 11px; font-weight: 700; }
+.forecast-temperatures small, .forecast-date { color: var(--pn-widget-muted-text, rgb(255 255 255 / 60%)); font-size: 10px; font-weight: 400; }
 
 .weather-current,
 .weather-placeholder {

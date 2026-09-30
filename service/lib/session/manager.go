@@ -23,6 +23,11 @@ const (
 	tokenBytes      = 32
 )
 
+// Extension sessions are revocable, but have no time-based refresh expiry.
+// Keep a representable timestamp for existing SQL schemas and API clients;
+// access tokens still rotate every 15 minutes and logout revokes the device.
+var extensionRefreshExpiry = time.Date(9999, 12, 31, 23, 59, 59, 0, time.UTC)
+
 // GetRefreshTokenTTL 返回可配置的 Refresh Token 有效期（OPS-02）。
 // 从全局配置读取 refresh_token_ttl_hours，默认 168 小时（7 天）。
 func GetRefreshTokenTTL() time.Duration {
@@ -111,7 +116,11 @@ func (m *Manager) Create(ctx context.Context, request CreateRequest) (models.Use
 		return models.UserSession{}, Pair{}, ErrInvalidClient
 	}
 	now := m.now()
-	pair, accessHash, refreshHash, err := buildPair(now, now.Add(defaultRefreshTTL))
+	refreshExpiresAt := now.Add(defaultRefreshTTL)
+	if request.ClientType == models.SessionClientChromeExtension {
+		refreshExpiresAt = extensionRefreshExpiry
+	}
+	pair, accessHash, refreshHash, err := buildPair(now, refreshExpiresAt)
 	if err != nil {
 		return models.UserSession{}, Pair{}, err
 	}
@@ -215,8 +224,14 @@ func (m *Manager) RotateRefresh(ctx context.Context, rawToken string) (Pair, err
 		if !now.Before(stored.RefreshExpiresAt) {
 			return ErrRefreshTokenExpired
 		}
+		refreshExpiresAt := stored.RefreshExpiresAt
+		if stored.ClientType == models.SessionClientChromeExtension {
+			// Upgrade still-valid extension sessions issued by older releases on
+			// their next silent refresh, without reviving expired credentials.
+			refreshExpiresAt = extensionRefreshExpiry
+		}
 		var accessHash, refreshHash string
-		pair, accessHash, refreshHash, err = buildPair(now, stored.RefreshExpiresAt)
+		pair, accessHash, refreshHash, err = buildPair(now, refreshExpiresAt)
 		if err != nil {
 			return err
 		}
@@ -231,7 +246,8 @@ func (m *Manager) RotateRefresh(ctx context.Context, rawToken string) (Pair, err
 			Where("id = ? AND refresh_token_hash = ?", stored.ID, stored.RefreshTokenHash).
 			Updates(map[string]any{
 				"access_token_hash": accessHash, "refresh_token_hash": refreshHash,
-				"access_expires_at": pair.AccessExpiresAt, "last_active_at": now,
+				"access_expires_at": pair.AccessExpiresAt, "refresh_expires_at": pair.RefreshExpiresAt,
+				"last_active_at":  now,
 				"refresh_version": gorm.Expr("refresh_version + 1"),
 			})
 		if result.Error != nil {

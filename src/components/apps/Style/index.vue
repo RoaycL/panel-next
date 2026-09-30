@@ -118,9 +118,9 @@ function resetPanelConfig() {
 </script>
 
 <template>
-  <div class="flex flex-col gap-2.5 overflow-auto">
-    <NCard class="glass-sub-card" size="small">
-      <div class="text-sky-500 dark:text-sky-400 mb-[5px] font-semibold text-xs uppercase tracking-wider">
+  <div class="pn-app-page flex flex-col gap-3 overflow-auto">
+    <NCard class="pn-app-card" size="small">
+      <div class="pn-app-heading">
         LOGO
       </div>
 
@@ -138,8 +138,8 @@ function resetPanelConfig() {
       </div>
     </NCard>
 
-    <NCard style="border-radius:10px" class="mt-[10px]" size="small">
-      <div class="text-slate-500 mb-[5px] font-bold">
+    <NCard class="pn-app-card" size="small">
+      <div class="pn-app-heading">
         {{ $t('apps.baseSettings.clock') }}
       </div>
       <div class="flex items-center mt-[5px]">
@@ -152,8 +152,8 @@ function resetPanelConfig() {
       </div>
     </NCard>
 
-    <NCard style="border-radius:10px" class="mt-[10px]" size="small">
-      <div class="text-slate-500 mb-[5px] font-bold">
+    <NCard class="pn-app-card" size="small">
+      <div class="pn-app-heading">
         {{ $t('apps.baseSettings.searchBar') }}
       </div>
       <div class="flex items-center mt-[5px]">
@@ -166,8 +166,8 @@ function resetPanelConfig() {
       </div>
     </NCard>
 
-    <NCard style="border-radius:10px" class="mt-[10px]" size="small">
-      <div class="text-slate-500 mb-[5px] font-bold">
+    <NCard class="pn-app-card" size="small">
+      <div class="pn-app-heading">
         {{ $t('apps.baseSettings.systemMonitorStatus') }}
       </div>
       <div class="flex items-center mt-[5px]">
@@ -184,8 +184,8 @@ function resetPanelConfig() {
       </div>
     </NCard>
 
-    <NCard style="border-radius:10px" class="mt-[10px]" size="small">
-      <div class="text-slate-500 mb-[5px] font-bold">
+    <NCard class="pn-app-card" size="small">
+      <div class="pn-app-heading">
         {{ $t('common.icon') }}
       </div>
       <div class="mt-[5px]">
@@ -236,8 +236,8 @@ function resetPanelConfig() {
         </div>
       </div>
     </NCard>
-    <NCard style="border-radius:10px" class="mt-[10px]" size="small">
-      <div class="text-slate-500 mb-[5px] font-bold">
+    <NCard class="pn-app-card" size="small">
+      <div class="pn-app-heading">
         {{ $t('apps.baseSettings.wallpaper') }}
       </div>
       <NUpload
@@ -254,7 +254,7 @@ function resetPanelConfig() {
       >
         <NUploadDragger class="dropzone-dragger" style="width: 100%; background: transparent; border: none; padding: 0;">
           <div
-            class="dropzone-box group"
+            class="pn-app-dropzone dropzone-box group"
             :style="{
               backgroundImage: panelState.panelConfig.backgroundImageSrc ? `url(${panelState.panelConfig.backgroundImageSrc})` : undefined,
               backgroundSize: 'cover',
@@ -266,10 +266,10 @@ function resetPanelConfig() {
               <span class="text-sm font-medium">点击更换壁纸</span>
             </div>
             <div v-else class="dropzone-empty-prompt">
-              <div class="text-xs font-semibold text-slate-700 dark:text-zinc-200">
+              <div class="text-xs font-semibold">
                 {{ $t('apps.baseSettings.uploadOrDragText') }}
               </div>
-              <div class="text-[11px] text-slate-400 dark:text-zinc-400">
+              <div class="pn-app-muted text-[11px]">
                 支持 .webp, .png, .jpg, .jpeg, .gif, .avif 格式
               </div>
             </div>
@@ -299,8 +299,8 @@ function resetPanelConfig() {
       </div>
     </NCard>
 
-    <NCard style="border-radius:10px" class="mt-[10px]" size="small">
-      <div class="text-slate-500 mb-[5px] font-bold">
+    <NCard class="pn-app-card" size="small">
+      <div class="pn-app-heading">
         {{ $t('apps.baseSettings.contentArea') }}
       </div>
 
@@ -344,8 +344,8 @@ function resetPanelConfig() {
       </NGrid>
     </NCard>
 
-    <NCard style="border-radius:10px" class="mt-[10px]" size="small">
-      <div class="text-slate-500 mb-[5px] font-bold">
+    <NCard class="pn-app-card" size="small">
+      <div class="pn-app-heading">
         {{ $t('apps.baseSettings.customFooter') }}
       </div>
 
@@ -356,52 +356,32 @@ function resetPanelConfig() {
       />
     </NCard>
 
-    <NCard style="border-radius:10px" class="mt-[10px]" size="small">
-      <NPopconfirm
-        @positive-click="resetPanelConfig"
-      >
-        <template #trigger>
-          <NButton size="small" quaternary type="error">
-            {{ $t('common.reset') }}
-          </NButton>
-        </template>
-        {{ $t('apps.baseSettings.resetWarnText') }}
-      </NPopconfirm>
-
-      <NButton size="small" quaternary type="success" class="ml-[10px]" @click="uploadCloud">
-        {{ $t('common.save') }}
-      </NButton>
+    <NCard class="pn-app-card" size="small">
+      <div class="pn-app-actions">
+        <NPopconfirm @positive-click="resetPanelConfig">
+          <template #trigger>
+            <NButton size="small" quaternary type="error">
+              {{ $t('common.reset') }}
+            </NButton>
+          </template>
+          {{ $t('apps.baseSettings.resetWarnText') }}
+        </NPopconfirm>
+        <NButton size="small" type="primary" @click="uploadCloud">
+          {{ $t('common.save') }}
+        </NButton>
+      </div>
     </NCard>
 
-    <NModal v-model:show="showWallpaperGallery" preset="card" size="small" class="round-card-modal" style="width: min(700px, calc(100vw - 24px)); max-height: calc(100vh - 24px);" :title="t('apps.baseSettings.selectFromGallery')">
+    <NModal v-model:show="showWallpaperGallery" to=".pn-theme-root" preset="card" size="small" class="round-card-modal" style="width: min(700px, calc(100vw - 24px)); max-height: calc(100vh - 24px);" :title="t('apps.baseSettings.selectFromGallery')">
       <GallerySelector type="wallpaper" @select="handleWallpaperGallerySelect" />
     </NModal>
   </div>
 </template>
 
 <style scoped>
-.text-shadow{
-  text-shadow: 0px 0px 5px gray;
-}
-
-:deep(.n-card) {
-  border-radius: 12px !important;
-  background: rgba(255, 255, 255, 0.035) !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
-}
-
-html:not(.dark) :deep(.n-card) {
-  background: rgba(255, 255, 255, 0.7) !important;
-  border: 1px solid rgba(0, 0, 0, 0.06) !important;
-}
-
 .dropzone-box {
   height: 160px;
   width: 100%;
-  border-radius: 12px;
-  border: 1.5px dashed rgba(56, 189, 248, 0.35);
-  background: rgba(56, 189, 248, 0.04);
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -409,16 +389,6 @@ html:not(.dark) :deep(.n-card) {
   position: relative;
   overflow: hidden;
   cursor: pointer;
-}
-
-html:not(.dark) .dropzone-box {
-  border-color: rgba(2, 132, 199, 0.35);
-  background: rgba(2, 132, 199, 0.03);
-}
-
-.dropzone-box:hover {
-  border-color: rgba(56, 189, 248, 0.7);
-  background: rgba(56, 189, 248, 0.08);
 }
 
 .dropzone-empty-prompt {
@@ -443,7 +413,8 @@ html:not(.dark) .dropzone-box {
   color: #ffffff;
 }
 
-.dropzone-box:hover .dropzone-hover-overlay {
+.dropzone-box:hover .dropzone-hover-overlay,
+.dropzone-box:focus-within .dropzone-hover-overlay {
   opacity: 1;
 }
 </style>

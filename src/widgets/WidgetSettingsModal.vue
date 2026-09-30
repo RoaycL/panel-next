@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { NButton, NInput, NInputNumber, NModal, NSelect, NSwitch, useMessage } from 'naive-ui'
+import { NButton, NInput, NInputNumber, NSelect, NSwitch, useMessage } from 'naive-ui'
+import RoundCardModal from '@/components/common/RoundCardModal/index.vue'
 import type { WidgetInstance } from './types'
 import { widgetRegistry } from './registry'
 import { t } from '@/locales'
-import { getRuntime } from '@/runtime'
 
 const props = defineProps<{ show: boolean; instance: WidgetInstance | null }>()
 const emit = defineEmits<{
@@ -13,9 +13,6 @@ const emit = defineEmits<{
 }>()
 const ms = useMessage()
 const draft = ref<Record<string, unknown>>({})
-const modalStyle = getRuntime().kind === 'extension'
-  ? 'width: min(520px, calc(100vw - 24px)); border-radius: 18px; color: #e2e8f0; background: rgba(15, 23, 42, 0.98); border: 1px solid rgba(148, 163, 184, 0.18); box-shadow: 0 24px 80px rgba(2, 6, 23, 0.58);'
-  : 'width: min(520px, calc(100vw - 24px)); border-radius: 18px;'
 
 const definition = computed(() => props.instance ? widgetRegistry.get(props.instance.type) : null)
 const fields = computed(() => Object.entries(definition.value?.configSchema.fields ?? {}))
@@ -58,7 +55,7 @@ function save() {
 </script>
 
 <template>
-  <NModal v-model:show="visible" :to="getRuntime().kind === 'extension' ? '.pn-theme-root' : undefined" preset="card" class="round-card-modal" :title="t('widgetLayout.settings.title')" :style="modalStyle">
+  <RoundCardModal v-model:show="visible" class="widget-settings-modal" :title="t('widgetLayout.settings.title')" style="width: min(520px, calc(100vw - 24px));" content-style="min-height: 0; overflow-y: auto;">
     <div v-if="instance && fields.length" class="widget-settings-fields">
       <label v-for="([key, descriptor]) in fields" :key="key" class="widget-settings-field">
         <span>{{ fieldLabel(key, descriptor.label) }}</span>
@@ -88,13 +85,15 @@ function save() {
         </NButton>
       </div>
     </template>
-  </NModal>
+  </RoundCardModal>
 </template>
 
 <style scoped>
 .widget-settings-fields { display: grid; gap: 14px; }
 .widget-settings-field { display: grid; gap: 6px; }
 .widget-settings-field > span { font-size: 13px; font-weight: 700; }
-.widget-settings-field > small, .widget-settings-empty { color: #94a3b8; font-size: 12px; }
+.widget-settings-field > small, .widget-settings-empty { color: var(--pn-color-text-muted, #64748b); font-size: 12px; line-height: 1.6; }
 .widget-settings-actions { display: flex; justify-content: flex-end; gap: 8px; }
+:global(.widget-settings-modal.n-card) { display: flex; flex-direction: column; overflow: hidden; }
+:global(.widget-settings-modal .n-card__footer) { flex: none; }
 </style>

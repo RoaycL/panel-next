@@ -62,6 +62,7 @@ onUnmounted(() => stopWatchingSystemMode())
   <div
     :class="view.rootClass"
     class="pn-theme-root"
+    :data-surface="surface"
     :style="view.cssVariables"
     :data-bookmark="view.variants.bookmark"
     :data-widget="view.variants.widget"

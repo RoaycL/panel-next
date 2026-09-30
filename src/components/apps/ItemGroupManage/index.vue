@@ -129,9 +129,9 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="h-full">
-    <div class="p-2">
-      <NButton type="success" size="small" style="margin-right: 10px;" @click="handleAddGroup">
+  <div class="pn-app-page h-full">
+    <div class="pn-app-toolbar p-2">
+      <NButton type="primary" size="small" @click="handleAddGroup">
         {{ $t('common.add') }}
       </NButton>
 
@@ -152,7 +152,7 @@ onMounted(() => {
         :disabled="!sortStatus"
       >
         <div v-for="(item, index) in groups" :key="index" class="w-full">
-          <NCard size="small" style="border-radius:10px;margin-bottom: 10px;">
+          <NCard class="pn-app-card mb-[10px]" size="small">
             <div class="flex" :class="sortStatus ? 'cursor-move' : ''">
               <div class="flex items-center">
                 <span class="mr-[10px]">
@@ -165,14 +165,14 @@ onMounted(() => {
               </div>
               <div class="ml-auto">
                 <span>
-                  <NButton strong secondary type="success" size="small" @click="handleEditGroup(item)">
+                  <NButton strong secondary size="small" :title="$t('common.edit')" :aria-label="$t('common.edit')" @click="handleEditGroup(item)">
                     <template #icon>
                       <SvgIcon icon="basil:edit-solid" />
                     </template>
                   </NButton>
                 </span>
                 <span class="ml-[10px]">
-                  <NButton strong secondary type="error" size="small" class="ml-[10px]" @click="handleDelete(item)">
+                  <NButton strong secondary type="error" size="small" class="ml-[10px]" :title="$t('common.delete')" :aria-label="$t('common.delete')" @click="handleDelete(item)">
                     <template #icon>
                       <SvgIcon icon="material-symbols:delete" />
                     </template>
@@ -185,7 +185,7 @@ onMounted(() => {
       </VueDraggable>
     </div>
 
-    <RoundCardModal v-model:show="editModalArg.show" size="small" type="small" :title="editModalArg.editStatus === 1 ? '添加' : '编辑'" style="width: 400px;">
+    <RoundCardModal v-model:show="editModalArg.show" size="small" type="small" :title="editModalArg.editStatus === 1 ? t('common.add') : t('common.edit')" style="width: min(400px, calc(100vw - 24px));">
       <NForm ref="formRef" :model="editModalArg.model" :rules="editModalArg.rules">
         <NFormItem path="title" :label="$t('apps.itemGroupManage.groupName')">
           <NInput v-model:value="editModalArg.model.title" type="text" :maxlength="20" show-count />
@@ -196,7 +196,7 @@ onMounted(() => {
         </NFormItem> -->
       </NForm>
       <template #footer>
-        <NButton type="success" size="small" class="float-right" @click="handleSaveGroup">
+        <NButton type="primary" size="small" class="float-right" @click="handleSaveGroup">
           {{ $t('common.confirm') }}
         </NButton>
       </template>

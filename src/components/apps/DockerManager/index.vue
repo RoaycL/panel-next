@@ -156,7 +156,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="overflow-auto pt-2">
+  <div class="pn-app-page overflow-auto pt-2">
     <NAlert v-if="!dockerAvailable" type="warning" :bordered="false">
       {{ $t('apps.dockerManager.unavailable') }}
     </NAlert>
@@ -164,7 +164,7 @@ onMounted(async () => {
       {{ $t('apps.dockerManager.alertText') }}
     </NAlert>
 
-    <div class="my-[10px] flex gap-[10px]">
+    <div class="pn-app-toolbar">
       <NButton size="small" type="primary" ghost :disabled="!dockerAvailable" @click="fetchContainers">
         {{ $t('common.refresh') }}
       </NButton>

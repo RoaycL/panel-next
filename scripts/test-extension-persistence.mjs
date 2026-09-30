@@ -8,6 +8,7 @@ function cleanImports(src) {
 }
 
 const appearanceSource = cleanImports(fs.readFileSync(new URL('../src/runtime/extensionAppearance.ts', import.meta.url), 'utf8'))
+const historySource = cleanImports(fs.readFileSync(new URL('../src/runtime/extensionHistory.ts', import.meta.url), 'utf8'))
 const contextSource = cleanImports(fs.readFileSync(new URL('../src/widgets/context.ts', import.meta.url), 'utf8'))
 const registrySource = cleanImports(fs.readFileSync(new URL('../src/widgets/registry.ts', import.meta.url), 'utf8'))
 const stackSource = cleanImports(fs.readFileSync(new URL('../src/widgets/stack.ts', import.meta.url), 'utf8'))
@@ -56,6 +57,10 @@ export function getRuntime() {
   return globalThis.mockRuntime
 }
 
+export function useAuthStore() {
+  return { userInfo: null }
+}
+
 export function inject(k, f) {
   return f
 }
@@ -78,6 +83,7 @@ const bundleCode = [
   registrySource,
   contextSource,
   appearanceSource,
+  historySource,
   extensionSource,
 ].join('\n')
 
@@ -103,6 +109,10 @@ const {
   readExtensionAppearance,
   saveExtensionAppearance,
   saveExtensionWidgets,
+  restoreExtensionLayoutSnapshot,
+  recordExtensionLayoutHistory,
+  readExtensionLayoutHistory,
+  restoreExtensionLayoutHistory,
   updateExtensionWidgets,
   clearWidgetStorage,
   removeExtensionWidgetFlow,
@@ -189,7 +199,7 @@ const storedWidgetBytes = prefs => JSON.stringify({ ...prefs, pendingWidgetClean
 // 1. Initial save succeeds: both memoryMap and durableMap are updated
 const saveResult1 = await saveExtensionWidgets(prefsA)
 assert.equal(saveResult1, true)
-assert.equal(flushCount, 1)
+assert.equal(flushCount, 3) // baseline history, layout, and resulting history
 assert.equal(memoryMap.get(EXTENSION_WIDGETS_KEY), storedWidgetBytes(prefsA))
 assert.equal(durableMap.get(EXTENSION_WIDGETS_KEY), storedWidgetBytes(prefsA))
 
@@ -206,7 +216,7 @@ assert.equal(durableMap.get(EXTENSION_WIDGETS_KEY), storedWidgetBytes(prefsA))
 // 2. Saving identical content skips write & flush (deduplication)
 const saveResult2 = await saveExtensionWidgets(prefsA)
 assert.equal(saveResult2, true)
-assert.equal(flushCount, 1) // flush count remained 1
+assert.equal(flushCount, 3) // identical save performs no new flush
 
 console.log('Passed saveExtensionWidgets basic & deduplication tests.')
 
@@ -274,7 +284,7 @@ flushShouldFail = false
 const initialFlushCount = flushCount
 const retrySaveResult = await saveExtensionWidgets(prefsB)
 assert.equal(retrySaveResult, true)
-assert.equal(flushCount, initialFlushCount + 1)
+assert.ok(flushCount >= initialFlushCount + 1)
 assert.equal(durableMap.get(EXTENSION_WIDGETS_KEY), storedWidgetBytes(prefsB))
 assert.equal(memoryMap.get(EXTENSION_WIDGETS_KEY), storedWidgetBytes(prefsB))
 
@@ -500,17 +510,12 @@ durableMap.set('PANEL_NEXT_WIDGET_V1.7:notes.2:9:note_data', JSON.stringify({ te
 
   // Mock clearWidgetStorage to fail during Stage 2
   const originalFlush = mockRuntime.storage.flush
-  let callCount = 0
   mockRuntime.storage.flush = async () => {
-    callCount++
-    if (callCount === 1) {
-      // Stage 1 layout save flush succeeds
-      durableMap.clear()
-      for (const [k, v] of memoryMap.entries()) durableMap.set(k, v)
-      return
-    }
-    // Stage 2 storage cleanup flush fails
-    throw new Error('IO Error during clearWidgetStorage flush')
+    // History adds its own flushes; identify Stage 2 by the removed private key.
+    if (!memoryMap.has('PANEL_NEXT_WIDGET_V1.7:notes.2:9:note_data'))
+      throw new Error('IO Error during clearWidgetStorage flush')
+    durableMap.clear()
+    for (const [k, v] of memoryMap.entries()) durableMap.set(k, v)
   }
 
   const instances = [widget1, widget2]
@@ -569,4 +574,45 @@ durableMap.set('PANEL_NEXT_WIDGET_V1.7:notes.2:9:note_data', JSON.stringify({ te
 }
 
 console.log('Passed Two-Stage Deletion & Retry Queue Production Flow Tests.')
+
+console.log('--- Running Local Layout History & Restore Tests ---')
+{
+  await updateExtensionWidgets(current => ({ ...current, pendingWidgetCleanupIds: ['old.cleanup'] }))
+  const before = { ...readExtensionWidgets(), searchHistory: ['keep search'] }
+  await saveExtensionWidgets(before)
+  const snapshot = { appearance: null, widgets: { ...before, clock: !before.clock, searchHistory: [], pendingWidgetCleanupIds: [] } }
+  assert.equal(await recordExtensionLayoutHistory(snapshot, '测试历史版本', false), true)
+  assert.equal(readExtensionLayoutHistory().some(entry => entry.label === '测试历史版本'), true)
+
+  await restoreExtensionLayoutSnapshot(snapshot)
+  assert.equal(readExtensionAppearance(), null)
+  assert.equal(readExtensionWidgets().clock, snapshot.widgets.clock)
+  assert.deepEqual(readExtensionWidgets().searchHistory, ['keep search'])
+  assert.deepEqual(readExtensionWidgets().pendingWidgetCleanupIds, ['old.cleanup'])
+
+  await saveExtensionWidgets({ ...readExtensionWidgets(), clock: before.clock })
+  const savedVersion = readExtensionLayoutHistory().find(entry => entry.label === '测试历史版本')
+  assert.ok(savedVersion)
+  await restoreExtensionLayoutHistory(savedVersion.id)
+  assert.equal(readExtensionWidgets().clock, snapshot.widgets.clock)
+  assert.equal(readExtensionLayoutHistory().some(entry => entry.label === '恢复前备份' && entry.snapshot.widgets.clock === before.clock), true)
+
+  const originalWidgets = durableMap.get(EXTENSION_WIDGETS_KEY)
+  const originalFlush = mockRuntime.storage.flush
+  let failNext = true
+  mockRuntime.storage.flush = async () => {
+    if (failNext) {
+      failNext = false
+      throw new Error('Simulated restore failure')
+    }
+    return originalFlush()
+  }
+  await assert.rejects(() => restoreExtensionLayoutSnapshot({
+    appearance: null,
+    widgets: { ...snapshot.widgets, clock: before.clock },
+  }), /已还原当前布局/)
+  mockRuntime.storage.flush = originalFlush
+  assert.equal(durableMap.get(EXTENSION_WIDGETS_KEY), originalWidgets)
+}
+console.log('Passed Local Layout History & Restore Tests.')
 console.log('✅ ALL Extension Persistence Unit Tests Passed!')

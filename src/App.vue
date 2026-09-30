@@ -6,7 +6,7 @@ import { useTheme } from '@/hooks/useTheme'
 import { useLanguage } from '@/hooks/useLanguage'
 import { handleRuntimeLink } from '@/runtime/navigation'
 import { getRuntime } from '@/runtime'
-import { createExtensionThemeOverrides } from '@/theme/extensionTheme'
+import { createThemeOverrides } from '@/theme/extensionTheme'
 import { usePanelState } from '@/store/modules/panel'
 import ThemeProvider from '@/themes/ThemeProvider.vue'
 import { registerThemeStoreAccessor } from '@/themes/storage'
@@ -28,9 +28,9 @@ const providerView = computed(() => buildProviderResult(
 ))
 const isDark = computed(() => providerView.value.resolvedMode === 'dark')
 const theme = computed(() => isDark.value ? darkTheme : undefined)
-const themeOverrides = computed(() => runtime.kind === 'extension'
-  ? createExtensionThemeOverrides(providerView.value.loadResult.resolved.tokens)
-  : undefined)
+// Web and extension now consume one component-token bridge. This keeps form
+// controls, overlays, cards and feedback surfaces aligned with the active SDK theme.
+const themeOverrides = computed(() => createThemeOverrides(providerView.value.loadResult.resolved.tokens))
 
 watch(isDark, (dark) => {
   document.documentElement.classList.toggle('dark', dark)

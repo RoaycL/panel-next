@@ -11,6 +11,9 @@ import { updateInfo, updatePassword } from '@/api/system/user'
 import { updateLocalUserInfo } from '@/utils/cmn'
 import { t } from '@/locales'
 import { getRuntime } from '@/runtime'
+import { createDefaultSelection } from '@/themes/legacyAdapter'
+import { persistThemeSelection } from '@/themes/storage'
+import { themeRegistry } from '@/themes/registry'
 
 const { embedded = false } = defineProps<{ embedded?: boolean }>()
 
@@ -23,7 +26,8 @@ const dialog = useDialog()
 const runtime = getRuntime()
 
 const languageValue = ref<Language>(appStore.language)
-const themeValue = ref<Theme>(appStore.theme)
+const themeValue = computed<Theme>(() => panelState.panelConfig.theme?.mode ?? appStore.theme)
+const themeChanging = ref(false)
 const nickName = ref(authStore.userInfo?.name || authStore.userInfo?.username || '')
 const profileMail = ref(authStore.userInfo?.mail || '')
 const profileHeadImage = ref(authStore.userInfo?.headImage || '')
@@ -31,7 +35,7 @@ const isSavingProfile = ref(false)
 const formRef = ref<FormInst | null>(null)
 
 const isAdmin = computed(() => authStore.userInfo?.role === 1)
-const displayName = computed(() => authStore.userInfo?.name || authStore.userInfo?.username || '-')
+const displayName = computed(() => authStore.userInfo?.name || authStore.userInfo?.username || t('apps.userInfo.guestTitle'))
 const avatarInitial = computed(() => displayName.value.trim().charAt(0).toUpperCase())
 const profileAvatarUrl = computed(() => runtime.resolveUrl(authStore.userInfo?.headImage?.trim() || ''))
 const draftAvatarUrl = computed(() => runtime.resolveUrl(profileHeadImage.value.trim()))
@@ -197,66 +201,104 @@ function handleChangeLanuage(value: Language) {
   location.reload()
 }
 
-function handleChangeTheme(value: Theme) {
-  themeValue.value = value
-  appStore.setTheme(value)
+async function handleChangeTheme(value: Theme) {
+  if (themeChanging.value || themeValue.value === value)
+    return
+  themeChanging.value = true
+  try {
+    const selection = themeRegistry.serialize({
+      ...(panelState.panelConfig.theme ?? createDefaultSelection(value)),
+      mode: value,
+    })
+    if (!selection)
+      throw new Error('Theme selection was rejected.')
+    if (authStore.token) {
+      const result = await persistThemeSelection({ surface: runtime.kind, serialized: selection })
+      if (!result.ok || result.conflict) {
+        ms.error(t('theme.saveFailed'))
+        return
+      }
+    }
+    else {
+      panelState.panelConfig = { ...panelState.panelConfig, theme: selection }
+      panelState.recordState()
+    }
+    appStore.setTheme(value)
+    ms.success(t('theme.saved'))
+  }
+  catch (error) {
+    ms.error(t('theme.saveFailed'))
+    console.error('Failed to change theme mode.', error)
+  }
+  finally {
+    themeChanging.value = false
+  }
 }
 </script>
 
 <template>
   <div
-    class="user-info-page"
+    class="pn-app-page user-info-page"
     :class="embedded
       ? 'embedded-user-center'
-      : 'h-full overflow-y-auto p-3 bg-gradient-to-b from-indigo-50/80 via-slate-50 to-slate-100 dark:from-zinc-900 dark:via-zinc-950 dark:to-black'"
+      : 'h-full overflow-y-auto p-3'"
   >
     <!-- 个人身份卡片 -->
-    <div class="profile-hero relative overflow-hidden rounded-2xl border border-white/40 dark:border-white/10 shadow-lg shadow-indigo-200/40 dark:shadow-black/40" :class="{ 'embedded-profile-hero': embedded }">
-      <div v-if="!embedded" class="absolute inset-0 bg-gradient-to-br from-indigo-500 via-violet-500 to-sky-500" />
-      <div v-if="!embedded" class="absolute -top-10 -right-8 w-44 h-44 rounded-full bg-white/20 blur-3xl" />
-      <div v-if="!embedded" class="absolute -bottom-14 -left-6 w-40 h-40 rounded-full bg-sky-300/30 blur-3xl" />
-
+    <div class="profile-hero relative overflow-hidden" :class="{ 'embedded-profile-hero': embedded }">
       <div class="relative flex items-center gap-4 p-5">
         <NAvatar
           :key="profileAvatarUrl"
           :size="64"
           :src="profileAvatarUrl || undefined"
           fallback-src="/favicon.svg"
-          class="!rounded-2xl !bg-white/20 border border-white/40 backdrop-blur-xl shrink-0 shadow-inner"
+          class="profile-avatar shrink-0"
         >
-          <span class="text-2xl font-black text-white">{{ avatarInitial }}</span>
+          <span class="text-2xl font-black">{{ avatarInitial }}</span>
         </NAvatar>
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-2">
-            <span class="text-lg font-bold text-white truncate">{{ displayName }}</span>
+            <span class="profile-name text-lg font-bold truncate">{{ displayName }}</span>
             <span
-              class="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide"
-              :class="isAdmin ? 'bg-amber-400/90 text-amber-950' : 'bg-white/25 text-white'"
+              v-if="authStore.token"
+              class="profile-role shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide"
+              :class="{ 'profile-role-admin': isAdmin }"
             >
               {{ isAdmin ? t('apps.userInfo.roleAdmin') : t('apps.userInfo.roleUser') }}
             </span>
           </div>
-          <div class="mt-0.5 text-xs text-white/75 truncate">
-            @{{ authStore.userInfo?.username || '-' }}
+          <div class="profile-account mt-0.5 text-xs truncate">
+            {{ authStore.token ? `@${authStore.userInfo?.username || '-'}` : t('apps.userInfo.guestDescription') }}
           </div>
         </div>
       </div>
     </div>
 
     <!-- 个人资料 -->
-    <section class="mt-3 rounded-2xl border border-slate-200/70 bg-white/70 backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.03]">
+    <section v-if="!authStore.token" class="pn-app-panel guest-profile-panel mt-3">
+      <h3 class="pn-app-heading">
+        {{ t('apps.userInfo.guestTitle') }}
+      </h3>
+      <p class="pn-app-muted">
+        {{ t('apps.userInfo.guestDescription') }}
+      </p>
+      <NButton type="primary" @click="$router.push('/login')">
+        {{ t('apps.userInfo.guestAction') }}
+      </NButton>
+    </section>
+
+    <section v-if="authStore.token" class="pn-app-panel mt-3">
       <header class="flex items-center gap-2 px-4 pt-3.5 pb-1">
-        <SvgIcon icon="material-symbols-person-edit-outline-rounded" class="text-indigo-500 dark:text-indigo-400" />
-        <h3 class="text-sm font-bold text-slate-700 dark:text-zinc-100">
+        <SvgIcon icon="material-symbols-person-edit-outline-rounded" class="pn-app-heading-icon" />
+        <h3 class="pn-app-heading">
           {{ t('apps.userInfo.profile') }}
         </h3>
       </header>
       <div class="profile-editor px-4 pb-4 pt-2 space-y-3">
         <div class="flex items-center justify-between gap-3 py-1.5">
-          <span class="text-xs text-slate-400 dark:text-zinc-500">{{ $t('common.username') }}</span>
-          <span class="text-sm font-medium text-slate-700 dark:text-zinc-200 truncate">{{ authStore.userInfo?.username || '-' }}</span>
+          <span class="pn-app-muted text-xs">{{ $t('common.username') }}</span>
+          <span class="text-sm font-medium truncate">{{ authStore.userInfo?.username || '-' }}</span>
         </div>
-        <div class="border-t border-dashed border-slate-200 dark:border-white/[0.06]" />
+        <div class="profile-divider" />
         <div class="profile-field-grid">
           <label for="profile-nickname">昵称</label>
           <NInput id="profile-nickname" v-model:value="nickName" maxlength="15" show-count type="text" placeholder="昵称（3～15 个字符）" />
@@ -265,7 +307,7 @@ function handleChangeTheme(value: Theme) {
           <label for="profile-email">邮箱</label>
           <NInput id="profile-email" v-model:value="profileMail" maxlength="50" type="text" placeholder="邮箱（可选）" />
         </div>
-        <div class="flex items-center gap-3 rounded-xl border border-white/10 bg-black/10 p-3">
+        <div class="profile-preview flex items-center gap-3 p-3">
           <NAvatar
             :key="draftAvatarUrl"
             :size="52"
@@ -276,8 +318,8 @@ function handleChangeTheme(value: Theme) {
             {{ (nickName || 'U').charAt(0).toUpperCase() }}
           </NAvatar>
           <div class="min-w-0">
-            <b class="block truncate text-sm text-slate-700 dark:text-zinc-100">{{ nickName || '未设置昵称' }}</b>
-            <small class="block truncate text-slate-400 dark:text-zinc-500">账号：{{ authStore.userInfo?.username || '-' }}</small>
+            <b class="block truncate text-sm">{{ nickName || '未设置昵称' }}</b>
+            <small class="pn-app-muted block truncate">账号：{{ authStore.userInfo?.username || '-' }}</small>
           </div>
         </div>
         <div class="profile-field-grid">
@@ -306,25 +348,24 @@ function handleChangeTheme(value: Theme) {
     </section>
 
     <!-- 偏好设置：扩展控制中心已有独立主题入口，嵌入时不再重复显示旧入口。 -->
-    <section v-if="!embedded" class="mt-3 rounded-2xl border border-slate-200/70 bg-white/70 backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.03]">
+    <section v-if="!embedded" class="pn-app-panel mt-3">
       <header class="flex items-center gap-2 px-4 pt-3.5 pb-1">
-        <SvgIcon icon="ion-color-palette-outline" class="text-indigo-500 dark:text-indigo-400" />
-        <h3 class="text-sm font-bold text-slate-700 dark:text-zinc-100">
+        <SvgIcon icon="ion-color-palette-outline" class="pn-app-heading-icon" />
+        <h3 class="pn-app-heading">
           {{ t('apps.userInfo.preferences') }}
         </h3>
       </header>
       <div class="px-4 pb-4 space-y-3">
         <div class="flex items-center justify-between gap-3 py-1.5">
-          <span class="shrink-0 text-xs text-slate-400 dark:text-zinc-500">{{ $t('apps.userInfo.theme') }}</span>
-          <div class="flex items-center gap-1 p-1 rounded-xl bg-slate-200/70 dark:bg-white/[0.06]">
+          <span class="pn-app-muted shrink-0 text-xs">{{ $t('apps.userInfo.theme') }}</span>
+          <div class="profile-theme-segments flex items-center gap-1 p-1">
             <button
               v-for="segment in themeSegments"
               :key="segment.key"
               type="button"
-              class="flex items-center justify-center w-9 h-7 rounded-lg transition-all duration-200"
-              :class="themeValue === segment.key
-                ? 'bg-white dark:bg-indigo-500/90 text-indigo-600 dark:text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-300'"
+              class="profile-theme-segment flex items-center justify-center w-9 h-7 transition-all duration-200"
+              :class="{ active: themeValue === segment.key }"
+              :disabled="themeChanging"
               :title="t(`apps.userInfo.themeStyle.${segment.key}`)"
               @click="handleChangeTheme(segment.key)"
             >
@@ -332,9 +373,9 @@ function handleChangeTheme(value: Theme) {
             </button>
           </div>
         </div>
-        <div class="border-t border-dashed border-slate-200 dark:border-white/[0.06]" />
+        <div class="profile-divider" />
         <div class="flex items-center justify-between gap-3 py-1.5">
-          <span class="shrink-0 text-xs text-slate-400 dark:text-zinc-500">{{ $t('common.language') }}</span>
+          <span class="pn-app-muted shrink-0 text-xs">{{ $t('common.language') }}</span>
           <div class="w-[140px]">
             <NSelect
               v-model:value="languageValue"
@@ -348,10 +389,10 @@ function handleChangeTheme(value: Theme) {
     </section>
 
     <!-- 安全 -->
-    <section class="mt-3 rounded-2xl border border-slate-200/70 bg-white/70 backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.03]">
+    <section v-if="authStore.token" class="pn-app-panel mt-3">
       <header class="flex items-center gap-2 px-4 pt-3.5 pb-1">
-        <SvgIcon icon="mdi-shield-key-outline" class="text-indigo-500 dark:text-indigo-400" />
-        <h3 class="text-sm font-bold text-slate-700 dark:text-zinc-100">
+        <SvgIcon icon="mdi-shield-key-outline" class="pn-app-heading-icon" />
+        <h3 class="pn-app-heading">
           {{ t('apps.userInfo.security') }}
         </h3>
       </header>
@@ -361,17 +402,18 @@ function handleChangeTheme(value: Theme) {
           class="group flex items-center justify-between w-full py-2.5 text-left"
           @click="updatePasswordModalState.show = true"
         >
-          <span class="flex items-center gap-2 text-sm text-slate-600 group-hover:text-indigo-600 dark:text-zinc-300 dark:group-hover:text-indigo-300 transition-colors">
+          <span class="profile-security-action flex items-center gap-2 text-sm transition-colors">
             <SvgIcon icon="mdi-password-outline" />
             {{ $t('settingUserInfo.updatePassword') }}
           </span>
-          <SvgIcon icon="mdi-chevron-right" class="text-slate-300 group-hover:text-indigo-500 dark:text-zinc-600 transition-colors" />
+          <SvgIcon icon="mdi-chevron-right" class="profile-security-action-icon transition-colors" />
         </button>
       </div>
     </section>
 
     <!-- 退出登录 -->
     <NButton
+      v-if="authStore.token"
       block
       size="medium"
       type="error"
@@ -418,14 +460,42 @@ function handleChangeTheme(value: Theme) {
   background: transparent;
 }
 
-.embedded-profile-hero {
-  color: var(--pn-color-text-primary, inherit);
-  border-color: var(--pn-color-border, rgba(148, 163, 184, .24)) !important;
-  background: var(--pn-color-surface-hover, rgba(148, 163, 184, .1));
-  box-shadow: none !important;
+.profile-hero {
+  border: 1px solid var(--pn-color-border, rgba(148, 163, 184, .24));
+  border-radius: var(--pn-radius-large, 18px);
+  color: var(--pn-color-text-primary, #0f172a);
+  background: linear-gradient(120deg, color-mix(in srgb, var(--pn-color-accent, #10b981) 19%, var(--pn-color-surface, #fff)), var(--pn-color-surface, #fff) 75%);
+  box-shadow: var(--pn-effect-shadow-low, 0 2px 10px rgba(2, 6, 23, .06));
 }
-.embedded-profile-hero .text-white { color: var(--pn-color-text-primary, inherit) !important; }
-.embedded-profile-hero .text-xs { color: var(--pn-color-text-muted, inherit) !important; }
+
+.embedded-profile-hero {
+  background: var(--pn-color-surface-hover, rgba(148, 163, 184, .1));
+}
+
+.profile-avatar {
+  border: 1px solid var(--pn-color-border, rgba(148, 163, 184, .24));
+  border-radius: var(--pn-radius-medium, 12px) !important;
+  color: var(--pn-color-accent, #10b981);
+  background: var(--pn-color-surface, #fff);
+}
+
+.profile-name,
+.profile-preview b { color: var(--pn-color-text-primary, #0f172a); }
+.profile-account { color: var(--pn-color-text-muted, #64748b); }
+.profile-role { color: var(--pn-color-accent, #10b981); background: color-mix(in srgb, var(--pn-color-accent, #10b981) 14%, transparent); }
+.profile-role-admin { color: var(--pn-color-warning, #d97706); background: color-mix(in srgb, var(--pn-color-warning, #d97706) 14%, transparent); }
+.profile-divider { border-top: 1px dashed var(--pn-color-border, rgba(148, 163, 184, .24)); }
+.profile-preview { border: 1px solid var(--pn-color-border, rgba(148, 163, 184, .24)); border-radius: var(--pn-radius-medium, 12px); background: var(--pn-color-surface-hover, rgba(148, 163, 184, .08)); }
+.profile-theme-segments { border-radius: var(--pn-radius-medium, 12px); background: var(--pn-color-surface-hover, rgba(148, 163, 184, .08)); }
+.profile-theme-segment { border: 0; border-radius: var(--pn-radius-small, 8px); color: var(--pn-color-text-muted, #64748b); background: transparent; cursor: pointer; }
+.profile-theme-segment:hover { color: var(--pn-color-text-primary, #0f172a); }
+.profile-theme-segment.active { color: var(--pn-color-accent, #10b981); background: var(--pn-color-surface, #fff); box-shadow: var(--pn-effect-shadow-low, 0 1px 3px rgba(2, 6, 23, .08)); }
+.profile-security-action { color: var(--pn-color-text-secondary, #475569); }
+.group:hover .profile-security-action, .group:focus-visible .profile-security-action { color: var(--pn-color-accent, #10b981); }
+.profile-security-action-icon { color: var(--pn-color-text-muted, #64748b); }
+.group:hover .profile-security-action-icon, .group:focus-visible .profile-security-action-icon { color: var(--pn-color-accent, #10b981); }
+.guest-profile-panel { padding: 20px; }
+.guest-profile-panel p { margin: 0 0 16px; font-size: 13px; line-height: 1.6; }
 
 .profile-field-grid {
   display: grid;
@@ -435,14 +505,12 @@ function handleChangeTheme(value: Theme) {
 }
 
 .profile-field-grid label {
-  color: #64748b;
+  color: var(--pn-color-text-muted, #64748b);
   font-size: 11px;
   font-weight: 650;
 }
 
-.profile-save-hint { color: #94a3b8; font-size: 10px; }
-
-:global(html.dark) .profile-field-grid label { color: #94a3b8; }
+.profile-save-hint { color: var(--pn-color-text-muted, #64748b); font-size: 10px; }
 
 @media (max-width: 520px) {
   .profile-field-grid { grid-template-columns: 1fr; gap: 5px; }
@@ -453,17 +521,17 @@ function handleChangeTheme(value: Theme) {
   height: 42px;
   padding: 3px;
   overflow: hidden;
-  border: 1px solid rgba(148, 163, 184, .22);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, .06);
+  border: 1px solid var(--pn-color-border, rgba(148, 163, 184, .24));
+  border-radius: var(--pn-radius-medium, 12px);
+  background: var(--pn-color-surface, #fff);
   cursor: pointer;
   transition: border-color .18s ease, transform .18s ease, background-color .18s ease;
 }
 
 .avatar-preset-button:hover,
 .avatar-preset-button.active {
-  border-color: rgba(52, 211, 153, .72);
-  background: rgba(16, 185, 129, .14);
+  border-color: var(--pn-color-accent, #10b981);
+  background: color-mix(in srgb, var(--pn-color-accent, #10b981) 14%, var(--pn-color-surface, #fff));
   transform: translateY(-1px);
 }
 

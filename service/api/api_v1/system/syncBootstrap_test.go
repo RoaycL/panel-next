@@ -27,7 +27,7 @@ func TestSyncBootstrapAggregatesOnlyCurrentAccount(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&models.ItemIconGroup{}, &models.ItemIcon{}, &models.UserConfig{}, &models.UserSyncState{}); err != nil {
+	if err := db.AutoMigrate(&models.ItemIconGroup{}, &models.ItemIcon{}, &models.UserConfig{}, &models.UserSyncState{}, &models.UserSyncChange{}); err != nil {
 		t.Fatal(err)
 	}
 	firstGroup := models.ItemIconGroup{Title: "Second", Sort: 2, Revision: 4, UserId: 7}
@@ -113,7 +113,7 @@ func TestSyncBootstrapRequiresDeviceSessionAndCreatesDefaultGroup(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&models.ItemIconGroup{}, &models.ItemIcon{}, &models.UserConfig{}, &models.UserSyncState{}); err != nil {
+	if err := db.AutoMigrate(&models.ItemIconGroup{}, &models.ItemIcon{}, &models.UserConfig{}, &models.UserSyncState{}, &models.UserSyncChange{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Create(&models.ItemIcon{Title: "Orphan", UserId: 10, ItemIconGroupId: 0}).Error; err != nil {
@@ -149,6 +149,60 @@ func TestSyncBootstrapRequiresDeviceSessionAndCreatesDefaultGroup(t *testing.T) 
 	}
 	if stored.ItemIconGroupId != int(envelope.Data.Panel.Groups[0].ID) {
 		t.Fatalf("orphan item was not persisted in the default group: %+v", stored)
+	}
+}
+
+func TestSyncBootstrapSeedsOnlyUntouchedDashboard(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
+		NamingStrategy: schema.NamingStrategy{SingularTable: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&models.ItemIconGroup{}, &models.ItemIcon{}, &models.UserConfig{}, &models.UserSyncState{}, &models.UserSyncChange{}); err != nil {
+		t.Fatal(err)
+	}
+	previousDB := global.Db
+	global.Db = db
+	t.Cleanup(func() { global.Db = previousDB })
+
+	newUser := models.User{BaseModel: models.BaseModel{ID: 21}, Username: "new@example.com", Status: 1}
+	first := callSyncBootstrap(t, newUser, sessionlib.AuthModeDevice, "1")
+	var firstResult struct {
+		Data syncApiStructs.BootstrapResponse `json:"data"`
+	}
+	if err := json.Unmarshal(first.Body.Bytes(), &firstResult); err != nil {
+		t.Fatal(err)
+	}
+	if len(firstResult.Data.Panel.Groups) != 1 || len(firstResult.Data.Panel.Groups[0].Items) != len(extensionStarterBookmarks) || firstResult.Data.Revision != "12" {
+		t.Fatalf("new account did not receive 12 durable starters: %s", first.Body.String())
+	}
+	if firstResult.Data.Panel.Groups[0].Items[0].Title != "百度" {
+		t.Fatalf("unexpected first preset: %+v", firstResult.Data.Panel.Groups[0].Items[0])
+	}
+	second := callSyncBootstrap(t, newUser, sessionlib.AuthModeDevice, "1")
+	var storedCount int64
+	if err := db.Model(&models.ItemIcon{}).Where("user_id = ?", newUser.ID).Count(&storedCount).Error; err != nil || storedCount != int64(len(extensionStarterBookmarks)) {
+		t.Fatalf("repeat bootstrap duplicated starters: count=%d err=%v body=%s", storedCount, err, second.Body.String())
+	}
+
+	// Removing every bookmark must not cause the next bootstrap to add them back.
+	if err := db.Where("user_id = ?", newUser.ID).Delete(&models.ItemIcon{}).Error; err != nil {
+		t.Fatal(err)
+	}
+	emptyAgain := callSyncBootstrap(t, newUser, sessionlib.AuthModeDevice, "1")
+	if err := db.Model(&models.ItemIcon{}).Where("user_id = ?", newUser.ID).Count(&storedCount).Error; err != nil || storedCount != 0 {
+		t.Fatalf("customized empty dashboard was overwritten: count=%d err=%v body=%s", storedCount, err, emptyAgain.Body.String())
+	}
+
+	customUser := models.User{BaseModel: models.BaseModel{ID: 22}, Username: "custom@example.com", Status: 1}
+	if err := db.Create(&models.ItemIconGroup{UserId: customUser.ID, Title: "My links"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	custom := callSyncBootstrap(t, customUser, sessionlib.AuthModeDevice, "1")
+	if err := db.Model(&models.ItemIcon{}).Where("user_id = ?", customUser.ID).Count(&storedCount).Error; err != nil || storedCount != 0 {
+		t.Fatalf("custom group was overwritten: count=%d err=%v body=%s", storedCount, err, custom.Body.String())
 	}
 }
 

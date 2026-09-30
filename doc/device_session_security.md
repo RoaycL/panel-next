@@ -10,14 +10,14 @@
 - `client_type` 仅允许 `web` 或 `chrome_extension`。
 - Access Token 和 Refresh Token 明文只在签发响应中出现一次；数据库只保存 SHA-256 哈希。
 - Access、Refresh 过期时间分别保存；撤销使用 `revoked_at`，不物理删除审计记录。
-- `last_active_at` 用于设备列表和闲置会话策略，不延长 Refresh Token 的绝对期限。
+- `last_active_at` 用于设备列表；网页 Refresh Token 不因活跃而延长绝对期限，扩展 Refresh Token 不按时间到期。
 - 修改密码、检测到 Refresh Token 重用或账号停用时必须撤销相关会话。
 
 ## Token 生命周期
 
 - Access Token 与 Refresh Token 分别使用 32 字节密码学安全随机数，并以无填充 Base64 URL 编码返回。
 - 明文 Token 只返回给调用方，数据库只保存 SHA-256 哈希；日志不得输出明文或哈希。
-- Access Token 默认有效期 15 分钟，Refresh Token 绝对有效期 30 天。轮换不会延长 Refresh 的绝对期限，Access 也不会越过该期限。
+- Access Token 默认有效期 15 分钟；网页 Refresh Token 按服务端配置绝对到期，轮换不会延长其期限。扩展 Refresh Token 不按时间到期，但退出、设备撤销、重放检测与账号停用仍会使其失效；旧版未到期的扩展会话在首次刷新时升级。
 - 每次刷新都同时替换 Access/Refresh Token，并把已消费的 Refresh 哈希写入 `user_session_refresh_token`。
 - 已消费 Refresh Token 再次出现时，视为凭据可能泄露，事务内撤销其整个设备会话；当前已签发的 Access Token 随即失效。
 - 轮换使用数据库事务、会话行锁和旧哈希条件更新，避免同一 Refresh Token 并发产生两个有效后继。

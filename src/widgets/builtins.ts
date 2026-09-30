@@ -38,6 +38,16 @@ export interface CountdownWidgetConfig {
   repeat: CountdownRepeat
 }
 
+export interface NotesWidgetConfig {
+  title: string
+}
+
+export interface WorkdayWidgetConfig {
+  title: string
+  endTime: string
+  weekdaysOnly: boolean
+}
+
 const clockSchema = defineConfigSchema<ClockWidgetConfig>({
   hideSecond: field.boolean(false),
   showDate: field.boolean(true),
@@ -67,6 +77,16 @@ const countdownSchema = defineConfigSchema<CountdownWidgetConfig>({
   repeat: field.enumeration<CountdownRepeat>({ values: ['none', 'yearly'], default: 'yearly', label: 'widgetLayout.fields.repeat' }),
 })
 
+const notesSchema = defineConfigSchema<NotesWidgetConfig>({
+  title: field.string({ default: '', max: 40, label: 'widgetLayout.fields.title' }),
+})
+
+const workdaySchema = defineConfigSchema<WorkdayWidgetConfig>({
+  title: field.string({ default: '', max: 40, label: 'widgetLayout.fields.title' }),
+  endTime: field.string({ default: '18:00', pattern: /^(?:[01]\d|2[0-3]):[0-5]\d$/, label: 'widgetLayout.fields.endTime', description: 'workdayWidget.timeHint' }),
+  weekdaysOnly: field.boolean(true, { label: 'widgetLayout.fields.weekdaysOnly' }),
+})
+
 if (!widgetRegistry.get('core.clock')) {
   widgetRegistry.register(defineWidget({
     type: 'core.clock', currentVersion: 1, configSchema: clockSchema,
@@ -88,7 +108,7 @@ if (!widgetRegistry.get('core.clock')) {
   })).register(defineWidget({
     type: 'core.weather', currentVersion: 1, configSchema: weatherSchema,
     defaultConfig: () => ({ city: '北京', units: 'metric' }),
-    size: { default: { columns: 3, rows: 1 }, min: { columns: 2, rows: 1 }, max: { columns: 6, rows: 2 } },
+    size: { default: { columns: 5, rows: 2 }, min: { columns: 2, rows: 1 }, max: { columns: 8, rows: 3 } },
     meta: { title: 'widgetLayout.types.core.weather' },
     capabilities: ['network'],
     load: () => import('./builtin/WeatherWidget.vue').then(module => module.default),
@@ -105,6 +125,30 @@ if (!widgetRegistry.get('core.clock')) {
     size: { default: { columns: 3, rows: 2 }, min: { columns: 2, rows: 1 }, max: { columns: 6, rows: 2 } },
     meta: { title: 'widgetLayout.types.core.countdown' },
     load: () => import('./builtin/CountdownWidget.vue').then(module => module.default),
+  })).register(defineWidget({
+    type: 'core.notes', currentVersion: 1, configSchema: notesSchema,
+    defaultConfig: () => ({ title: '' }),
+    size: { default: { columns: 4, rows: 2 }, min: { columns: 2, rows: 2 }, max: { columns: 8, rows: 5 } },
+    meta: { title: 'widgetLayout.types.core.notes' },
+    capabilities: ['storage'],
+    load: () => import('./builtin/NotesWidget.vue').then(module => module.default),
+  })).register(defineWidget({
+    type: 'core.calendar', currentVersion: 1, configSchema: emptySchema, defaultConfig: () => ({}),
+    size: { default: { columns: 4, rows: 3 }, min: { columns: 3, rows: 3 }, max: { columns: 8, rows: 4 } },
+    meta: { title: 'widgetLayout.types.core.calendar' },
+    load: () => import('./builtin/CalendarWidget.vue').then(module => module.default),
+  })).register(defineWidget({
+    type: 'core.todo', currentVersion: 1, configSchema: emptySchema, defaultConfig: () => ({}),
+    size: { default: { columns: 4, rows: 3 }, min: { columns: 3, rows: 2 }, max: { columns: 8, rows: 5 } },
+    meta: { title: 'widgetLayout.types.core.todo' },
+    capabilities: ['storage'],
+    load: () => import('./builtin/TodoWidget.vue').then(module => module.default),
+  })).register(defineWidget({
+    type: 'core.workday', currentVersion: 1, configSchema: workdaySchema,
+    defaultConfig: () => ({ title: '', endTime: '18:00', weekdaysOnly: true }),
+    size: { default: { columns: 4, rows: 2 }, min: { columns: 3, rows: 1 }, max: { columns: 8, rows: 3 } },
+    meta: { title: 'widgetLayout.types.core.workday' },
+    load: () => import('./builtin/WorkdayWidget.vue').then(module => module.default),
   }))
 }
 

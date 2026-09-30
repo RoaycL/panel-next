@@ -153,7 +153,11 @@ function retryLoad() {
 
 .pn-widget-shell[data-widget='borderless'] :deep(.trending-card),
 .pn-widget-shell[data-widget='borderless'] :deep(.weather-card),
-.pn-widget-shell[data-widget='borderless'] :deep(.countdown-card) {
+.pn-widget-shell[data-widget='borderless'] :deep(.countdown-card),
+.pn-widget-shell[data-widget='borderless'] :deep(.notes-card),
+.pn-widget-shell[data-widget='borderless'] :deep(.calendar-card),
+.pn-widget-shell[data-widget='borderless'] :deep(.todo-card),
+.pn-widget-shell[data-widget='borderless'] :deep(.workday-card) {
   backdrop-filter: none;
   box-shadow: none;
 }

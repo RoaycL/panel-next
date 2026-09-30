@@ -45,7 +45,7 @@ const textColor = computed(() => {
       <!-- 图标 -->
       <div class="app-icon-info-icon w-[70px] h-[70px]">
         <div class="w-[70px] h-full flex items-center justify-center ">
-          <ItemIcon :item-icon="itemInfo?.icon" force-background="transparent" :size="50" class="overflow-hidden rounded-xl" />
+          <ItemIcon :item-icon="itemInfo?.icon" :site-url="itemInfo?.url" :fallback-text="itemInfo?.title" force-background="transparent" :size="50" class="overflow-hidden rounded-xl" />
         </div>
       </div>
 
@@ -73,7 +73,7 @@ const textColor = computed(() => {
         class="app-icon-small-icon overflow-hidden rounded-2xl sunpanel w-[70px] h-[70px] mx-auto rounded-2xl transition-all duration-200 hover:shadow-[0_0_20px_10px_rgba(0,0,0,0.2)]"
         :title="itemInfo?.description"
       >
-        <ItemIcon :item-icon="itemInfo?.icon" />
+        <ItemIcon :item-icon="itemInfo?.icon" :site-url="itemInfo?.url" :fallback-text="itemInfo?.title" />
       </div>
       <div
         v-if="!iconTextIconHideTitle"

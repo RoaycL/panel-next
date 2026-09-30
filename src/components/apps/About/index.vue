@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { NDivider, NGradientText, NTag } from 'naive-ui'
+import { NTag } from 'naive-ui'
 import { onMounted, ref } from 'vue'
 import { get } from '@/api/system/about'
 import srcSvglogo from '@/assets/logo.svg'
-import srcGithub from '@/assets/about_image/github.png'
 
 interface Version {
   versionName: string
@@ -17,67 +16,50 @@ onMounted(() => {
   get<Version>().then((res) => {
     if (res.code === 0)
       versionName.value = res.data.versionName
+  }).catch(() => {
+    // Keep the bundled version visible when the server is unavailable.
+    versionName.value = ''
   })
 })
 </script>
 
 <template>
-  <div class="pt-5">
-    <div class="flex flex-col items-center justify-center">
-      <img :src="srcSvglogo" width="100" height="100" alt="">
-      <div class="text-3xl font-semibold">
+  <div class="pn-app-page about-page">
+    <section class="pn-app-panel about-hero">
+      <img :src="srcSvglogo" width="86" height="86" alt="">
+      <h2 class="about-title">
         {{ $t('common.appName') }}
-      </div>
-      <div class="text-xl">
-        <NGradientText type="info">
-          <a href="https://github.com/RoaycL/panel-next/releases" class="font-semibold" :title="$t('apps.about.viewUpdateLog')" target="_blank">v{{ versionName }}</a>
-        </NGradientText>
-      </div>
-      <div class="mt-2">
-        <a href="https://github.com/RoaycL/panel-next/releases" target="_blank" class="link">{{ $t('apps.about.checkUpdate') }}</a>
-      </div>
-    </div>
-
-    <NDivider style="margin:10px 0">
-      •
-    </NDivider>
-
-    <div class="flex flex-col items-center justify-center text-base text-center px-4">
-      <p class="mb-3 opacity-80">
+      </h2>
+      <a class="pn-app-link about-version" href="https://github.com/RoaycL/panel-next/releases" :title="$t('apps.about.viewUpdateLog')" target="_blank" rel="noopener noreferrer">v{{ versionName || frontVersion }}</a>
+      <p class="pn-app-muted about-description">
         {{ $t('apps.about.description') }}
       </p>
-    </div>
+      <a class="pn-app-link" href="https://github.com/RoaycL/panel-next/releases" target="_blank" rel="noopener noreferrer">{{ $t('apps.about.checkUpdate') }}</a>
+    </section>
 
-    <NDivider style="margin:10px 0">
-      •
-    </NDivider>
-
-    <div class="flex flex-col items-center justify-center text-base">
-      <div>
-        {{ $t('apps.about.issue') }}<a href="https://github.com/RoaycL/panel-next/issues" target="_blank" class="link">Github Issues</a>
+    <section class="pn-app-panel about-links">
+      <h3 class="pn-app-heading">
+        {{ $t('common.appName') }}
+      </h3>
+      <p>{{ $t('apps.about.issue') }} <a class="pn-app-link" href="https://github.com/RoaycL/panel-next/issues" target="_blank" rel="noopener noreferrer">Github Issues</a></p>
+      <p>{{ $t('apps.about.discussions') }} <a class="pn-app-link" href="https://github.com/RoaycL/panel-next/discussions" target="_blank" rel="noopener noreferrer">Github Discussions</a></p>
+      <div class="about-project-link">
+        <a class="pn-app-link" href="https://github.com/RoaycL/panel-next" target="_blank" rel="noopener noreferrer">Github</a>
       </div>
-      <div>
-        {{ $t('apps.about.discussions') }}<a href="https://github.com/RoaycL/panel-next/discussions" target="_blank" class="link">Github Discussions</a>
-      </div>
-
-      <div class="flex mt-[10px] flex-wrap justify-center">
-        <div class="flex items-center mx-[10px]">
-          <img class="w-[20px] h-[20px] mr-[5px]" :src="srcGithub" alt="">
-          <a href="https://github.com/RoaycL/panel-next" target="_blank" class="link">Github</a>
-        </div>
-      </div>
-
-      <div class="mt-5">
-        <NTag :bordered="false" size="small">
-          {{ $t("apps.about.frontVersionText") }}: FV-{{ frontVersion }}
-        </NTag>
-      </div>
-    </div>
+      <NTag :bordered="false" size="small">
+        {{ $t('apps.about.frontVersionText') }}: FV-{{ frontVersion }}
+      </NTag>
+    </section>
   </div>
 </template>
 
-<style>
-.link{
-    color:rgb(0, 89, 255)
-}
+<style scoped>
+.about-page { display: grid; width: min(100%, 620px); gap: 12px; margin: 0 auto; padding: 12px 0; }
+.about-hero, .about-links { padding: clamp(20px, 5vw, 30px); }
+.about-hero { display: flex; flex-direction: column; align-items: center; gap: 9px; text-align: center; }
+.about-title { margin: 0; color: var(--pn-color-text-primary, #0f172a); font-size: 26px; font-weight: var(--pn-font-weight-heading, 700); }
+.about-version { font-size: 16px; font-weight: 700; }
+.about-description { max-width: 48ch; margin: 6px 0; line-height: 1.7; }
+.about-links p { margin: 10px 0; line-height: 1.6; }
+.about-project-link { display: flex; align-items: center; gap: 8px; margin: 12px 0 18px; }
 </style>

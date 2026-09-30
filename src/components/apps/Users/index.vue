@@ -227,11 +227,11 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="overflow-auto pt-2">
+  <div class="pn-app-page overflow-auto pt-2">
     <NAlert type="info" :bordered="false">
       {{ $t('adminSettingUsers.alertText') }}
     </NAlert>
-    <div class="my-[10px]">
+    <div class="pn-app-toolbar">
       <NButton type="primary" size="small" ghost @click="handleAdd">
         {{ $t('common.add') }}
       </NButton>

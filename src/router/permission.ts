@@ -7,19 +7,33 @@ export function setupPageGuard(router: Router) {
     const authStore = useAuthStore()
     const userStore = useUserStore()
 
+    // An extension tab can restore an old #/login URL. Guest mode is the
+    // default entry; the form is reached explicitly from the dashboard.
+    if (__PANEL_RUNTIME__ === 'extension' && to.name === 'login' && !authStore.token && !from.name) {
+      next({ name: 'Home', replace: true })
+      return
+    }
+
     // AUTH-04: 已登录用户访问登录页直接跳转首页
     if (to.name === 'login' && authStore.token) {
       next({ name: 'Home' })
       return
     }
 
-    // AUTH-02: 设备会话模式下，如果 access token 过期且 refresh 也失败，
-    // 自动清除会话并跳转登录页，避免重复账号记录
-    if (authStore.authMode === 'device' && authStore.token && !authStore.accessExpiresAt) {
+    // Refresh near access expiry. A still-valid extension session from an
+    // older release is also refreshed once so the server can upgrade it to a
+    // revocable, non-expiring extension session.
+    const accessExpiry = Date.parse(authStore.accessExpiresAt ?? '')
+    const needsExtensionUpgrade = __PANEL_RUNTIME__ === 'extension'
+      && new Date(authStore.refreshExpiresAt ?? '').getUTCFullYear() < 9999
+    if (authStore.authMode === 'device' && authStore.token && (!Number.isFinite(accessExpiry) || accessExpiry - Date.now() < 60_000 || needsExtensionUpgrade)) {
       const refreshed = await authStore.refreshSession()
-      if (!refreshed) {
+      if (!refreshed && !authStore.token) {
         // Extension 新标签页必须始终可作为访客主页打开；登录仅由用户点击头像触发。
-        next({ name: __PANEL_RUNTIME__ === 'extension' ? 'Home' : 'login' })
+        if (__PANEL_RUNTIME__ === 'extension' && to.name === 'Home')
+          next()
+        else
+          next({ name: __PANEL_RUNTIME__ === 'extension' ? 'Home' : 'login' })
         return
       }
     }

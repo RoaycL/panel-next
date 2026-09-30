@@ -84,6 +84,9 @@ func buildSyncBootstrap(c *gin.Context, user models.User) (syncApiStructs.Bootst
 			}
 			groups = append(groups, defaultGroup)
 		}
+		if err := seedExtensionStarterBookmarks(tx, user.ID, groups); err != nil {
+			return err
+		}
 
 		groupIndexes := make(map[uint]int, len(groups))
 		for _, group := range groups {

@@ -240,12 +240,12 @@ async function handleStartImport() {
 </script>
 
 <template>
-  <div class="pt-2">
+  <div class="pn-app-page pt-2">
     <NAlert type="info" :bordered="false">
       <p>{{ $t('apps.exportImport.tip') }}</p>
     </NAlert>
-    <div class="flex justify-center m-[50px]">
-      <div class="m-[10px]">
+    <div class="pn-app-panel pn-app-actions import-export-actions">
+      <div>
         <NUpload
           accept=".sun-panel.json,.sunpanel.json"
           directory-dnd
@@ -253,7 +253,7 @@ async function handleStartImport() {
           :show-file-list="false"
           @change="handleFileChange"
         >
-          <NButton type="info" size="large" :loading="uploadLoading">
+          <NButton type="primary" size="large" :loading="uploadLoading">
             <template #icon>
               <SvgIcon icon="fa6:solid-file-import" />
             </template>
@@ -261,8 +261,8 @@ async function handleStartImport() {
           </NButton>
         </NUpload>
       </div>
-      <div class="m-[10px]">
-        <NButton type="info" size="large" @click="exportRoundModalShow = !exportRoundModalShow">
+      <div>
+        <NButton secondary size="large" @click="exportRoundModalShow = !exportRoundModalShow">
           <template #icon>
             <SvgIcon icon="fa6:solid-file-export" />
           </template>
@@ -272,7 +272,7 @@ async function handleStartImport() {
     </div>
 
     <div class="flex justify-center">
-      <a href="https://hslr-s.github.io/sun-panel-tool-page/#/" target="_blank">{{ $t('apps.exportImport.transmuteStandard') }}</a>
+      <a class="pn-app-link" href="https://hslr-s.github.io/sun-panel-tool-page/#/" target="_blank">{{ $t('apps.exportImport.transmuteStandard') }}</a>
     </div>
 
     <!-- 调试模式 -->
@@ -349,3 +349,16 @@ async function handleStartImport() {
     </RoundCardModal>
   </div>
 </template>
+
+<style scoped>
+.import-export-actions {
+  justify-content: center;
+  margin: 18px 0;
+  padding: clamp(20px, 5vw, 32px);
+}
+
+@media (max-width: 560px) {
+  .import-export-actions > div,
+  .import-export-actions :deep(.n-button) { width: 100%; }
+}
+</style>

@@ -34,12 +34,14 @@ import { onSyncConflict, setSyncRevision } from '@/sync/revision'
 import { replayOfflineQueue } from '@/sync/offlineReplay'
 import { getPendingMutationCount, OFFLINE_QUEUE_KEY_PREFIX, onOfflineQueueChanged } from '@/sync/offlineQueue'
 import type { ConflictDescriptor, ConflictResolutionChoice } from '@/sync/conflictResolver'
-import { getBootstrap } from '@/api/sync'
+import { getBootstrap, waitForSyncChange } from '@/api/sync'
 import { getList as getGroupList } from '@/api/panel/itemIconGroup'
 import { deletes as deleteItems, getListByGroupId, saveSort as saveItemSort } from '@/api/panel/itemIcon'
 import type { DashboardGroup } from '@/dashboard/core'
 import { createDashboardState, createItemSortRequest, selectItemUrl } from '@/dashboard/core'
 import { VueDraggable } from 'vue-draggable-plus'
+import { ICON_PRESETS } from '@/icons/presets'
+import type { IconPreset } from '@/icons/presets'
 
 import SvgSrcBaidu from '@/assets/search_engine_svg/baidu.svg'
 import SvgSrcBing from '@/assets/search_engine_svg/bing.svg'
@@ -50,6 +52,8 @@ const EditItem = defineAsyncComponent(() => import('@/views/home/components/Edit
 const ItemGroupManage = defineAsyncComponent(() => import('@/components/apps/ItemGroupManage/index.vue'))
 const GallerySelector = defineAsyncComponent(() => import('@/components/common/GallerySelector/index.vue'))
 const WidgetSettingsModal = defineAsyncComponent(() => import('@/widgets/WidgetSettingsModal.vue'))
+const WidgetGalleryModal = defineAsyncComponent(() => import('./components/WidgetGalleryModal.vue'))
+const IconGalleryModal = defineAsyncComponent(() => import('./components/IconGalleryModal.vue'))
 const ConflictResolverModal = defineAsyncComponent(() => import('@/components/common/ConflictResolverModal/index.vue'))
 const OfflineQueueManager = defineAsyncComponent(() => import('@/components/common/OfflineQueueManager/index.vue'))
 
@@ -76,6 +80,8 @@ let removeStorageListener: (() => void) | null = null
 let removeOfflineQueueListener: (() => void) | null = null
 let externalStorageTimer: number | null = null
 let isDisposed = false
+let syncWatchController: AbortController | null = null
+let syncWatchRunning = false
 const externalStorageKeys = new Set<string>()
 const pendingMutationsCount = ref(0)
 
@@ -112,6 +118,8 @@ async function triggerOfflineReplay() {
 
 const showWallpaperModal = ref(false)
 const showWidgetManager = ref(false)
+const showWidgetGallery = ref(false)
+const showIconGallery = ref(false)
 const showGroupManager = ref(false)
 const widgetPreferences = ref(readExtensionWidgets())
 const sidebarPosition = computed({
@@ -287,10 +295,10 @@ watch([
   scheduleSaveExtensionWidgets(150)
 })
 
-const fixedExtensionWidgetTypes = new Set(['core.clock', 'core.search'])
-const extensionWidgetAddOptions = computed(() => widgetRegistry.list()
-  .filter(definition => (!definition.surfaces || definition.surfaces.includes('extension')) && !fixedExtensionWidgetTypes.has(definition.type))
-  .map(definition => ({ label: widgetDefinitionTitle(definition), key: definition.type })))
+const extensionWidgetAddedCounts = computed(() => extensionWidgetInstances.value.reduce<Record<string, number>>((counts, instance) => {
+  counts[instance.type] = (counts[instance.type] ?? 0) + 1
+  return counts
+}, {}))
 
 function widgetDefinitionTitle(definition: { type: string, meta?: { title?: string } }) {
   const metaTitle = definition.meta?.title
@@ -307,14 +315,45 @@ function widgetDefinitionTitle(definition: { type: string, meta?: { title?: stri
   return definition.type
 }
 
-function addExtensionWidget(type: string | number) {
+const addingExtensionWidget = ref(false)
+
+function restoreCurrentWidgetPageFromStorage() {
+  if (saveTimer) {
+    clearTimeout(saveTimer)
+    saveTimer = null
+  }
+  widgetSaveGeneration += 1
+  const persisted = readExtensionWidgets()
+  widgetPreferences.value.pageLayouts = persisted.pageLayouts
+  widgetPreferences.value.contentLayout = persisted.contentLayout
+  if (loadedWidgetPageKey) {
+    loadExtensionWidgetLayout(persisted.pageLayouts[loadedWidgetPageKey]?.contentLayout ?? emptyPageLayout().contentLayout, loadedWidgetPageKey)
+    dirtyPageLayoutKeys.delete(loadedWidgetPageKey)
+  }
+  isWidgetLayoutDirty.value = false
+}
+
+async function addExtensionWidget(type: string | number) {
+  if (addingExtensionWidget.value)
+    return
+  addingExtensionWidget.value = true
+  let inserted = false
   try {
     extensionWidgetInstances.value.push(widgetRegistry.create(String(type), generateWidgetInstanceId(String(type)), { column: 0, row: extensionWidgetInstances.value.length }))
+    inserted = true
     isWidgetLayoutDirty.value = true
-    void persistExtensionWidgets()
+    if (await persistExtensionWidgets())
+      ms.success(t('widgetGallery.addedMessage', { title: widgetDefinitionTitle(widgetRegistry.get(String(type)) ?? { type: String(type) }) }))
+    else
+      restoreCurrentWidgetPageFromStorage()
   }
   catch (error) {
-    ms.error(error instanceof Error ? error.message : '添加组件失败')
+    if (inserted)
+      restoreCurrentWidgetPageFromStorage()
+    ms.error(error instanceof Error ? error.message : t('widgetGallery.addFailed'))
+  }
+  finally {
+    addingExtensionWidget.value = false
   }
 }
 
@@ -579,6 +618,12 @@ function syncClockTimer() {
 
 function handleVisibilityChange() {
   syncClockTimer()
+  if (document.hidden) {
+    syncWatchController?.abort()
+  }
+  else {
+    void refreshBootstrap().then(startSyncWatch)
+  }
 }
 
 watch([
@@ -609,6 +654,15 @@ const searchEngines: SearchEngine[] = [
 const currentEngine = computed<SearchEngine>(() => searchEngines.find(engine => engine.id === widgetPreferences.value.searchEngineId) ?? searchEngines[0])
 const searchQuery = ref('')
 const isSearchFocused = ref(false)
+const bookmarkSearchOpen = ref(false)
+const bookmarkSearchQuery = ref('')
+const bookmarkSearchInputRef = ref<HTMLInputElement | null>(null)
+
+interface BookmarkSearchResult {
+  key: string
+  groupTitle: string
+  card: Panel.ItemInfo
+}
 
 const engineDropdownOptions = computed(() => {
   return searchEngines.map(e => ({
@@ -630,6 +684,22 @@ function clearSearchHistory() {
   widgetPreferences.value.searchHistory = []
 }
 
+function directHttpUrl(query: string): string | null {
+  if (/\s/.test(query))
+    return null
+  const explicitHttp = /^https?:\/\//i.test(query)
+  const hostLike = /^(?:localhost|(?:\d{1,3}\.){3}\d{1,3}|(?:[a-z\d](?:[a-z\d-]*[a-z\d])?\.)+[a-z]{2,})(?::\d+)?(?:[/?#]|$)/i.test(query)
+  if (!explicitHttp && !hostLike)
+    return null
+  try {
+    const url = new URL(explicitHttp ? query : `https://${query}`)
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : null
+  }
+  catch {
+    return null
+  }
+}
+
 function handleSearchSubmit() {
   const query = searchQuery.value.trim()
   if (!query)
@@ -640,10 +710,27 @@ function handleSearchSubmit() {
       ...widgetPreferences.value.searchHistory.filter(item => item !== query),
     ].slice(0, 10)
   }
-  const targetUrl = currentEngine.value.url.replace('%s', encodeURIComponent(query))
+  const targetUrl = directHttpUrl(query) ?? currentEngine.value.url.replace('%s', encodeURIComponent(query))
   runtime.openUrl(targetUrl, widgetPreferences.value.searchOpenMode)
 }
 
+function toggleBookmarkSearch() {
+  bookmarkSearchOpen.value = !bookmarkSearchOpen.value
+  if (bookmarkSearchOpen.value)
+    void nextTick(() => bookmarkSearchInputRef.value?.focus())
+}
+
+function closeBookmarkSearch() {
+  bookmarkSearchOpen.value = false
+  bookmarkSearchQuery.value = ''
+}
+
+function openBookmarkSearchResult(card: Panel.ItemInfo) {
+  closeBookmarkSearch()
+  handleCardClick(card)
+}
+
+const featuredSiteIds = new Set(['baidu', 'google', 'bing', 'github', 'bilibili', 'youtube', 'chatgpt', 'cloudflare', 'docker', 'v2ex', 'claude', 'deepseek'])
 const defaultPresetGroups: DashboardGroup[] = [
   {
     id: 1,
@@ -651,14 +738,17 @@ const defaultPresetGroups: DashboardGroup[] = [
     icon: '',
     sort: 1,
     hoverStatus: false,
-    items: [
-      { id: 101, title: 'GitHub', url: 'https://github.com', description: '全球开源代码平台', icon: { itemType: 2, src: 'mdi:github' }, openMethod: 1, itemIconGroupId: 1 },
-      { id: 102, title: 'Bilibili', url: 'https://www.bilibili.com', description: '哔哩哔哩 (゜-゜)つロ', icon: { itemType: 2, src: 'ri:bilibili-fill' }, openMethod: 1, itemIconGroupId: 1 },
-      { id: 103, title: 'YouTube', url: 'https://www.youtube.com', description: '全球视频流媒体', icon: { itemType: 2, src: 'ri:youtube-fill' }, openMethod: 1, itemIconGroupId: 1 },
-      { id: 104, title: 'V2EX', url: 'https://v2ex.com', description: '创意工作者社区', icon: { itemType: 2, src: 'mdi:code-tags' }, openMethod: 1, itemIconGroupId: 1 },
-      { id: 105, title: 'ChatGPT', url: 'https://chatgpt.com', description: 'AI 对话与创作助手', icon: { itemType: 2, src: 'mdi:robot' }, openMethod: 1, itemIconGroupId: 1 },
-      { id: 106, title: 'DeepSeek', url: 'https://chat.deepseek.com', description: '深度求索通用大模型', icon: { itemType: 2, src: 'solar:cpu-bold' }, openMethod: 1, itemIconGroupId: 1 },
-    ],
+    items: ICON_PRESETS.filter(preset => featuredSiteIds.has(preset.id)).map((preset, index) => ({
+      id: 101 + index,
+      title: preset.title,
+      url: preset.url,
+      description: preset.url,
+      icon: preset.sprite
+        ? { itemType: 3, text: preset.sprite.replace('-', ':'), backgroundColor: preset.color }
+        : { itemType: 1, text: preset.mark, backgroundColor: preset.color },
+      openMethod: 1,
+      itemIconGroupId: 1,
+    })),
   },
 ]
 
@@ -678,6 +768,21 @@ const extensionSyncPresentation = computed(() => {
 })
 const groups = ref<DashboardGroup[]>(defaultPresetGroups)
 const groupsReady = ref(!authStore.token)
+const bookmarkSearchResults = computed<BookmarkSearchResult[]>(() => {
+  const query = bookmarkSearchQuery.value.trim().toLowerCase()
+  if (!query)
+    return []
+  return groups.value.flatMap(group => (group.items ?? [])
+    .filter(card => card.title?.toLowerCase().includes(query)
+      || card.description?.toLowerCase().includes(query)
+      || card.url?.toLowerCase().includes(query))
+    .map(card => ({
+      key: `${group.id}:${card.id ?? card.title}`,
+      groupTitle: group.title || '未命名分组',
+      card,
+    })))
+    .slice(0, 12)
+})
 let isRefreshing = false
 
 async function applyBootstrapData(data: Sync.BootstrapResponseV1) {
@@ -752,6 +857,58 @@ async function refreshBootstrap() {
   }
   finally {
     isRefreshing = false
+  }
+}
+
+/** Hold one bounded request while visible; the server only sends a revision.
+ * Missed notifications are harmless because refreshBootstrap replays changes
+ * from the last durable snapshot cursor after reconnect/focus. */
+async function startSyncWatch() {
+  if (syncWatchRunning || isDisposed || document.hidden || !authStore.token || !authStore.userInfo?.id)
+    return
+  syncWatchRunning = true
+  try {
+    while (true) {
+      if (isDisposed || document.hidden || !authStore.token || !authStore.userInfo?.id)
+        break
+      const accountId: number = authStore.userInfo.id
+      const controller = new AbortController()
+      syncWatchController = controller
+      try {
+        const response = await waitForSyncChange(syncRevision.value, controller.signal)
+        if (controller.signal.aborted || isDisposed || authStore.userInfo?.id !== accountId)
+          break
+        if (response.code !== 0) {
+          await new Promise(resolve => window.setTimeout(resolve, 10_000))
+          if (!isDisposed && !document.hidden)
+            await refreshBootstrap()
+          continue
+        }
+        if (response.data?.changed && response.data.revision !== syncRevision.value) {
+          await refreshBootstrap()
+          // A local save may already be refreshing this page. Avoid a hot
+          // reconnect loop until that refresh applies the new cursor.
+          if (response.data.revision !== syncRevision.value)
+            await new Promise(resolve => window.setTimeout(resolve, 750))
+        }
+      }
+      catch {
+        if (controller.signal.aborted || isDisposed || document.hidden)
+          break
+        await new Promise(resolve => window.setTimeout(resolve, 10_000))
+        if (!isDisposed && !document.hidden)
+          await refreshBootstrap()
+      }
+      finally {
+        if (syncWatchController === controller)
+          syncWatchController = null
+      }
+    }
+  }
+  finally {
+    syncWatchRunning = false
+    if (!isDisposed && !document.hidden && authStore.token)
+      void startSyncWatch()
   }
 }
 
@@ -902,12 +1059,7 @@ const activeCanvasItems = computed<ExtensionCanvasItem[]>({
     const pageKey = readyPageLayoutKey.value
     const widgetGroups = buildWidgetDisplayGroups(extensionWidgetInstances.value, extensionWidgetEditMode.value)
       .map(group => ({ key: widgetCanvasKey(group), kind: 'widget' as const, group }))
-    const query = searchQuery.value.trim().toLowerCase()
     const bookmarks = activeGroupItems.value
-      .filter(card => !query
-        || card.title?.toLowerCase().includes(query)
-        || card.description?.toLowerCase().includes(query)
-        || card.url?.toLowerCase().includes(query))
       .map(card => ({ key: bookmarkCanvasKey(card), kind: 'bookmark' as const, card }))
     const savedOrder = pageKey ? widgetPreferences.value.pageLayouts[pageKey]?.itemOrder ?? [] : []
     return orderedCanvasItems([...widgetGroups, ...bookmarks], savedOrder)
@@ -1030,7 +1182,7 @@ function closeGroupManager() {
 function handleGroupWheel(event: WheelEvent) {
   if (!widgetPreferences.value.sidebarWheelSwitch)
     return
-  if (settingsModalVisible.value || showWallpaperModal.value || showWidgetManager.value || editCardModalVisible.value || conflictModalVisible.value)
+  if (settingsModalVisible.value || showWallpaperModal.value || showWidgetManager.value || showWidgetGallery.value || showIconGallery.value || editCardModalVisible.value || conflictModalVisible.value)
     return
   const target = event.target as HTMLElement | null
   if (target?.closest('input, textarea, [role="dialog"], .side-panel-scroll'))
@@ -1078,6 +1230,42 @@ function openCardEditor(card: Panel.ItemInfo) {
   editCardModalVisible.value = true
 }
 
+function selectIconPreset(preset: IconPreset | null) {
+  if (authStore.visitMode !== VisitMode.VISIT_MODE_LOGIN || !authStore.token)
+    return
+  const groupId = activeGroupRecord.value?.id
+  if (!groupId)
+    return
+  if (!preset) {
+    editCardData.value = null
+    editCardGroupId.value = groupId
+    showIconGallery.value = false
+    editCardModalVisible.value = true
+    return
+  }
+
+  const icon: Panel.ItemIcon = preset.sprite
+    ? { itemType: 3, text: preset.sprite.replace('-', ':'), backgroundColor: preset.color }
+    : { itemType: 1, text: preset.mark, backgroundColor: preset.color }
+  editCardData.value = {
+    title: preset.title,
+    url: preset.url,
+    lanUrl: '',
+    description: '',
+    openMethod: 2,
+    itemIconGroupId: groupId,
+    icon,
+  }
+  editCardGroupId.value = groupId
+  showIconGallery.value = false
+  editCardModalVisible.value = true
+}
+
+function goToIconLogin() {
+  showIconGallery.value = false
+  void router.push('/login')
+}
+
 function handleBookmarkDragStart() {
   bookmarkSortSnapshot = activeGroupItems.value.map(item => ({ ...item }))
   dashboardOrderSnapshot = activeCanvasItems.value.map(item => item.key)
@@ -1120,6 +1308,11 @@ async function handleBookmarkDragEnd() {
     restoreDashboardOrder()
     return
   }
+
+  // Guest bookmarks are presets. Their visual order is local-only, just like
+  // guest widgets, so there is no account mutation to send to the server.
+  if (authStore.visitMode !== VisitMode.VISIT_MODE_LOGIN || !authStore.token)
+    return
 
   const bookmarkOrderChanged = snapshot.some((item, index) => item.id !== group.items[index]?.id)
   if (!bookmarkOrderChanged)
@@ -1465,10 +1658,12 @@ onMounted(async () => {
   await refreshBootstrap()
   if (isDisposed) return
   await triggerOfflineReplay()
+  void startSyncWatch()
 })
 
 onUnmounted(() => {
   isDisposed = true
+  syncWatchController?.abort()
   flushPendingLayoutIfDirty()
   stopClockTimer()
   if (sideHideTimer) clearTimeout(sideHideTimer)
@@ -1596,7 +1791,7 @@ onUnmounted(() => {
         </div>
       </section>
 
-      <!-- 居中胶囊全能搜索栏 -->
+      <!-- 主搜索栏只负责联网搜索与网址直达；书签搜索使用独立面板。 -->
       <section v-if="widgetPreferences.search" class="search-section w-full max-w-[600px] mb-8">
         <div
           class="search-bar-capsule flex items-center backdrop-blur-xl px-3 py-2 shadow-lg transition-all duration-300"
@@ -1620,7 +1815,7 @@ onUnmounted(() => {
             v-model="searchQuery"
             :list="widgetPreferences.searchHistoryEnabled && widgetPreferences.searchHistory.length ? 'extension-search-history' : undefined"
             type="text"
-            placeholder="搜索网页、书签或直接输入网址"
+            placeholder="搜索网页或输入网址"
             class="extension-search-input flex-1 bg-transparent border-none outline-none px-3 text-sm md:text-base"
             @focus="isSearchFocused = true"
             @blur="isSearchFocused = false"
@@ -1641,6 +1836,18 @@ onUnmounted(() => {
             <SvgIcon icon="material-symbols:close-rounded" class="w-4 h-4" />
           </button>
 
+          <button
+            type="button"
+            class="bookmark-search-trigger"
+            :class="{ active: bookmarkSearchOpen }"
+            title="搜索书签"
+            aria-label="搜索书签"
+            :aria-expanded="bookmarkSearchOpen"
+            @click="toggleBookmarkSearch"
+          >
+            <SvgIcon icon="material-symbols:folder-outline" class="w-4 h-4" />
+          </button>
+
           <!-- 回车搜索图标按钮 -->
           <button
             type="button"
@@ -1651,6 +1858,50 @@ onUnmounted(() => {
             <SvgIcon icon="material-symbols:search-rounded" class="w-4 h-4" />
           </button>
         </div>
+
+        <Transition name="bookmark-search-panel">
+          <section v-if="bookmarkSearchOpen" class="bookmark-search-panel" aria-label="搜索书签">
+            <header class="bookmark-search-header">
+              <div>
+                <b>搜索书签</b>
+                <small>跨全部分组查找，不影响主页图标</small>
+              </div>
+              <button type="button" aria-label="关闭书签搜索" @click="closeBookmarkSearch">
+                <SvgIcon icon="material-symbols:close-rounded" />
+              </button>
+            </header>
+            <div class="bookmark-search-input-wrap">
+              <SvgIcon icon="material-symbols:search-rounded" />
+              <input
+                ref="bookmarkSearchInputRef"
+                v-model="bookmarkSearchQuery"
+                type="search"
+                placeholder="输入书签名称、描述或网址"
+                @keydown.esc="closeBookmarkSearch"
+              >
+            </div>
+            <div v-if="bookmarkSearchResults.length" class="bookmark-search-results">
+              <button
+                v-for="result in bookmarkSearchResults"
+                :key="result.key"
+                type="button"
+                @click="openBookmarkSearchResult(result.card)"
+              >
+                <span class="bookmark-result-icon">
+                  <ItemIcon :item-icon="result.card.icon" :size="28" :fallback-text="result.card.title" :site-url="result.card.url" />
+                </span>
+                <span class="bookmark-result-copy">
+                  <b>{{ result.card.title }}</b>
+                  <small>{{ result.groupTitle }} · {{ result.card.description || result.card.url }}</small>
+                </span>
+                <SvgIcon icon="mdi:open-in-new" class="bookmark-result-open" />
+              </button>
+            </div>
+            <div v-else class="bookmark-search-empty">
+              {{ bookmarkSearchQuery.trim() ? '没有找到匹配的书签' : '输入关键词开始查找' }}
+            </div>
+          </section>
+        </Transition>
       </section>
 
       <section class="dashboard-canvas-section w-full max-w-[1120px]">
@@ -1664,12 +1915,10 @@ onUnmounted(() => {
               <strong>正在编辑当前页面</strong>
               <small>书签与组件可混合拖动 · 组件尺寸严格吸附统一网格</small>
             </div>
-            <NDropdown v-if="extensionWidgetEditMode" trigger="click" :options="extensionWidgetAddOptions" @select="addExtensionWidget">
-              <button type="button" class="modal-secondary-action flex items-center gap-1" :title="t('widgetLayout.add')" :aria-label="t('widgetLayout.add')">
-                <SvgIcon icon="material-symbols:add-rounded" class="w-4 h-4" />
-                <span>{{ t('widgetLayout.add') }}</span>
-              </button>
-            </NDropdown>
+            <button type="button" class="modal-secondary-action flex items-center gap-1" :title="t('widgetLayout.add')" :aria-label="t('widgetLayout.add')" @click="showWidgetGallery = true">
+              <SvgIcon icon="material-symbols:add-rounded" class="w-4 h-4" />
+              <span>{{ t('widgetLayout.add') }}</span>
+            </button>
             <button type="button" class="modal-secondary-action flex items-center gap-1" :title="extensionWidgetEditMode ? t('widgetLayout.done') : t('widgetLayout.edit')" :aria-label="extensionWidgetEditMode ? t('widgetLayout.done') : t('widgetLayout.edit')" @click="extensionWidgetEditMode = !extensionWidgetEditMode">
               <SvgIcon :icon="extensionWidgetEditMode ? 'material-symbols:check-rounded' : 'material-symbols:dashboard-customize-outline-rounded'" class="w-4 h-4" />
               <span>{{ extensionWidgetEditMode ? t('widgetLayout.done') : t('widgetLayout.edit') }}</span>
@@ -1683,7 +1932,7 @@ onUnmounted(() => {
             v-model="activeCanvasItems"
             item-key="key"
             class="extension-dashboard-track"
-            :disabled="!groupsReady || authStore.visitMode !== VisitMode.VISIT_MODE_LOGIN || Boolean(searchQuery.trim()) || Boolean(resizingExtensionWidgetId) || activeCanvasItems.length < 2"
+            :disabled="!groupsReady || Boolean(resizingExtensionWidgetId) || activeCanvasItems.length < 2"
             :delay="extensionWidgetEditMode ? 0 : 480"
             :delay-on-touch-only="false"
             :touch-start-threshold="8"
@@ -1716,7 +1965,7 @@ onUnmounted(() => {
                   <SvgIcon icon="material-symbols:edit-outline-rounded" class="w-3.5 h-3.5" />
                 </button>
                 <div class="card-icon-box">
-                  <ItemIcon :item-icon="item.card.icon" :size="64" class="card-item-icon" />
+                  <ItemIcon :item-icon="item.card.icon" :size="64" :fallback-text="item.card.title" :site-url="item.card.url" class="card-item-icon" />
                 </div>
                 <div class="card-info">
                   <span class="card-title">{{ item.card.title }}</span>
@@ -1751,10 +2000,19 @@ onUnmounted(() => {
           </VueDraggable>
 
           <div v-else class="extension-widget-empty">
-            <SvgIcon :icon="searchQuery ? 'material-symbols:search-off-rounded' : 'material-symbols:dashboard-customize-outline-rounded'" class="w-10 h-10 opacity-60" />
-            <p>{{ searchQuery ? '没有找到匹配的书签或服务' : '当前页面还是空的' }}</p>
-            <small>{{ searchQuery ? `按回车直接全网搜索 “${searchQuery}”` : '进入编辑模式添加组件，或在侧边栏管理书签' }}</small>
+            <SvgIcon icon="material-symbols:dashboard-customize-outline-rounded" class="w-10 h-10 opacity-60" />
+            <p>当前页面还是空的</p>
+            <small>添加小组件开始布置；书签可使用下方的加号添加</small>
+            <button type="button" @click="showWidgetGallery = true">
+              <SvgIcon icon="material-symbols:add-rounded" />
+              添加小组件
+            </button>
           </div>
+
+          <button v-if="activeGroup" type="button" class="dashboard-add-icon" :title="t('iconGallery.title')" :aria-label="t('iconGallery.title')" @click="showIconGallery = true">
+            <span class="dashboard-add-icon-symbol"><SvgIcon icon="material-symbols-add-rounded" /></span>
+            <span>{{ t('iconGallery.title') }}</span>
+          </button>
         </div>
       </section>
     </main>
@@ -1848,24 +2106,22 @@ onUnmounted(() => {
       <p v-else-if="activeRightWidget.stack" class="context-menu-note">
         叠放中的组件需先移出叠放，再单独调整尺寸。
       </p>
-      <template v-if="authStore.visitMode === VisitMode.VISIT_MODE_LOGIN">
-        <div class="context-menu-divider" />
-        <button v-if="hasExtensionWidgetSettings(activeRightWidget)" type="button" class="context-menu-row" role="menuitem" @click="openActiveWidgetSettings">
-          <ThemeIcon name="settings" /><span>配置组件</span>
-        </button>
-        <button type="button" class="context-menu-row" role="menuitem" @click="toggleExtensionWidgetHidden(activeRightWidget); closeContextMenus()">
-          <ThemeIcon :name="activeRightWidget.hidden ? 'eye' : 'eyeOff'" /><span>{{ activeRightWidget.hidden ? '显示组件' : '隐藏组件' }}</span>
-        </button>
-        <button v-if="activeRightWidget.stack" type="button" class="context-menu-row" role="menuitem" @click="removeExtensionWidgetFromStack(activeRightWidget); closeContextMenus()">
-          <ThemeIcon name="drag" /><span>移出叠放</span>
-        </button>
-        <button type="button" class="context-menu-row" role="menuitem" @click="showWidgetManager = true; closeContextMenus()">
-          <ThemeIcon name="dashboard" /><span>编辑主页组件</span>
-        </button>
-        <button type="button" class="context-menu-row danger" role="menuitem" @click="removeActiveWidgetFromMenu">
-          <ThemeIcon name="delete" /><span>删除</span>
-        </button>
-      </template>
+      <div class="context-menu-divider" />
+      <button v-if="hasExtensionWidgetSettings(activeRightWidget)" type="button" class="context-menu-row" role="menuitem" @click="openActiveWidgetSettings">
+        <ThemeIcon name="settings" /><span>配置组件</span>
+      </button>
+      <button type="button" class="context-menu-row" role="menuitem" @click="toggleExtensionWidgetHidden(activeRightWidget); closeContextMenus()">
+        <ThemeIcon :name="activeRightWidget.hidden ? 'eye' : 'eyeOff'" /><span>{{ activeRightWidget.hidden ? '显示组件' : '隐藏组件' }}</span>
+      </button>
+      <button v-if="activeRightWidget.stack" type="button" class="context-menu-row" role="menuitem" @click="removeExtensionWidgetFromStack(activeRightWidget); closeContextMenus()">
+        <ThemeIcon name="drag" /><span>移出叠放</span>
+      </button>
+      <button type="button" class="context-menu-row" role="menuitem" @click="showWidgetManager = true; closeContextMenus()">
+        <ThemeIcon name="dashboard" /><span>编辑主页组件</span>
+      </button>
+      <button type="button" class="context-menu-row danger" role="menuitem" @click="removeActiveWidgetFromMenu">
+        <ThemeIcon name="delete" /><span>删除</span>
+      </button>
     </div>
 
     <!-- 现代化专属个人中心与系统控制台 -->
@@ -1937,11 +2193,9 @@ onUnmounted(() => {
         <div class="extension-widget-library">
           <div class="extension-widget-library-head">
             <div><b>{{ t('widgetLayout.manager.contentWidgetsTitle') }}</b><small>{{ t('widgetLayout.manager.contentWidgetsDesc') }}</small></div>
-            <NDropdown trigger="click" :options="extensionWidgetAddOptions" @select="addExtensionWidget">
-              <button type="button" class="modal-secondary-action">
-                {{ t('widgetLayout.add') }}
-              </button>
-            </NDropdown>
+            <button type="button" class="modal-secondary-action" @click="showWidgetManager = false; showWidgetGallery = true">
+              {{ t('widgetLayout.add') }}
+            </button>
           </div>
           <div v-if="extensionWidgetInstances.length" class="extension-widget-list">
             <div v-for="(instance, index) in extensionWidgetInstances" :key="instance.id" class="extension-widget-list-item">
@@ -1963,6 +2217,9 @@ onUnmounted(() => {
         </button>
       </div>
     </NModal>
+
+    <WidgetGalleryModal v-model:show="showWidgetGallery" :page-name="activeGroup?.title" :added-counts="extensionWidgetAddedCounts" :busy="addingExtensionWidget" @add="addExtensionWidget" />
+    <IconGalleryModal v-model:show="showIconGallery" :page-name="activeGroup?.title" :can-add="authStore.visitMode === VisitMode.VISIT_MODE_LOGIN && Boolean(authStore.token)" @select="selectIconPreset" @login="goToIconLogin" />
 
     <WidgetSettingsModal v-model:show="extensionWidgetSettingsVisible" :instance="extensionWidgetSettingsInstance" @save="applyExtensionWidgetSettings" />
 
@@ -2572,10 +2829,10 @@ onUnmounted(() => {
   --ext-text: var(--pn-color-text-primary, #f4f7fb);
   --ext-text-muted: var(--pn-color-text-secondary, #9cabc0);
   --ext-text-soft: var(--pn-color-text-muted, #75859b);
-  --ext-rail: var(--pn-sidebar-background, var(--pn-color-surface, #101622));
-  --ext-surface: var(--pn-color-surface, #141c2a);
+  --ext-rail: var(--pn-glass-surface, var(--pn-sidebar-background));
+  --ext-surface: var(--pn-glass-surface, var(--pn-color-surface));
   --ext-surface-raised: var(--pn-color-surface-hover, #1a2536);
-  --ext-border: var(--pn-color-border, #344157);
+  --ext-border: var(--pn-glass-border, var(--pn-color-border));
   --ext-divider: var(--pn-color-border, #2b3547);
   --ext-accent: var(--pn-color-accent, #2eb8f0);
   --ext-accent-soft: var(--pn-sidebar-active-background, var(--pn-color-surface-hover, #17354a));
@@ -2674,14 +2931,13 @@ onUnmounted(() => {
 .rail-group-button.active .rail-group-icon { color: inherit; border: 0; background: transparent; }
 .rail-group-add { color: var(--ext-accent); }
 
-.clock-hero { margin-bottom: 24px; color: var(--ext-text); }
+.clock-hero { margin-bottom: 24px; color: #fff; }
 .time-display { letter-spacing: -.06em; }
 .time-display > span:first-child { font-size: clamp(46px, 6vw, 70px) !important; font-weight: 650 !important; }
 .clock-seconds { font-size: 18px !important; letter-spacing: 0; }
-.clock-period { margin-left: 8px; color: var(--ext-text-muted); font-size: 11px; font-weight: 650; letter-spacing: 0; }
-.date-display { color: var(--ext-text-muted); font-size: 13px !important; text-shadow: none; }
-.text-shadow-md { text-shadow: 0 3px 22px rgba(0,0,0,.32); }
-:global(html:not(.dark)) .text-shadow-md { text-shadow: 0 3px 20px rgba(255,255,255,.86); }
+.clock-period { margin-left: 8px; color: rgb(255 255 255 / 82%); font-size: 11px; font-weight: 650; letter-spacing: 0; }
+.date-display { color: rgb(255 255 255 / 84%); font-size: 13px !important; }
+.clock-hero.text-shadow-md { text-shadow: 0 2px 5px rgb(0 0 0 / 76%), 0 6px 24px rgb(0 0 0 / 54%); }
 
 .sync-status-banner {
   width: min(100%, 620px);
@@ -2704,7 +2960,7 @@ onUnmounted(() => {
 .sync-status-banner.is-error { border-color: var(--ext-danger); }
 .sync-status-banner.is-error > svg { color: var(--ext-danger); }
 
-.search-section { margin-bottom: 28px !important; }
+.search-section { position: relative; margin-bottom: 28px !important; }
 .search-bar-capsule {
   min-height: 48px;
   padding: 5px 8px 5px 10px !important;
@@ -2719,12 +2975,96 @@ onUnmounted(() => {
 .extension-search-input { color: var(--ext-text); }
 .extension-search-input::placeholder { color: var(--ext-text-soft); }
 .engine-select-btn { color: var(--ext-text-muted); border-radius: 10px !important; }
-.engine-select-btn:hover, .clear-btn:hover { background: var(--ext-surface-raised) !important; }
+.engine-select-btn:hover, .clear-btn:hover, .bookmark-search-trigger:hover { background: var(--ext-surface-raised) !important; }
+.bookmark-search-trigger {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  place-items: center;
+  margin-right: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  color: var(--ext-text-muted);
+  background: transparent;
+  cursor: pointer;
+}
+.bookmark-search-trigger.active { color: var(--ext-accent); background: var(--ext-accent-soft); }
 .search-submit-btn { background: var(--ext-accent) !important; box-shadow: none !important; }
 
-.active-group-meta { margin: 0 3px 10px; color: var(--ext-text); }
+.bookmark-search-panel {
+  position: absolute;
+  z-index: 42;
+  top: calc(100% + 10px);
+  left: 0;
+  width: 100%;
+  padding: 14px;
+  border: 1px solid var(--ext-border);
+  border-radius: 18px;
+  color: var(--ext-text);
+  background: var(--ext-surface);
+  box-shadow: 0 18px 48px var(--ext-shadow);
+}
+.bookmark-search-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 11px; }
+.bookmark-search-header > div { display: flex; flex-direction: column; }
+.bookmark-search-header b { color: var(--ext-text); font-size: 12px; }
+.bookmark-search-header small { margin-top: 2px; color: var(--ext-text-soft); font-size: 10px; }
+.bookmark-search-header > button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--ext-border);
+  border-radius: 9px;
+  color: var(--ext-text-muted);
+  background: var(--ext-surface-raised);
+  cursor: pointer;
+}
+.bookmark-search-input-wrap {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid var(--ext-border);
+  border-radius: 12px;
+  color: var(--ext-text-muted);
+  background: var(--ext-surface-raised);
+}
+.bookmark-search-input-wrap:focus-within { border-color: var(--ext-accent); box-shadow: 0 0 0 3px var(--ext-accent-soft); }
+.bookmark-search-input-wrap input { width: 100%; min-width: 0; border: 0; outline: 0; color: var(--ext-text); background: transparent; font-size: 12px; }
+.bookmark-search-input-wrap input::placeholder { color: var(--ext-text-soft); }
+.bookmark-search-results { display: flex; max-height: 300px; flex-direction: column; gap: 4px; overflow-y: auto; margin-top: 10px; overscroll-behavior: contain; }
+.bookmark-search-results > button {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 9px;
+  border: 0;
+  border-radius: 11px;
+  color: var(--ext-text);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.bookmark-search-results > button:hover { background: var(--ext-accent-soft); }
+.bookmark-result-icon { display: grid; width: 34px; height: 34px; place-items: center; overflow: hidden; border-radius: 9px; background: var(--ext-surface-raised); }
+.bookmark-result-copy { display: flex; min-width: 0; flex-direction: column; }
+.bookmark-result-copy b, .bookmark-result-copy small { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.bookmark-result-copy b { font-size: 11px; }
+.bookmark-result-copy small { margin-top: 2px; color: var(--ext-text-soft); font-size: 9px; }
+.bookmark-result-open { color: var(--ext-text-soft); font-size: 13px; }
+.bookmark-search-empty { padding: 22px 10px 12px; color: var(--ext-text-soft); font-size: 11px; text-align: center; }
+.bookmark-search-panel-enter-active, .bookmark-search-panel-leave-active { transition: opacity 150ms ease, transform 150ms ease; }
+.bookmark-search-panel-enter-from, .bookmark-search-panel-leave-to { opacity: 0; transform: translateY(-5px); }
+
+.active-group-meta { margin: 0 3px 10px; color: #fff; text-shadow: 0 2px 8px rgb(0 0 0 / 75%); }
 .active-group-meta > span { font-size: 12px; font-weight: 750; letter-spacing: .04em; }
-.active-group-meta small { color: var(--ext-text-soft); }
+.active-group-meta small { color: rgb(255 255 255 / 82%); }
 .extension-widget-grid { --widget-grid-row-height: 76px; gap: 12px; padding: 0 0 8px; }
 .extension-widget-cell { border-radius: 20px; }
 .extension-widget-cell :deep(.trending-card),
@@ -2787,9 +3127,8 @@ onUnmounted(() => {
 .speed-card:hover { background: var(--ext-surface-raised); }
 .speed-card.is-expanded { background: var(--ext-surface); border: 1px solid var(--ext-border); box-shadow: 0 10px 28px var(--ext-shadow); backdrop-filter: none; }
 .card-icon-box { width: 54px; height: 54px; border-radius: var(--pn-bookmark-icon-radius, 14px); box-shadow: 0 8px 18px rgba(0,0,0,.2); }
-.card-title { color: var(--pn-icon-default-color, var(--ext-text)); font-size: 10px; font-weight: 550; text-shadow: 0 1px 8px rgba(0,0,0,.48); }
-:global(html:not(.dark)) .card-title { text-shadow: 0 1px 8px rgba(255,255,255,.9); }
-.card-description { color: var(--ext-text-muted); }
+.card-title { color: #fff; font-size: 11px; font-weight: 650; text-shadow: 0 1px 3px rgb(0 0 0 / 95%), 0 3px 12px rgb(0 0 0 / 80%); }
+.card-description { color: rgb(255 255 255 / 85%); text-shadow: 0 1px 5px rgb(0 0 0 / 85%); }
 .speed-card-edit { border-color: var(--ext-border); color: var(--ext-text); background: var(--ext-surface-raised); box-shadow: 0 3px 10px var(--ext-shadow); }
 
 .extension-context-menu {
@@ -2886,7 +3225,8 @@ onUnmounted(() => {
   justify-content: space-between;
   gap: 12px;
 }
-.dashboard-canvas-header .active-group-meta { margin: 0 3px; display: flex; flex-direction: column; }
+.dashboard-canvas-header .active-group-meta { min-width: 0; margin: 0 3px; display: flex; flex-direction: column; }
+.dashboard-canvas-header .active-group-meta > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dashboard-canvas-header .extension-widget-toolbar {
   position: static;
   width: auto;
@@ -2910,6 +3250,11 @@ onUnmounted(() => {
 }
 .extension-dashboard-track { display: contents; }
 .dashboard-canvas-item { min-width: 0; min-height: 0; }
+.dashboard-add-icon { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 7px; grid-column: span 1; grid-row: span 1; min-width: 0; min-height: 0; padding: 3px 2px 6px; border: 1px dashed rgb(255 255 255 / 48%); border-radius: 14px; color: #fff; background: rgb(12 21 38 / 30%); cursor: pointer; font: inherit; font-size: 10px; font-weight: 650; text-shadow: 0 1px 5px rgb(0 0 0 / 75%); transition: border-color .18s ease, color .18s ease, transform .18s ease, background .18s ease; }
+.dashboard-add-icon:hover { border-color: #fff; color: #fff; background: rgb(12 21 38 / 50%); transform: translateY(-2px); }
+.dashboard-add-icon:focus-visible { outline: 2px solid var(--ext-accent); outline-offset: 3px; }
+.dashboard-add-icon-symbol { display: grid; width: 54px; height: 54px; place-items: center; border: 1px solid rgb(255 255 255 / 65%); border-radius: var(--pn-bookmark-icon-radius, 14px); background: rgb(255 255 255 / 13%); }
+.dashboard-add-icon-symbol svg { width: 27px; height: 27px; }
 .extension-dashboard-grid .extension-widget-cell { height: 100%; border-radius: 20px; }
 .extension-dashboard-grid.is-editing .extension-widget-cell {
   outline: 1px dashed color-mix(in srgb, var(--ext-accent) 58%, transparent);
@@ -2931,6 +3276,10 @@ onUnmounted(() => {
 }
 .extension-dashboard-grid .extension-widget-empty p { margin: 0; color: var(--ext-text); font-size: 13px; font-weight: 700; }
 .extension-dashboard-grid .extension-widget-empty small { color: var(--ext-text-soft); font-size: 10px; }
+.extension-dashboard-grid .extension-widget-empty button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; margin-top: 6px; padding: 8px 14px; border: 1px solid color-mix(in srgb, var(--ext-accent) 45%, transparent); border-radius: var(--pn-radius-medium, 12px); color: var(--ext-text); background: color-mix(in srgb, var(--ext-accent) 18%, transparent); cursor: pointer; font: inherit; font-size: 12px; font-weight: 700; }
+.extension-dashboard-grid .extension-widget-empty button:hover { background: color-mix(in srgb, var(--ext-accent) 27%, transparent); }
+.extension-dashboard-grid .extension-widget-empty button:focus-visible { outline: 2px solid var(--ext-accent); outline-offset: 3px; }
+.extension-dashboard-grid .extension-widget-empty button svg { width: 16px; height: 16px; }
 .is-dashboard-dragging {
   z-index: 40;
   opacity: .82;
@@ -2940,13 +3289,34 @@ onUnmounted(() => {
 }
 
 @media (max-width: 720px) {
-  .dashboard-canvas-header { align-items: flex-start; flex-direction: column; }
-  .dashboard-canvas-header .extension-widget-toolbar { align-self: stretch; justify-content: flex-end; }
-  .dashboard-canvas-section { overflow-x: auto; overscroll-behavior-inline: contain; }
-  .extension-dashboard-grid { min-width: 840px; }
+  .dashboard-canvas-header { align-items: center; flex-wrap: wrap; }
+  .dashboard-canvas-header .active-group-meta { flex: 1; }
+  .dashboard-canvas-header .extension-widget-toolbar { flex: none; max-width: 100%; margin-left: auto; padding: 5px; justify-content: flex-end; }
+  .dashboard-canvas-section { min-width: 0; }
+  .extension-dashboard-grid { min-width: 0; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .extension-dashboard-grid .extension-widget-cell { grid-column: 1 / -1 !important; }
+}
+
+@media (max-width: 430px) {
+  .extension-dashboard-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .side-rail, .main-content, .rail-avatar-status { transition: none !important; animation: none !important; }
+}
+
+/* Blur only independent surfaces, not every child, to avoid stacked GPU layers. */
+.side-rail, .search-bar-capsule, .bookmark-search-panel,
+.sync-status-banner, .extension-widget-toolbar, .extension-widget-editor,
+.extension-context-menu, .wheel-switch-hint, .speed-card.is-expanded {
+  -webkit-backdrop-filter: var(--pn-glass-filter);
+  backdrop-filter: var(--pn-glass-filter);
+  box-shadow: var(--pn-glass-highlight), var(--ext-elevation);
+}
+.extension-widget-editor { background: var(--pn-glass-surface); }
+.dashboard-add-icon {
+  -webkit-backdrop-filter: var(--pn-glass-control-filter);
+  backdrop-filter: var(--pn-glass-control-filter);
+  box-shadow: var(--pn-glass-highlight);
 }
 </style>

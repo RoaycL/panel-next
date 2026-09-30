@@ -20,6 +20,12 @@ export interface WeatherResponse {
     temperatureUnit: string
     windSpeedUnit: string
   }
+  daily?: Array<{
+    date: string
+    weatherCode: number
+    temperatureMax: number
+    temperatureMin: number
+  }>
   units: 'metric' | 'imperial'
   fetchedAt: string
   cached: boolean

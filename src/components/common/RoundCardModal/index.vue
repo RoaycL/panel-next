@@ -2,7 +2,6 @@
 import { computed, useAttrs } from 'vue'
 import type { CSSProperties } from 'vue'
 import { NModal } from 'naive-ui'
-import { getRuntime } from '@/runtime'
 
 defineOptions({ inheritAttrs: false })
 
@@ -28,13 +27,13 @@ const bindAttrs = computed(() => {
   return rest
 })
 const modalTarget = computed(() => (attrs.to as string | HTMLElement | undefined)
-  ?? (getRuntime().kind === 'extension' ? '.pn-theme-root' : undefined))
+  ?? '.pn-theme-root')
 const modalClass = computed(() => ['round-card-modal', attrs.class])
 const modalStyle = computed(() => [
   {
     maxWidth: 'calc(100vw - 24px)',
     maxHeight: 'calc(100vh - 24px)',
-    borderRadius: '1.25rem',
+    borderRadius: 'var(--pn-radius-large, 18px)',
   } satisfies CSSProperties,
   attrs.style as CSSProperties,
 ])

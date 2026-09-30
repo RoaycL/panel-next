@@ -22,7 +22,7 @@ import { router } from '@/router'
 import { t } from '@/locales'
 import { getRuntime } from '@/runtime'
 import { readBootstrapSnapshot, refreshBootstrapSnapshot } from '@/sync/bootstrapCache'
-import { getBootstrap } from '@/api/sync'
+import { getBootstrap, waitForSyncChange } from '@/api/sync'
 import { onSyncConflict, setSyncRevision } from '@/sync/revision'
 import { replayOfflineQueue } from '@/sync/offlineReplay'
 import { getPendingMutationCount } from '@/sync/offlineQueue'
@@ -81,6 +81,8 @@ const safeFooterHtml = computed(() => {
 const items = ref<DashboardGroup[]>([])
 const filterItems = ref<DashboardGroup[]>([])
 const searchKeyword = ref('')
+const groupsLoaded = ref(false)
+const groupsLoadFailed = ref(false)
 const browserOnline = ref(navigator.onLine)
 type ExtensionSyncStatus = 'idle' | 'syncing' | 'online' | 'cached' | 'offline' | 'error'
 const extensionSyncStatus = ref<ExtensionSyncStatus>(runtime.kind === 'extension' ? 'syncing' : 'idle')
@@ -88,6 +90,11 @@ const lastSyncAt = ref<string | null>(null)
 let hasCachedSnapshot = false
 let extensionRefreshPromise: Promise<void> | null = null
 let removeSyncConflictListener: (() => void) | null = null
+let webSyncRevision: Sync.Revision = '0'
+let webSyncWatchController: AbortController | null = null
+let webSyncWatchRunning = false
+let webBootstrapRefreshPromise: Promise<void> | null = null
+let isDisposed = false
 
 // 离线队列与冲突解决
 const conflictModalVisible = ref(false)
@@ -526,19 +533,33 @@ async function getList() {
   if (cached) {
     items.value = normalizeDashboardGroups(cached)
     refreshFilteredItems()
+    groupsLoaded.value = true
   }
-  // 获取组数据
-  const { code, data } = await getGroupList<Common.ListResponse<Panel.ItemIconGroup[]>>()
-  if (code !== 0 || !data?.list)
+  try {
+    // 获取组数据
+    const { code, data } = await getGroupList<Common.ListResponse<Panel.ItemIconGroup[]>>()
+    if (code !== 0 || !data?.list) {
+      groupsLoadFailed.value = true
+      groupsLoaded.value = true
+      return false
+    }
+    items.value = normalizeDashboardGroups(data.list)
+    await Promise.all(items.value.map(async (element, index) => {
+      if (element.id)
+        await updateItemIconGroupByNet(index, element.id)
+    }))
+    persistentStorage.set('card-list-cache', items.value)
+    refreshFilteredItems()
+    groupsLoadFailed.value = false
+    groupsLoaded.value = true
+    return true
+  }
+  catch (error) {
+    console.warn('Unable to refresh dashboard groups.', error)
+    groupsLoadFailed.value = true
+    groupsLoaded.value = true
     return false
-  items.value = normalizeDashboardGroups(data.list)
-  persistentStorage.set('card-list-cache', data.list)
-  await Promise.all(items.value.map(async (element, index) => {
-    if (element.id)
-      await updateItemIconGroupByNet(index, element.id)
-  }))
-  refreshFilteredItems()
-  return true
+  }
 }
 
 // 从后端获取组下面的图标
@@ -704,14 +725,104 @@ function getDropdownMenuOptions() {
 function applyBootstrapData(data: Sync.BootstrapResponseV1) {
   const dashboard = createDashboardState(data)
   setSyncRevision(dashboard.revision)
+  webSyncRevision = dashboard.revision
   panelState.applyPanelConfig(dashboard.panelConfig)
   authStore.setUserInfo(dashboard.account)
   authStore.setVisitMode(VisitMode.VISIT_MODE_LOGIN)
   userStore.updateUserInfo(dashboard.account)
   items.value = dashboard.groups
+  groupsLoaded.value = true
+  groupsLoadFailed.value = false
   refreshFilteredItems()
   if (panelState.panelConfig.logoText)
     setTitle(panelState.panelConfig.logoText)
+}
+
+async function refreshWebBootstrap() {
+  if (runtime.kind !== 'web' || authStore.authMode !== 'device' || !authStore.token)
+    return
+  if (webBootstrapRefreshPromise)
+    return webBootstrapRefreshPromise
+  const accountId = authStore.userInfo?.id
+  webBootstrapRefreshPromise = (async () => {
+    const response = await getBootstrap()
+    if (!isDisposed && !webEditInProgress() && response.code === 0 && response.data && authStore.userInfo?.id === accountId)
+      applyBootstrapData(response.data)
+  })()
+  try {
+    await webBootstrapRefreshPromise
+  }
+  finally {
+    webBootstrapRefreshPromise = null
+  }
+}
+
+function webEditInProgress() {
+  return editItemInfoShow.value || settingModalShow.value || themeCenterVisible.value
+    || widgetEditMode.value || widgetLayoutSaving.value
+}
+
+/** Web and extension listen to the same account revision, but each keeps its
+ * own appearance/layout boundary. A hidden page closes its held request. */
+async function startWebSyncWatch() {
+  if (runtime.kind !== 'web' || webSyncWatchRunning || isDisposed || document.hidden
+    || authStore.authMode !== 'device' || !authStore.token || !authStore.userInfo?.id)
+    return
+  webSyncWatchRunning = true
+  try {
+    while (true) {
+      if (isDisposed || document.hidden || authStore.authMode !== 'device' || !authStore.token || !authStore.userInfo?.id)
+        break
+      if (webEditInProgress()) {
+        await new Promise(resolve => window.setTimeout(resolve, 1000))
+        continue
+      }
+      const accountId: number = authStore.userInfo.id
+      const controller = new AbortController()
+      webSyncWatchController = controller
+      try {
+        const response = await waitForSyncChange(webSyncRevision, controller.signal)
+        if (controller.signal.aborted || isDisposed || authStore.userInfo?.id !== accountId)
+          break
+        if (response.code !== 0) {
+          await new Promise(resolve => window.setTimeout(resolve, 10_000))
+          await refreshWebBootstrap()
+          continue
+        }
+        if (response.data?.changed && response.data.revision !== webSyncRevision) {
+          if (webEditInProgress())
+            continue
+          await refreshWebBootstrap()
+          if (response.data.revision !== webSyncRevision)
+            await new Promise(resolve => window.setTimeout(resolve, 750))
+        }
+      }
+      catch {
+        if (controller.signal.aborted || isDisposed || document.hidden)
+          break
+        await new Promise(resolve => window.setTimeout(resolve, 10_000))
+        await refreshWebBootstrap()
+      }
+      finally {
+        if (webSyncWatchController === controller)
+          webSyncWatchController = null
+      }
+    }
+  }
+  finally {
+    webSyncWatchRunning = false
+    if (!isDisposed && !document.hidden && authStore.authMode === 'device' && authStore.token)
+      void startWebSyncWatch()
+  }
+}
+
+function handleWebVisibilityChange() {
+  if (runtime.kind !== 'web')
+    return
+  if (document.hidden)
+    webSyncWatchController?.abort()
+  else
+    void refreshWebBootstrap().then(startWebSyncWatch, startWebSyncWatch)
 }
 
 async function refreshExtensionBootstrap() {
@@ -744,7 +855,10 @@ async function refreshExtensionBootstrap() {
 function handleBrowserOnline() {
   browserOnline.value = true
   void triggerOfflineReplay()
-  void refreshExtensionBootstrap()
+  if (runtime.kind === 'extension')
+    void refreshExtensionBootstrap()
+  else
+    void refreshWebBootstrap().then(startWebSyncWatch, startWebSyncWatch)
 }
 
 function handleBrowserOffline() {
@@ -781,6 +895,7 @@ if (runtime.kind === 'extension') {
 }
 
 onMounted(async () => {
+  isDisposed = false
   // Theme SDK 统一外观入口：结构性校验 + 剥离非法主题 + 补默认选择（含旧字段迁移）。
   // 由 store.applyPanelConfig 内部统一跑一次 preparePanelAppearance；扩展端在清理后回写
   // EXTENSION_APPEARANCE_KEY（字节去重，未变化不写）。
@@ -792,34 +907,50 @@ onMounted(async () => {
   removeSyncConflictListener = onSyncConflict(handleSyncConflict)
   window.addEventListener('online', handleBrowserOnline)
   window.addEventListener('offline', handleBrowserOffline)
+  document.addEventListener('visibilitychange', handleWebVisibilityChange)
   if (runtime.kind === 'extension') {
     void refreshExtensionBootstrap()
     return
   }
 
   // 更新用户信息
-  await updateLocalUserInfo()
+  try {
+    await updateLocalUserInfo()
+  }
+  catch (error) {
+    console.warn('Unable to refresh account information.', error)
+  }
 
   if (authStore.visitMode === VisitMode.VISIT_MODE_LOGIN && authStore.authMode === 'device') {
-    const bootstrap = await getBootstrap()
-    if (bootstrap.code === 0) {
-      applyBootstrapData(bootstrap.data)
-      return
+    try {
+      const bootstrap = await getBootstrap()
+      if (bootstrap.code === 0 && bootstrap.data) {
+        applyBootstrapData(bootstrap.data)
+        void startWebSyncWatch()
+        return
+      }
+    }
+    catch (error) {
+      console.warn('Unable to load dashboard snapshot.', error)
     }
   }
 
   // 分组、卡片和面板配置来自同一个已验证会话，可以并行加载。
-  await Promise.all([getList(), panelState.updatePanelConfigByCloud()])
+  await Promise.allSettled([getList(), panelState.updatePanelConfigByCloud()])
 
   // 设置标题
   if (panelState.panelConfig.logoText)
     setTitle(panelState.panelConfig.logoText)
+  void startWebSyncWatch()
 })
 
 onUnmounted(() => {
+  isDisposed = true
+  webSyncWatchController?.abort()
   removeSyncConflictListener?.()
   window.removeEventListener('online', handleBrowserOnline)
   window.removeEventListener('offline', handleBrowserOffline)
+  document.removeEventListener('visibilitychange', handleWebVisibilityChange)
 })
 
 // 前端搜索过滤
@@ -1097,6 +1228,20 @@ function handleAddItem(itemIconGroupId?: number) {
             ? undefined
             : { marginLeft: `${panelState.panelConfig.marginX}px`, marginRight: `${panelState.panelConfig.marginX}px` }"
         >
+          <div v-if="groupsLoaded && filterItems.length === 0" class="home-groups-empty" role="status">
+            <span class="home-groups-empty-icon" aria-hidden="true"><ThemeIcon name="dashboard" /></span>
+            <strong>{{ searchKeyword.trim() ? $t('panelHome.noSearchResults') : groupsLoadFailed ? $t('panelHome.groupsUnavailable') : $t('panelHome.noGroups') }}</strong>
+            <p>{{ searchKeyword.trim() ? $t('panelHome.noSearchResultsHint') : groupsLoadFailed ? $t('panelHome.groupsUnavailableHint') : $t('panelHome.noGroupsHint') }}</p>
+            <NButton v-if="searchKeyword.trim()" secondary @click="itemFrontEndSearch('')">
+              {{ $t('panelHome.clearSearch') }}
+            </NButton>
+            <NButton v-else-if="groupsLoadFailed" secondary @click="getList">
+              {{ $t('panelHome.retryGroups') }}
+            </NButton>
+            <NButton v-else-if="canEdit" secondary @click="settingModalShow = true">
+              {{ $t('panelHome.openControlCenter') }}
+            </NButton>
+          </div>
           <!-- 系统监控状态 -->
           <div
             v-if="panelState.panelConfig.systemMonitorShow
@@ -1128,12 +1273,12 @@ function handleAddItem(itemIconGroupId?: number) {
                 class="group-buttons ml-2 delay-100 transition-opacity flex"
                 :class="itemGroup.hoverStatus ? 'opacity-100' : 'opacity-0'"
               >
-                <span class="mr-2 cursor-pointer" :title="t('common.add')" @click="handleAddItem(itemGroup.id)">
+                <button type="button" class="group-action" :title="t('common.add')" :aria-label="t('common.add')" @click="handleAddItem(itemGroup.id)">
                   <span class="text-white font-xl"><ThemeIcon name="add" /></span>
-                </span>
-                <span class="mr-2 cursor-pointer " :title="t('common.sort')" @click="handleSetSortStatus(itemGroup, !itemGroup.sortStatus)">
+                </button>
+                <button type="button" class="group-action" :title="t('common.sort')" :aria-label="t('common.sort')" @click="handleSetSortStatus(itemGroup, !itemGroup.sortStatus)">
                   <span class="text-white font-xl"><ThemeIcon name="drag" /></span>
-                </span>
+                </button>
               </div>
             </div>
 
@@ -1375,6 +1520,34 @@ html {
 </style>
 
 <style scoped>
+.home-groups-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: min(100%, 460px);
+  min-height: 190px;
+  margin: 48px auto;
+  padding: 28px;
+  border: 1px solid var(--pn-widget-border, rgb(255 255 255 / 18%));
+  border-radius: var(--pn-radius-large, 18px);
+  color: var(--pn-widget-text-color, #fff);
+  background: var(--pn-widget-background, rgb(18 25 39 / 55%));
+  box-shadow: var(--pn-widget-shadow, 0 10px 30px rgb(0 0 0 / 14%));
+  text-align: center;
+  backdrop-filter: blur(var(--pn-effect-blur, 14px));
+}
+.home-groups-empty-icon { display: grid; width: 42px; height: 42px; place-items: center; border-radius: var(--pn-radius-medium, 12px); background: color-mix(in srgb, var(--pn-color-accent, #10b981) 20%, transparent); }
+.home-groups-empty-icon :deep(svg) { width: 22px; height: 22px; }
+.home-groups-empty strong { font-size: 17px; }
+.home-groups-empty p { max-width: 36ch; margin: 0 0 4px; color: var(--pn-widget-muted-text, rgb(255 255 255 / 72%)); font-size: 13px; line-height: 1.6; }
+.home-groups-empty :deep(.n-button) { min-height: 40px; }
+.group-action { display: inline-grid; width: 36px; height: 36px; place-items: center; border: 0; border-radius: var(--pn-radius-small, 8px); color: #fff; background: transparent; cursor: pointer; }
+.group-action:hover { background: rgb(255 255 255 / 18%); }
+.item-list:focus-within .group-buttons { opacity: 1; }
+@media (pointer: coarse) { .group-buttons { opacity: 1 !important; } .group-action { width: 42px; height: 42px; } }
+
 .mask {
   position: absolute;
   top: 0;

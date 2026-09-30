@@ -62,6 +62,8 @@ const columns: DataTableColumns<SessionInfo> = [
     title: t('adminSettingUsers.refreshExpiresAt'),
     key: 'refreshExpiresAt',
     render(row) {
+      if (row.clientType === 'chrome_extension' && new Date(row.refreshExpiresAt).getUTCFullYear() >= 9999)
+        return t('adminSettingUsers.neverExpires')
       return timeFormat(row.refreshExpiresAt)
     },
   },
@@ -137,7 +139,7 @@ onMounted(fetchSessions)
 </script>
 
 <template>
-  <div :class="embedded ? 'embedded-session-center' : 'overflow-auto pt-2'">
+  <div class="pn-app-page" :class="embedded ? 'embedded-session-center' : 'overflow-auto pt-2'">
     <NAlert type="info" :bordered="false">
       {{ $t('adminSettingUsers.sessionsAlertText') }}
     </NAlert>
@@ -146,14 +148,14 @@ onMounted(fetchSessions)
       <div><b>{{ extensionSessionCount }}</b><span>扩展设备</span></div>
       <div><b>{{ revocableSessionCount }}</b><span>可撤销会话</span></div>
     </div>
-    <div class="my-[10px] flex flex-wrap items-center gap-[10px]">
+    <div class="pn-app-toolbar">
       <NButton size="small" type="primary" ghost :loading="loading" @click="fetchSessions">
         {{ $t('common.refresh') }}
       </NButton>
       <NButton size="small" type="error" ghost :disabled="revocableSessionCount === 0" @click="handleRevokeAll">
         {{ $t('adminSettingUsers.revokeAll') }}
       </NButton>
-      <small v-if="lastUpdatedAt" class="ml-auto text-slate-400">更新于 {{ lastUpdatedAt.toLocaleTimeString() }}</small>
+      <small v-if="lastUpdatedAt" class="pn-app-muted ml-auto">更新于 {{ lastUpdatedAt.toLocaleTimeString() }}</small>
     </div>
     <NDataTable
       v-if="sessions.length || loading"
@@ -164,7 +166,7 @@ onMounted(fetchSessions)
       :scroll-x="860"
       size="small"
     />
-    <NEmpty v-else size="small" description="暂无设备会话" class="py-8" />
+    <NEmpty v-else size="small" description="暂无设备会话" class="pn-app-empty" />
   </div>
 </template>
 
@@ -187,20 +189,13 @@ onMounted(fetchSessions)
   min-width: 0;
   flex-direction: column;
   padding: 10px 12px;
-  border: 1px solid rgba(100, 116, 139, .16);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, .66);
+  border: 1px solid var(--pn-color-border, rgba(148, 163, 184, .24));
+  border-radius: var(--pn-radius-medium, 12px);
+  background: var(--pn-color-surface, #fff);
 }
 
-.session-summary-grid b { color: #0f172a; font-size: 16px; }
-.session-summary-grid span { margin-top: 2px; color: #64748b; font-size: 10px; }
-
-:global(html.dark) .session-summary-grid > div {
-  border-color: rgba(148, 163, 184, .14);
-  background: rgba(15, 23, 42, .48);
-}
-
-:global(html.dark) .session-summary-grid b { color: #f8fafc; }
+.session-summary-grid b { color: var(--pn-color-text-primary, #0f172a); font-size: 16px; }
+.session-summary-grid span { margin-top: 2px; color: var(--pn-color-text-muted, #64748b); font-size: 10px; }
 
 @media (max-width: 560px) {
   .session-summary-grid { grid-template-columns: 1fr; }

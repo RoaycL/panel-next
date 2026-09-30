@@ -85,6 +85,28 @@ export const useAuthStore = defineStore('auth-store', {
       const refreshToken = this.refreshToken
       const performRefresh = async () => {
         try {
+          const runtime = getRuntime()
+          if (runtime.kind === 'extension') {
+            // Another new-tab window may have rotated the one-time refresh
+            // token while this window waited for the browser-wide lock.
+            await runtime.storage.sync?.()
+            const stored = getStorage() as Partial<AuthState> | null
+            if (!stored?.refreshToken || stored.authMode !== 'device') {
+              this.clearSession()
+              return false
+            }
+            if (stored.refreshToken !== refreshToken) {
+              this.$patch({
+                token: stored.token ?? null,
+                refreshToken: stored.refreshToken,
+                accessExpiresAt: stored.accessExpiresAt ?? null,
+                refreshExpiresAt: stored.refreshExpiresAt ?? null,
+                userInfo: stored.userInfo ?? null,
+                visitMode: VisitMode.VISIT_MODE_LOGIN,
+              })
+              return Boolean(this.token)
+            }
+          }
           const { getDeviceIdentity } = await import('@/runtime/device')
           const deviceIdentity = getDeviceIdentity()
           const response = await axios.post(
@@ -94,13 +116,15 @@ export const useAuthStore = defineStore('auth-store', {
           )
           const data = response.data
           if (data.code !== 0 || !data.data) {
-            // 刷新端点给出明确业务拒绝：无论具体错误码如何，
-            // 会话都已无法静默续期，必须清理本地会话走重新登录，
-            // 否则页面会陷入「每次请求都报 Access token expired」的僵尸状态。
-            this.clearSession()
+            // Only a definitive authentication rejection invalidates the
+            // session. Rate limits or temporary server errors must not log out
+            // a long-lived extension installation.
+            if ([1000, 1001, 1008, 1009].includes(data.code))
+              this.clearSession()
             return false
           }
           this.updateDeviceSession(data.data)
+          await runtime.storage.flush?.()
           return true
         }
         catch (error) {

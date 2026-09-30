@@ -3,6 +3,7 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { TrendingItem, TrendingResponse, TrendingSource } from '@/api/trending'
 import { getTrending } from '@/api/trending'
+import { useWidgetContext } from '@/widgets/context'
 
 const props = withDefaults(defineProps<{
   source?: TrendingSource
@@ -13,12 +14,16 @@ const props = withDefaults(defineProps<{
 })
 
 const { locale, t } = useI18n()
+const widgetContext = useWidgetContext()
 const trending = ref<TrendingResponse | null>(null)
+const activeSource = ref<TrendingSource>(props.source)
 const loading = ref(false)
 const failed = ref(false)
 let requestController: AbortController | null = null
 
-const sourceLabel = computed(() => t(`trending.sources.${props.source}`))
+const sourceLabel = computed(() => t(`trending.sources.${activeSource.value}`))
+const showSourceTabs = computed(() => (widgetContext?.size.columns ?? 6) >= 5)
+const sourceTabs: TrendingSource[] = ['weibo', 'baidu', 'zhihu', 'hackernews']
 
 const displayItems = computed<TrendingItem[]>(() => trending.value?.items.slice(0, props.limit) ?? [])
 
@@ -34,26 +39,32 @@ function formatScore(score?: number) {
 
 async function refresh() {
   requestController?.abort()
-  requestController = new AbortController()
+  const controller = new AbortController()
+  requestController = controller
   loading.value = true
   failed.value = false
   try {
-    const response = await getTrending(props.source, props.limit, requestController.signal)
+    const response = await getTrending(activeSource.value, props.limit, controller.signal)
+    if (requestController !== controller)
+      return
     if (response.code === 0 && Array.isArray(response.data?.items) && response.data.items.length > 0)
       trending.value = response.data
     else
       failed.value = true
   }
   catch (error) {
-    if (!(error instanceof DOMException && error.name === 'AbortError'))
+    if (requestController === controller && !(error instanceof DOMException && error.name === 'AbortError'))
       failed.value = true
   }
   finally {
-    loading.value = false
+    if (requestController === controller)
+      loading.value = false
   }
 }
 
-watch([() => props.source, () => props.limit, locale], refresh, { immediate: true })
+watch(() => props.source, value => { activeSource.value = value })
+watch(activeSource, () => { trending.value = null })
+watch([activeSource, () => props.limit, locale], refresh, { immediate: true })
 const refreshTimer = window.setInterval(refresh, 5 * 60 * 1000)
 
 onUnmounted(() => {
@@ -74,6 +85,11 @@ onUnmounted(() => {
         <span class="sr-only">{{ t('trending.refresh') }}</span>
       </button>
     </header>
+    <div v-if="showSourceTabs" class="trending-sources" role="group" :aria-label="t('trending.selectSource')">
+      <button v-for="sourceOption in sourceTabs" :key="sourceOption" type="button" :class="{ active: activeSource === sourceOption }" :aria-pressed="activeSource === sourceOption" @click="activeSource = sourceOption">
+        {{ t(`trending.sources.${sourceOption}`) }}
+      </button>
+    </div>
     <ol v-if="displayItems.length" class="trending-list">
       <li v-for="item in displayItems" :key="item.rank">
         <span class="trending-rank" :class="{ 'trending-rank-top': item.rank <= 3 }">{{ item.rank }}</span>
@@ -111,6 +127,10 @@ onUnmounted(() => {
   gap: 8px;
   margin-bottom: 8px;
 }
+
+.trending-sources { display: flex; gap: 5px; min-width: 0; overflow-x: auto; margin: -2px 0 7px; }
+.trending-sources button { flex: none; padding: 3px 7px; border: 0; border-radius: 6px; color: var(--pn-widget-muted-text, rgb(255 255 255 / 72%)); background: transparent; cursor: pointer; font: inherit; font-size: 11px; white-space: nowrap; }
+.trending-sources button.active, .trending-sources button:hover { color: var(--pn-widget-text-color, white); background: rgb(255 255 255 / 14%); }
 
 .trending-title {
   margin: 0;

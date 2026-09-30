@@ -2,6 +2,8 @@ import { getRuntime } from '@/runtime'
 import { WIDGET_ID_PATTERN, serializeWidgetLayout } from '@/widgets'
 import type { WidgetInstance, WidgetLayout } from '@/widgets'
 import { clearWidgetStorage } from '@/widgets/context'
+import { recordExtensionLayoutHistory } from './extensionHistory'
+import type { ExtensionLayoutSnapshot } from './extensionHistory'
 
 export const EXTENSION_APPEARANCE_KEY = 'PANEL_NEXT_EXTENSION_APPEARANCE_V1'
 export const EXTENSION_WIDGETS_KEY = 'PANEL_NEXT_EXTENSION_WIDGETS_V1'
@@ -137,9 +139,14 @@ export function saveExtensionAppearance(config: Panel.panelConfig): Promise<bool
     if (runtime.storage.getItem(EXTENSION_APPEARANCE_KEY) === serialized)
       return true
 
+    const previous = readExtensionAppearance()
+    if (previous)
+      await recordExtensionLayoutHistory({ appearance: previous, widgets: readExtensionWidgets() }, '外观修改前', false)
+
     runtime.storage.setItem(EXTENSION_APPEARANCE_KEY, serialized)
     try {
       await runtime.storage.flush?.()
+      await recordExtensionLayoutHistory({ appearance: config, widgets: readExtensionWidgets() }, '外观修改')
       return true
     }
     catch (error) {
@@ -262,6 +269,54 @@ export function saveExtensionWidgets(
   })
 }
 
+/** Apply a history snapshot as one queued layout operation. Widget cleanup
+ * tombstones and search terms belong to the current session, not history. */
+export function restoreExtensionLayoutSnapshot(snapshot: ExtensionLayoutSnapshot): Promise<void> {
+  const runtime = getRuntime()
+  if (runtime.kind !== 'extension')
+    return Promise.reject(new Error('仅扩展页面支持本机布局恢复'))
+
+  return enqueueExtensionStorageSave(async () => {
+    const previousAppearance = runtime.storage.getItem(EXTENSION_APPEARANCE_KEY)
+    const previousWidgets = runtime.storage.getItem(EXTENSION_WIDGETS_KEY)
+    const currentWidgets = readExtensionWidgets()
+    const widgets = {
+      ...snapshot.widgets,
+      searchHistory: currentWidgets.searchHistory,
+      pendingWidgetCleanupIds: currentWidgets.pendingWidgetCleanupIds,
+    }
+    const serializedWidgets = JSON.stringify(widgets)
+    if (new TextEncoder().encode(serializedWidgets).byteLength > MAX_EXTENSION_WIDGET_PREFERENCES_BYTES)
+      throw new Error('历史布局超过本地安全上限，未执行恢复')
+
+    if (snapshot.appearance)
+      runtime.storage.setItem(EXTENSION_APPEARANCE_KEY, JSON.stringify(snapshot.appearance))
+    else
+      runtime.storage.removeItem(EXTENSION_APPEARANCE_KEY)
+    runtime.storage.setItem(EXTENSION_WIDGETS_KEY, serializedWidgets)
+    try {
+      await runtime.storage.flush?.()
+    }
+    catch {
+      if (previousAppearance === null)
+        runtime.storage.removeItem(EXTENSION_APPEARANCE_KEY)
+      else
+        runtime.storage.setItem(EXTENSION_APPEARANCE_KEY, previousAppearance)
+      if (previousWidgets === null)
+        runtime.storage.removeItem(EXTENSION_WIDGETS_KEY)
+      else
+        runtime.storage.setItem(EXTENSION_WIDGETS_KEY, previousWidgets)
+      try {
+        await runtime.storage.flush?.()
+      }
+      catch {
+        throw new Error('恢复失败，当前布局可能部分更改；可从“恢复前备份”再次找回')
+      }
+      throw new Error('恢复失败，已还原当前布局')
+    }
+  })
+}
+
 export function updateExtensionWidgets(
   updater: (current: ExtensionWidgetPreferences) => ExtensionWidgetPreferences,
 ): Promise<boolean> {
@@ -270,7 +325,9 @@ export function updateExtensionWidgets(
     return Promise.resolve(true)
 
   return enqueueExtensionStorageSave(async () => {
-    const serialized = JSON.stringify(updater(readExtensionWidgets()))
+    const previous = readExtensionWidgets()
+    const next = updater(previous)
+    const serialized = JSON.stringify(next)
     const serializedBytes = new TextEncoder().encode(serialized).byteLength
     if (serializedBytes > MAX_EXTENSION_WIDGET_PREFERENCES_BYTES) {
       throw new Error(`扩展页面布局数据已超过本地安全上限（${Math.ceil(serializedBytes / 1024 / 1024)} MiB / 4 MiB），请删除不再使用的小组件或分组布局后重试。`)
@@ -279,9 +336,12 @@ export function updateExtensionWidgets(
     if (runtime.storage.getItem(EXTENSION_WIDGETS_KEY) === serialized)
       return true
 
+    await recordExtensionLayoutHistory({ appearance: readExtensionAppearance(), widgets: previous }, '布局修改前', false)
+
     runtime.storage.setItem(EXTENSION_WIDGETS_KEY, serialized)
     try {
       await runtime.storage.flush?.()
+      await recordExtensionLayoutHistory({ appearance: readExtensionAppearance(), widgets: next }, '布局修改')
       return true
     }
     catch (error) {

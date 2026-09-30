@@ -8,6 +8,18 @@ import { router } from '@/router'
 import { getRuntime } from '@/runtime'
 
 let loginMessageShow = false
+let lastNetworkErrorNoticeAt = 0
+
+function showNetworkErrorNotice() {
+  const now = Date.now()
+  if (now - lastNetworkErrorNoticeAt < 6000)
+    return
+  lastNetworkErrorNoticeAt = now
+  message.error(t('common.networkError'), {
+    duration: 6000,
+    closable: true,
+  })
+}
 export interface HttpOption {
   url: string
   data?: any
@@ -145,10 +157,7 @@ function http<T = any>(options: HttpOption, sessionRetry = false): Promise<Respo
     afterRequest?.()
     if (error instanceof HttpRequestError) {
       if (error.retryable && !silentNetworkError) {
-        message.error(t('common.networkError'), {
-          duration: 50000,
-          closable: true,
-        })
+        showNetworkErrorNotice()
       }
       throw error
     }
@@ -165,10 +174,7 @@ function http<T = any>(options: HttpOption, sessionRetry = false): Promise<Respo
     const retryable = isTimeout || (!isCanceled && (status === undefined || status >= 500))
 
     if (!silentNetworkError && !isCanceled && retryable) {
-      message.error(t('common.networkError'), {
-        duration: 50000,
-        closable: true,
-      })
+      showNetworkErrorNotice()
     }
     const messageText = isAxios
       ? String(error.response?.data?.msg || error.message || 'Error')

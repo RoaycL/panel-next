@@ -204,6 +204,7 @@ onUnmounted(() => {
 <template>
   <NModal
     v-model:show="show"
+    to=".pn-theme-root"
     preset="card"
     :bordered="false"
     :mask-closable="true"
@@ -253,6 +254,13 @@ onUnmounted(() => {
 
     <!-- Modal Content -->
     <div class="app-starter-body" style="flex: 1 1 0%; min-height: 0; height: 100%; display: flex; overflow: hidden; width: 100%;">
+      <button
+        v-if="isSmallScreen && !sidebarCollapsed"
+        type="button"
+        class="app-starter-sidebar-scrim"
+        :aria-label="t('appLauncher.collapseMenu')"
+        @click="sidebarCollapsed = true"
+      />
       <!-- Left Sidebar -->
       <aside
         class="app-starter-sidebar"
@@ -606,5 +614,42 @@ html:not(.dark) .main-content-card {
     margin: 8px !important;
     border-radius: 16px !important;
   }
+
+  .app-starter-sidebar-scrim {
+    position: absolute;
+    z-index: 2;
+    inset: 0;
+    border: 0;
+    background: var(--pn-modal-overlay, rgba(2, 6, 23, .52));
+    cursor: pointer;
+  }
+
+  .app-starter-sidebar.small-screen {
+    position: absolute;
+    z-index: 3;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(260px, calc(100% - 56px));
+    border-right: 1px solid var(--pn-sidebar-border, rgba(148, 163, 184, .24));
+    background: var(--pn-sidebar-background, #172033);
+    box-shadow: var(--pn-effect-shadow-high, 0 16px 45px rgba(0, 0, 0, .32));
+    transform: translateX(0);
+    transition: transform var(--pn-effect-duration-normal, .2s), visibility var(--pn-effect-duration-normal, .2s);
+  }
+
+  .app-starter-sidebar.small-screen.collapsed {
+    width: min(260px, calc(100% - 56px));
+    visibility: hidden;
+    transform: translateX(-105%);
+    pointer-events: none;
+  }
+
+  .app-starter-main {
+    width: 100%;
+    padding: 10px;
+  }
+
+  .main-content-card { padding: 12px; }
 }
 </style>

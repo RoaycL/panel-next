@@ -68,13 +68,13 @@ async function handleRestore(file: File) {
 </script>
 
 <template>
-  <div class="backup-restore-container flex flex-col gap-3 h-full overflow-auto p-1">
+  <div class="pn-app-page backup-restore-container flex flex-col gap-3 h-full overflow-auto p-1">
     <NAlert type="warning" :bordered="false">
       {{ $t('apps.backupRestore.warning') }}
     </NAlert>
     <div class="flex flex-col gap-3.5 mt-1">
-      <NCard class="glass-sub-card" size="small">
-        <div class="text-sm font-semibold text-sky-500 dark:text-sky-400 mb-1">
+      <NCard class="pn-app-card" size="small">
+        <div class="pn-app-heading">
           {{ $t('apps.backupRestore.exportTitle') }}
         </div>
         <NText depth="3" class="text-xs">
@@ -90,8 +90,8 @@ async function handleRestore(file: File) {
         </div>
       </NCard>
 
-      <NCard class="glass-sub-card" size="small">
-        <div class="text-sm font-semibold text-amber-500 dark:text-amber-400 mb-1">
+      <NCard class="pn-app-card" size="small">
+        <div class="pn-app-heading">
           {{ $t('apps.backupRestore.restoreTitle') }}
         </div>
         <NText depth="3" class="text-xs">
@@ -117,16 +117,3 @@ async function handleRestore(file: File) {
     </div>
   </div>
 </template>
-
-<style scoped>
-:deep(.n-card.glass-sub-card) {
-  border-radius: 12px !important;
-  background: rgba(255, 255, 255, 0.035) !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
-}
-
-html:not(.dark) :deep(.n-card.glass-sub-card) {
-  background: rgba(255, 255, 255, 0.7) !important;
-  border: 1px solid rgba(0, 0, 0, 0.06) !important;
-}
-</style>

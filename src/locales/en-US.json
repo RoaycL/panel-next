@@ -26,7 +26,8 @@
     "clientExtension": "Chrome Extension",
     "createdAt": "Created At",
     "lastActiveAt": "Last Active",
-    "refreshExpiresAt": "Refresh Expires At",
+    "refreshExpiresAt": "Session Valid Until",
+    "neverExpires": "No time limit (until logout or revocation)",
     "revoke": "Revoke",
     "cannotRevokeCurrent": "Cannot Revoke Current",
     "revokeConfirm": "Are you sure to revoke this session? You will need to login again.",
@@ -59,7 +60,8 @@
     "categoryAdmin": "System & Admin",
     "categoryAbout": "About & Info",
     "expandMenu": "Expand menu",
-    "collapseMenu": "Collapse menu"
+    "collapseMenu": "Collapse menu",
+    "loadFailed": "This page could not be loaded"
   },
   "apps": {
     "about": {
@@ -249,6 +251,9 @@
     },
     "userInfo": {
       "appName": "My Information",
+      "guestTitle": "Guest mode",
+      "guestDescription": "Use the dashboard and local settings now. Sign in to sync bookmarks and manage your account.",
+      "guestAction": "Sign in to sync",
       "preferences": "Preferences",
       "profile": "Profile",
       "roleAdmin": "Admin",
@@ -268,6 +273,7 @@
     "addSuccess": "Added successfully",
     "appName": "Panel Next",
     "backgroundColor": "Background color",
+    "basicInfo": "Basic information",
     "cancel": "Cancel",
     "confirm": "Confirm",
     "continue": "Continue",
@@ -302,6 +308,7 @@
     "refreshPage": "Please refresh the page",
     "repeatLater": "Please try again later",
     "reset": "Reset",
+    "retry": "Retry",
     "role": {
       "admin": "Admin",
       "regularUser": "Regular"
@@ -356,6 +363,7 @@
   },
   "iconItem": {
     "add": "Add item",
+    "otherSettings": "Other settings",
     "currentPageLayerOpen": "Open in current page as layer",
     "currentPageOpen": "Open in current page",
     "currentGroupOffline": "Current group (offline)",
@@ -368,6 +376,8 @@
     "inputIconUrlOrUpload": "Enter icon URL or upload",
     "lanUrl": "LAN URL",
     "lanUrlInputPlaceholder": "http(s):// (LAN mode, will redirect to this address)",
+    "localCacheUnavailable": "Icon saved, but this image could not be cached locally; a fallback will appear offline",
+    "localCacheHint": "Readable images are cached in this browser and shown locally on later visits.",
     "multipleIconsFound": "Found {count} candidate icon(s). Please pick one from the list.",
     "newWindowOpen": "Open in new window",
     "queuedOffline": "You are offline. The change has been added to the sync queue",
@@ -381,12 +391,36 @@
   },
   "login": {
     "captchaPlaceholder": "Enter captcha",
+    "captchaRequired": "Enter the captcha before signing in",
+    "credentialsRequired": "Enter your username and password",
+    "continueAsGuest": "Continue to the guest dashboard",
+    "sessionSaveWarning": "Signed in, but the session could not be saved locally; you may need to sign in again",
     "loginButton": "Login",
+    "eyebrow": "PERSONAL DASHBOARD",
+    "subtitle": "Sign in to sync your bookmarks, layouts, and widgets.",
+    "secureHint": "Your session is used only to connect to your Panel Next service",
     "passwordPlaceholder": "Password",
     "usernamePlaceholder": "Username",
     "welcomeMessage": "Welcome back!"
   },
+  "statusPage": {
+    "notFoundTitle": "Page not found",
+    "notFoundDescription": "This address does not exist or the link has changed. Return home to continue using your dashboard.",
+    "serverErrorTitle": "This page is unavailable",
+    "serverErrorDescription": "The service ran into a temporary problem. Try again shortly or return home.",
+    "backHome": "Back to home",
+    "retry": "Try again"
+  },
   "panelHome": {
+    "noSearchResults": "No matching bookmarks",
+    "noSearchResultsHint": "Try another keyword, or clear the search to see all groups.",
+    "groupsUnavailable": "Bookmarks are unavailable",
+    "groupsUnavailableHint": "Check the server connection. Any local cache will still be shown.",
+    "noGroups": "No bookmark groups yet",
+    "noGroupsHint": "Open the control center to create a group and add your favorite sites.",
+    "clearSearch": "Clear search",
+    "retryGroups": "Reload bookmarks",
+    "openControlCenter": "Open control center",
     "changeToLanModel": "Switch to LAN mode",
     "changeToLanModelSuccess": "Switched to LAN mode (mode status saved locally)",
     "changeToWanModel": "Switch to WAN mode",
@@ -412,6 +446,8 @@
   },
   "weather": {
     "title": "Current weather",
+    "today": "Today",
+    "forecast": "Six-day forecast",
     "loading": "Loading weather",
     "unavailable": "Weather unavailable",
     "refresh": "Refresh weather",
@@ -431,6 +467,7 @@
   },
   "trending": {
     "title": "Trending",
+    "selectSource": "Select trending source",
     "loading": "Loading trending",
     "unavailable": "Trending unavailable",
     "refresh": "Refresh trending",
@@ -449,6 +486,122 @@
     "daysPassed": "days ago",
     "today": "It's today",
     "invalid": "Invalid date"
+  },
+  "workdayWidget": {
+    "title": "End-of-day countdown",
+    "done": "Workday finished",
+    "rest": "Day off",
+    "invalid": "Invalid time",
+    "until": "Until {time}",
+    "localTime": "Based on local time",
+    "timeHint": "24-hour format, e.g. 18:00"
+  },
+  "widgetGallery": {
+    "title": "Add widgets",
+    "categoryLabel": "Widget categories",
+    "explore": "EXPLORE",
+    "tip": "Drag, resize, or stack widgets after adding them.",
+    "search": "Search widgets",
+    "addTo": "Add to: {page}",
+    "currentPage": "current page",
+    "dataType": "Data type",
+    "results": "{count} results",
+    "preview": "STYLE PREVIEW",
+    "size": "{size} cells",
+    "add": "Add",
+    "addAgain": "Add again",
+    "adding": "Adding…",
+    "addedCount": "Added {count}",
+    "addNamed": "Add {title}",
+    "addedMessage": "{title} added to this page",
+    "addFailed": "Could not add widget",
+    "empty": "No widgets match these filters",
+    "clearFilters": "Clear filters",
+    "categories": {
+      "all": "All widgets",
+      "information": "Information",
+      "productivity": "Productivity",
+      "time": "Date & time",
+      "other": "Other"
+    },
+    "filters": {
+      "all": "All",
+      "local": "Works offline",
+      "network": "Needs internet"
+    },
+    "descriptions": {
+      "weather": "Current weather and a six-day forecast",
+      "trending": "Trending stories from multiple sources",
+      "notes": "Capture ideas, saved only in this browser",
+      "todo": "Track tasks and mark them complete",
+      "calendar": "Browse months at a glance",
+      "countdown": "Count down to an important date",
+      "workday": "Count down to the end of your workday",
+      "date": "Show today's date at a glance",
+      "default": "A widget for your new tab"
+    },
+    "samples": {
+      "weather": "Partly cloudy · Humidity 62%",
+      "trendingTitle": "Trending now",
+      "trending1": "What people are talking about",
+      "trending2": "Discover something worth reading",
+      "trending3": "Fresh stories throughout the day",
+      "countdownLabel": "Until your big day",
+      "countdownDetail": "days to go · Target date",
+      "workdayLabel": "Until clock-out",
+      "notes1": "Write down an idea",
+      "notes2": "Keep inspiration close.",
+      "todo1": "Tidy up",
+      "todo2": "Finish today's plan",
+      "todo3": "Take a break"
+    }
+  },
+  "iconGallery": {
+    "title": "Add shortcuts",
+    "categoryLabel": "Shortcut categories",
+    "explore": "DISCOVER SHORTCUTS",
+    "tip": "Choose a site, then edit its name, URL, and icon before saving.",
+    "search": "Search sites or domains",
+    "addTo": "Add to: {page}",
+    "loginHint": "Sign in and connect a server to save shortcuts.",
+    "login": "Sign in",
+    "custom": "Custom shortcut",
+    "customHint": "Enter a URL, upload an image, or use an online icon",
+    "results": "{count} sites",
+    "choose": "Choose {title}",
+    "empty": "No sites match your search",
+    "clearFilters": "Clear filters",
+    "categories": {
+      "all": "All",
+      "popular": "Popular",
+      "development": "Development",
+      "productivity": "Productivity",
+      "social": "Social",
+      "entertainment": "Entertainment"
+    }
+  },
+  "notesWidget": {
+    "title": "Notes",
+    "editor": "Note content",
+    "placeholder": "Write down a thought…",
+    "saved": "Saved",
+    "saving": "Saving…",
+    "error": "Save failed"
+  },
+  "calendarWidget": {
+    "title": "Calendar",
+    "previous": "Previous month",
+    "next": "Next month",
+    "today": "Today"
+  },
+  "todoWidget": {
+    "title": "To-do",
+    "remaining": "{count} remaining",
+    "placeholder": "Add a task…",
+    "newItem": "New task",
+    "add": "Add task",
+    "remove": "Remove task: {item}",
+    "empty": "No tasks yet. Add one above."
   },
   "widgetLayout": {
     "edit": "Edit widgets",
@@ -515,12 +668,14 @@
       "background": "Background color",
       "city": "City",
       "date": "Date",
+      "endTime": "End time",
       "limit": "Item count",
       "repeat": "Repeat",
       "source": "Source",
       "textColor": "Text color",
       "title": "Title",
-      "units": "Units"
+      "units": "Units",
+      "weekdaysOnly": "Weekdays only"
     },
     "types": {
       "core": {
@@ -529,7 +684,11 @@
         "search": "Search box",
         "weather": "Weather",
         "trending": "Trending",
-        "countdown": "Countdown / anniversary"
+        "countdown": "Countdown / anniversary",
+        "notes": "Notes",
+        "calendar": "Calendar",
+        "todo": "To-do",
+        "workday": "End-of-day countdown"
       }
     }
   },
@@ -547,6 +706,9 @@
     "confirmTitle": "Confirm Action"
   },
   "theme": {
+    "default": {
+      "description": "A wallpaper-based theme with translucent cards and clear visual layers"
+    },
     "center": {
       "title": "Theme Center",
       "themes": "Themes",

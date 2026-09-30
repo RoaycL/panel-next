@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { NButton, NColorPicker, NInput, NModal, NUpload } from 'naive-ui'
 import type { UploadFileInfo } from 'naive-ui'
-import { computed, ref } from 'vue'
+import { ref, watch } from 'vue'
 import { ItemIcon } from '@/components/common'
 import GallerySelector from '@/components/common/GallerySelector/index.vue'
 import { useAuthStore } from '@/store'
@@ -11,6 +11,8 @@ import { t } from '@/locales'
 
 const props = defineProps<{
   itemIcon: Panel.ItemIcon | null
+  fallbackText?: string
+  siteUrl?: string
 }>()
 const emit = defineEmits<{
   (e: 'update:itemIcon', visible: Panel.ItemIcon): void // 定义修改父组件（prop内）的值的事件
@@ -38,19 +40,14 @@ const initData: Panel.ItemIcon = {
   backgroundColor: '#2a2a2a6b',
 }
 
-const itemIconInfo = computed({
-  get() {
-    const v = {
-      ...initData,
-      ...props.itemIcon,
-      backgroundColor: props.itemIcon?.backgroundColor || initData.backgroundColor,
-    }
-    return v
-  },
-  set() {
-    handleChange()
-  },
-})
+const itemIconInfo = ref<Panel.ItemIcon>({ ...initData })
+watch(() => props.itemIcon, (icon) => {
+  itemIconInfo.value = {
+    ...initData,
+    ...icon,
+    backgroundColor: icon?.backgroundColor || initData.backgroundColor,
+  }
+}, { immediate: true, deep: true })
 
 function handleIconTypeRadioChange(type: number) {
   // checkedValueRef.value = type
@@ -59,7 +56,7 @@ function handleIconTypeRadioChange(type: number) {
 }
 
 function handleChange() {
-  emit('update:itemIcon', itemIconInfo.value || null)
+  emit('update:itemIcon', { ...itemIconInfo.value })
 }
 
 function handleResetBackgroundColor() {
@@ -78,7 +75,7 @@ const handleUploadFinish = ({
   if (res.code === 0) {
     const imageUrl = res.data.imageUrl
     itemIconInfo.value.src = imageUrl
-    emit('update:itemIcon', itemIconInfo.value || null)
+    handleChange()
   }
   else {
     apiRespErrMsg(res)
@@ -90,7 +87,7 @@ const handleUploadFinish = ({
 
 function handleGallerySelect(url: string) {
   itemIconInfo.value.src = url
-  emit('update:itemIcon', itemIconInfo.value || null)
+  handleChange()
   showGallery.value = false
 }
 </script>
@@ -105,7 +102,7 @@ function handleGallerySelect(url: string) {
         :class="{ 'active': itemIconInfo.itemType === 1 }"
         @click="handleIconTypeRadioChange(1)"
       >
-        <SvgIcon icon="tabler:letter-case" class="text-sm" />
+        <span class="type-text-mark" aria-hidden="true">A</span>
         <span>{{ $t('common.text') }}</span>
       </button>
 
@@ -115,7 +112,7 @@ function handleGallerySelect(url: string) {
         :class="{ 'active': itemIconInfo.itemType === 2 }"
         @click="handleIconTypeRadioChange(2)"
       >
-        <SvgIcon icon="tabler:photo" class="text-sm" />
+        <SvgIcon icon="mdi-image-multiple-outline" class="text-sm" />
         <span>{{ $t('common.image') }}</span>
       </button>
 
@@ -125,7 +122,7 @@ function handleGallerySelect(url: string) {
         :class="{ 'active': itemIconInfo.itemType === 3 }"
         @click="handleIconTypeRadioChange(3)"
       >
-        <SvgIcon icon="tabler:world" class="text-sm" />
+        <SvgIcon icon="mdi-web" class="text-sm" />
         <span>{{ $t('iconItem.onlineIcon') }}</span>
       </button>
     </div>
@@ -134,7 +131,7 @@ function handleGallerySelect(url: string) {
     <div class="icon-editor-body flex gap-4 items-start">
       <!-- 实时预览区 -->
       <div class="icon-preview-frame">
-        <ItemIcon :item-icon="itemIconInfo" />
+        <ItemIcon :item-icon="itemIconInfo" :fallback-text="fallbackText" :site-url="siteUrl" :cache-delay="450" />
       </div>
 
       <!-- 右侧表单配置 -->
@@ -153,7 +150,7 @@ function handleGallerySelect(url: string) {
             <span>{{ $t('iconItem.onlineIcon') }} (Iconify 名称)</span>
             <a target="_blank" href="https://icon-sets.iconify.design/" class="text-sky-400 hover:underline flex items-center gap-0.5">
               <span>{{ $t('iconItem.onlineIconLibrary') }}</span>
-              <SvgIcon icon="tabler:external-link" class="text-[11px]" />
+              <SvgIcon icon="mdi-open-in-new" class="text-[11px]" />
             </a>
           </div>
           <NInput v-model:value="itemIconInfo.text" size="small" type="text" :placeholder="$t('iconItem.inputIconName')" @input="handleChange" />
@@ -165,6 +162,7 @@ function handleGallerySelect(url: string) {
             {{ $t('iconItem.inputIconUrlOrUpload') }}
           </div>
           <NInput v-model:value="itemIconInfo.src" size="small" type="text" placeholder="https://... 或本地上传" @input="handleChange" />
+          <small class="icon-cache-hint">{{ $t('iconItem.localCacheHint') }}</small>
           <div class="flex gap-2">
             <NUpload
               :action="uploadAction"
@@ -179,14 +177,14 @@ function handleGallerySelect(url: string) {
             >
               <NButton size="small" secondary type="primary">
                 <template #icon>
-                  <SvgIcon icon="tabler:cloud-upload" />
+                  <SvgIcon icon="tabler-file-upload" />
                 </template>
                 {{ $t('iconItem.selectUpload') }}
               </NButton>
             </NUpload>
             <NButton size="small" secondary @click="showGallery = true">
               <template #icon>
-                <SvgIcon icon="tabler:photo-search" />
+                <SvgIcon icon="mdi-image-multiple-outline" />
               </template>
               {{ $t('iconItem.selectFromGallery') }}
             </NButton>
@@ -242,14 +240,9 @@ function handleGallerySelect(url: string) {
   display: inline-flex;
   padding: 3px;
   border-radius: 10px;
-  background: rgba(0, 0, 0, 0.05);
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: var(--pn-color-surface-hover, rgb(148 163 184 / 8%));
+  border: 1px solid var(--pn-color-border, rgb(148 163 184 / 18%));
   gap: 3px;
-}
-
-html.dark .type-selector-bar {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .type-pill-btn {
@@ -262,37 +255,23 @@ html.dark .type-selector-bar {
   background: transparent;
   font-size: 12px;
   font-weight: 500;
-  color: #64748b;
+  color: var(--pn-color-text-secondary, #64748b);
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-html.dark .type-pill-btn {
-  color: #94a3b8;
-}
-
 .type-pill-btn:hover {
-  color: #0284c7;
-  background: rgba(2, 132, 199, 0.06);
-}
-
-html.dark .type-pill-btn:hover {
-  color: #38bdf8;
-  background: rgba(56, 189, 248, 0.08);
+  color: var(--pn-color-accent, #0f9f75);
+  background: color-mix(in srgb, var(--pn-color-accent, #0f9f75) 9%, transparent);
 }
 
 .type-pill-btn.active {
-  background: #0284c7;
+  background: var(--pn-color-accent, #0f9f75);
   color: #ffffff;
-  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.25);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--pn-color-accent, #0f9f75) 25%, transparent);
 }
-
-html.dark .type-pill-btn.active {
-  background: #38bdf8;
-  color: #0f172a;
-  box-shadow: 0 2px 10px rgba(56, 189, 248, 0.35);
-  font-weight: 600;
-}
+.type-pill-btn:focus-visible { outline: 2px solid var(--pn-color-accent, #0f9f75); outline-offset: 2px; }
+.type-text-mark { width: 14px; text-align: center; font-size: 13px; font-weight: 800; }
 
 .icon-preview-frame {
   width: 68px;
@@ -302,14 +281,12 @@ html.dark .type-pill-btn.active {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  border: 1.5px solid rgba(56, 189, 248, 0.35);
-  background: rgba(56, 189, 248, 0.05);
+  border: 1.5px solid color-mix(in srgb, var(--pn-color-accent, #0f9f75) 35%, transparent);
+  background: color-mix(in srgb, var(--pn-color-accent, #0f9f75) 6%, transparent);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
   overflow: hidden;
 }
 
-html:not(.dark) .icon-preview-frame {
-  border-color: rgba(2, 132, 199, 0.25);
-  background: rgba(2, 132, 199, 0.04);
-}
+.icon-cache-hint { color: var(--pn-color-text-muted, #64748b); font-size: 11px; line-height: 1.4; }
+
 </style>

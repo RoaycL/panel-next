@@ -10,6 +10,8 @@ import (
 func InitSync(router *gin.RouterGroup) {
 	bootstrapApi := api_v1.ApiGroupApp.ApiSystem.SyncBootstrapApi
 	changesApi := api_v1.ApiGroupApp.ApiSystem.SyncChangesApi
+	waitApi := api_v1.ApiGroupApp.ApiSystem.SyncWaitApi
 	router.GET("/v1/sync/bootstrap", middleware.LoginInterceptor, bootstrapApi.Get)
 	router.GET("/v1/sync/changes", middleware.LoginInterceptor, changesApi.Get)
+	router.GET("/v1/sync/wait", middleware.LoginInterceptor, waitApi.Get)
 }

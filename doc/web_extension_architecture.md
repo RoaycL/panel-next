@@ -106,7 +106,7 @@ user_session
 
 - Token 只以不可逆哈希保存，响应和日志不得输出明文。
 - 每台设备可独立撤销；修改密码时可撤销全部会话。
-- Access Token 短期有效，Refresh Token 可轮换并检测重复使用。
+- Access Token 短期有效，Refresh Token 可轮换并检测重复使用；网页 Refresh 有配置的到期时间，扩展 Refresh 长期有效直到退出或被撤销。
 - 保留旧登录接口的迁移窗口，Web 与扩展切换完成后再移除旧会话逻辑。
 
 ### 5.2 跨源与服务器发现
@@ -129,6 +129,7 @@ POST /api/v1/sessions/refresh
 POST /api/v1/sessions/upgrade
 GET  /api/v1/sync/bootstrap
 GET  /api/v1/sync/changes?since=<revision>
+GET  /api/v1/sync/wait?since=<revision>
 POST /api/v1/sync/mutations
 GET  /api/v1/sessions
 DELETE /api/v1/sessions/:id
@@ -143,6 +144,8 @@ DELETE /api/v1/sessions/:id
 能力必须按可调用状态发布。当前 `deviceSession.available=true`，`clientTypes` 包含 `web` 与 `chrome_extension`，并公开 Extension 旧 Token 升级端点。响应同时公开旧 Token 的实际最终截止时间，客户端不能假定兼容窗口可无限延期。
 
 `bootstrap` 一次返回新标签页首屏所需的数据和全局 `revision`。写操作携带客户端已知 revision；服务端发现过期写入时返回冲突，不静默覆盖更新的数据。
+
+网页和扩展页面可见且使用设备会话时，对 `wait` 保持一条最长 25 秒的账号级长轮询。它只返回 revision 变化信号，实际数据仍走 `changes`/`bootstrap`；隐藏页面会取消请求，重新显示或恢复联网时主动刷新。旧服务器不支持 `wait` 时，客户端每 10 秒尝试一次普通刷新。网页正在编辑时会推迟应用远端快照，避免覆盖未保存的表单和布局。此通知不负责扩展本机的小组件布局——该布局仍然只保存在当前浏览器。
 
 当前写入协议使用账号级 `expectedRevision`。每次分组、卡片或面板配置写操作都必须基于最近一次 bootstrap 或成功写响应返回的 revision；服务端在账号同步状态行上串行化事务，业务数据、资源 revision 与 changes 日志要么同时提交，要么同时回滚。错误码 `1502` 表示客户端版本陈旧，客户端必须重新 bootstrap，禁止用新游标重放旧表单。
 
@@ -217,13 +220,14 @@ DELETE /api/v1/sessions/:id
 - 后台请求只对传输失败执行最多 3 次尝试，等待间隔为 0、1、3 秒；明确的认证或 API 响应不重试。浏览器恢复在线时可立即再次刷新，避免无限定时轮询。
 - 有缓存但刷新失败时保留内容并标记“离线 · 显示缓存”；没有缓存时明确显示不可用。离线、缓存和同步中状态关闭编辑入口，第一版不伪装支持离线写入。
 - 主题选择（Theme SDK）双端分别保存：Web 写入 `panelConfig.theme` 随 `userConfig/set` 同步服务端并接受服务端结构校验；Extension 仅写入 `EXTENSION_APPEARANCE_KEY` 本地载荷，不读取也不回写 Web 的服务端主题。双端共享 ThemeDefinition/Registry/Token 与迁移逻辑；未知或未来版本主题进入隔离区保留原始数据并用默认主题渲染。
+- 扩展“备份与恢复”中的本机布局历史按账号/访客隔离，保留最近 24 个外观与小组件布局快照，总量最多 2 MiB。恢复前先持久化当前布局；搜索词及待清理队列不随历史回滚。书签与分组属于服务端账号数据，不包含在本机布局历史中；整套账号数据的按时间回滚需要单独的服务端版本与冲突协议。
 - 双端首页右上角统一展示 Runtime、浏览器网络和会话类型；设备会话提供到期时间提示，Extension 在同一状态栏展示同步/缓存/离线状态并允许手动重试。
 
 ## 7. 新标签页性能预算
 
 共享小组件使用 v1 版本化布局信封与 WidgetRegistry。每个定义声明稳定 type、配置 schema、异步 loader、尺寸边界和连续迁移函数；每个实例记录稳定 ID、网格位置/尺寸、隐藏状态、定义版本与配置。未知、重复、损坏或未来版本实例在加载时隔离并报告，不阻塞其余组件渲染。
 
-首批内置定义为 `core.clock`、`core.date`、`core.search`，后续加入 `core.weather`、`core.trending` 与 `core.countdown`。通用 WidgetHost 通过定义的异步 loader 渲染并透传配置/事件；首页历史时钟和搜索配置映射为注册表实例，保持升级兼容。热搜组件的数据源是可替换的：`service/lib/trending` 以 Provider 接口聚合微博/百度/知乎/Hacker News，通过注册表按名替换或扩展，公共代理端点统一实施校验、超时、缓存和陈旧降级。倒计时/纪念日组件纯本地计算，不发起网络请求。
+内置定义包括 `core.clock`、`core.date`、`core.search`、`core.weather`、`core.trending`、`core.countdown`、`core.workday`、`core.notes`、`core.calendar` 与 `core.todo`。通用 WidgetHost 通过定义的异步 loader 渲染并透传配置/事件；首页历史时钟和搜索配置映射为注册表实例，保持升级兼容。热搜组件的数据源是可替换的：`service/lib/trending` 以 Provider 接口聚合微博/百度/知乎/Hacker News，通过注册表按名替换或扩展，公共代理端点统一实施校验、超时、缓存和陈旧降级。普通倒计时、下班倒计时与月历纯本地计算；便签与待办使用按实例隔离的本地存储，内容不随账号同步。
 
 内容组件区使用 12 列网格与 v1 布局信封：Web 编辑模式支持拖拽排序、按定义边界缩放、隐藏/显示、移除与从注册表新增实例，其布局作为 `panelConfig.widgets` 经 `userConfig/set` mutation（`expectedRevision`）同步。Extension 使用相同 WidgetRegistry、Host 和配置表单，但组件布局写入 `chrome.storage.local` 的扩展外观信封；只共享账号分组和书签，不读取或回写 Web 的组件布局。未知或未来版本实例会被隔离并在再次保存时保留，身份损坏、重复或超限实例才丢弃。
 

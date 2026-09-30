@@ -37,11 +37,15 @@ function cancel() {
 
   <main v-else class="server-setup">
     <section class="server-card">
-      <img class="server-logo" src="/logo.png" alt="Panel Next">
-      <p class="server-eyebrow">
-        PANEL NEXT
-      </p>
-      <h1>{{ configuredOrigin ? '切换服务器' : '连接你的服务器' }}</h1>
+      <header class="server-heading">
+        <img class="server-logo" src="/logo.png" alt="">
+        <div>
+          <p class="server-eyebrow">
+            PANEL NEXT
+          </p>
+          <h1>{{ configuredOrigin ? '切换服务器' : '连接你的服务器' }}</h1>
+        </div>
+      </header>
       <p class="server-description">
         输入 Panel Next 或兼容 Sun-Panel 服务的 Origin。扩展只会申请访问这个地址，并按服务器隔离本地会话。
       </p>
@@ -83,49 +87,70 @@ function cancel() {
 
 <style scoped>
 .server-setup {
+  --setup-accent: #0f9f75;
+  --setup-accent-hover: #0b8a66;
+  --setup-page: #eef8ff;
+  --setup-surface: rgb(255 255 255 / 68%);
+  --setup-surface-muted: rgb(237 245 244 / 48%);
+  --setup-border: rgb(100 116 139 / 20%);
+  --setup-text: #0f172a;
+  --setup-text-secondary: #475569;
+  --setup-text-muted: #64748b;
   min-height: 100%;
   display: grid;
   place-items: center;
-  padding: 32px;
-  color: #172033;
+  padding: clamp(18px, 5vw, 48px);
+  color: var(--setup-text);
   background:
-    radial-gradient(circle at 15% 10%, rgb(90 178 255 / 26%), transparent 38%),
-    radial-gradient(circle at 85% 85%, rgb(121 95 255 / 22%), transparent 38%),
-    #f4f7fb;
+    radial-gradient(circle at 15% 10%, rgb(16 185 129 / 20%), transparent 38%),
+    radial-gradient(circle at 85% 85%, rgb(14 165 233 / 18%), transparent 40%),
+    var(--setup-page);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 .server-card {
   width: min(100%, 480px);
   padding: 40px;
-  border: 1px solid rgb(23 32 51 / 8%);
-  border-radius: 24px;
-  background: rgb(255 255 255 / 92%);
-  box-shadow: 0 24px 80px rgb(31 47 78 / 16%);
+  border: 1px solid var(--setup-border);
+  border-radius: 18px;
+  background: var(--setup-surface);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 35%), 0 22px 60px rgb(15 23 42 / 18%);
+  -webkit-backdrop-filter: blur(28px) saturate(155%);
+  backdrop-filter: blur(28px) saturate(155%);
+}
+
+.server-heading {
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 
 .server-logo {
   width: 56px;
   height: 56px;
-  border-radius: 14px;
+  flex: 0 0 auto;
+  border-radius: 12px;
+  box-shadow: 0 8px 20px rgb(15 23 42 / 14%);
 }
 
 .server-eyebrow {
-  margin: 20px 0 8px;
-  color: #376cf6;
-  font-size: 12px;
+  margin: 0 0 5px;
+  color: var(--setup-accent);
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: .16em;
 }
 
 h1 {
   margin: 0;
-  font-size: 30px;
+  font-size: clamp(25px, 6vw, 30px);
+  letter-spacing: -.035em;
   line-height: 1.25;
 }
 
 .server-description {
-  margin: 14px 0 28px;
-  color: #667085;
+  margin: 24px 0 28px;
+  color: var(--setup-text-secondary);
   line-height: 1.7;
 }
 
@@ -139,17 +164,17 @@ input {
   box-sizing: border-box;
   width: 100%;
   padding: 13px 14px;
-  border: 1px solid #cfd6e4;
-  border-radius: 10px;
+  border: 1px solid var(--setup-border);
+  border-radius: 12px;
   color: inherit;
-  background: #fff;
+  background: var(--setup-surface);
   font: inherit;
   outline: none;
 }
 
 input:focus {
-  border-color: #376cf6;
-  box-shadow: 0 0 0 3px rgb(55 108 246 / 14%);
+  border-color: var(--setup-accent);
+  box-shadow: 0 0 0 3px rgb(16 185 129 / 14%);
 }
 
 .server-hint,
@@ -160,7 +185,7 @@ input:focus {
 }
 
 .server-hint {
-  color: #7a8498;
+  color: var(--setup-text-muted);
 }
 
 .server-error {
@@ -175,8 +200,8 @@ input:focus {
 }
 
 button {
-  border: 0;
-  border-radius: 10px;
+  border: 1px solid transparent;
+  border-radius: 12px;
   padding: 11px 18px;
   font: inherit;
   font-weight: 600;
@@ -188,14 +213,26 @@ button:disabled {
   opacity: .6;
 }
 
+button:focus-visible,
+input:focus-visible {
+  outline: 3px solid rgb(16 185 129 / 22%);
+  outline-offset: 2px;
+}
+
 .primary {
   color: #fff;
-  background: #376cf6;
+  background: var(--setup-accent);
+  box-shadow: 0 8px 18px rgb(16 185 129 / 22%);
+}
+
+.primary:not(:disabled):hover {
+  background: var(--setup-accent-hover);
 }
 
 .secondary {
-  color: #39445a;
-  background: #edf1f7;
+  border-color: var(--setup-border);
+  color: var(--setup-text-secondary);
+  background: var(--setup-surface-muted);
 }
 
 .server-switch {
@@ -217,6 +254,26 @@ button:disabled {
 
   .server-card {
     padding: 28px 22px;
+  }
+
+  .server-actions {
+    flex-direction: column-reverse;
+  }
+
+  .server-actions button {
+    width: 100%;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .server-setup {
+    --setup-page: #020617;
+    --setup-surface: rgb(15 23 42 / 68%);
+    --setup-surface-muted: rgb(30 41 59 / 88%);
+    --setup-border: rgb(148 163 184 / 20%);
+    --setup-text: #f8fafc;
+    --setup-text-secondary: #cbd5e1;
+    --setup-text-muted: #94a3b8;
   }
 }
 </style>

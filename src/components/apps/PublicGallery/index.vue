@@ -112,13 +112,13 @@ onMounted(getFileList)
 </script>
 
 <template>
-  <div class="p-1 h-full flex flex-col">
+  <div class="pn-app-page p-1 h-full flex flex-col">
     <NSpin v-show="loading" size="small" />
     <NAlert type="info" :bordered="false">
       {{ $t('apps.publicGallery.alertText') }}
     </NAlert>
 
-    <div class="flex items-center justify-between mt-2 mb-2 gap-2 flex-wrap">
+    <div class="pn-app-toolbar">
       <NSelect
         v-model:value="activeType"
         :options="typeOptions"
@@ -126,7 +126,7 @@ onMounted(getFileList)
         style="width: 160px"
         @update-value="getFileList"
       />
-      <div class="flex items-center gap-2">
+      <div class="pn-app-toolbar-controls">
         <NSelect
           v-model:value="uploadFileType"
           :options="uploadTypeOptions"
@@ -153,15 +153,15 @@ onMounted(getFileList)
     </div>
 
     <div class="flex justify-center mt-2">
-      <div v-if="imageList.length === 0 && !loading" class="flex">
+      <div v-if="imageList.length === 0 && !loading" class="pn-app-empty">
         {{ $t('apps.uploadsFileManager.nothingText') }}
       </div>
       <NImageGroup v-else>
         <NGrid cols="2 300:2 600:4 900:6 1100:9" :x-gap="5" :y-gap="5">
           <NGridItem v-for=" item, index in imageList" :key="index">
-            <NCard size="small" style="border-radius: 5px;" :bordered="true">
+            <NCard class="pn-app-card" size="small" :bordered="true">
               <template #cover>
-                <div class="card transparent-grid">
+                <div class="pn-app-image-preview">
                   <NImage :lazy="true" style="object-fit: contain;height: 100%;" :src="item.src" />
                 </div>
               </template>
@@ -204,19 +204,3 @@ onMounted(getFileList)
     </div>
   </div>
 </template>
-
-<style scoped>
-.card {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 80px;
-}
-
-.transparent-grid {
-  background-image: linear-gradient(45deg, #f0f0f0 25%, transparent 25%, transparent 75%, #f0f0f0 75%),
-    linear-gradient(45deg, #f0f0f0 25%, transparent 25%, transparent 75%, #f0f0f0 75%);
-  background-size: 16px 16px;
-  background-position: 0 0, 8px 8px;
-}
-</style>

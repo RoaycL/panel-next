@@ -1,8 +1,8 @@
 import type { GlobalThemeOverrides } from 'naive-ui'
 import type { ThemeTokens } from '@/themes'
 
-/** Build Naive UI overlays from the same Theme SDK tokens as the extension shell. */
-export function createExtensionThemeOverrides(tokens: Readonly<ThemeTokens>): GlobalThemeOverrides {
+/** Build Naive UI component tokens from the same Theme SDK tokens as the app shell. */
+export function createThemeOverrides(tokens: Readonly<ThemeTokens>): GlobalThemeOverrides {
   return {
     common: {
       primaryColor: tokens.color.accent,
@@ -17,7 +17,7 @@ export function createExtensionThemeOverrides(tokens: Readonly<ThemeTokens>): Gl
       cardColor: tokens.color.surface,
       modalColor: tokens.modal.background,
       popoverColor: tokens.color.surface,
-      inputColor: tokens.color.surfaceOverlay,
+      inputColor: tokens.color.surface,
       actionColor: tokens.color.surfaceHover,
       borderColor: tokens.color.border,
       dividerColor: tokens.color.border,
@@ -70,7 +70,7 @@ export function createExtensionThemeOverrides(tokens: Readonly<ThemeTokens>): Gl
     },
     Input: {
       borderRadius: tokens.radius.medium,
-      color: tokens.color.surfaceOverlay,
+      color: tokens.color.surface,
       colorFocus: tokens.color.surface,
       border: `1px solid ${tokens.color.border}`,
       borderFocus: `1px solid ${tokens.color.accent}`,
@@ -84,6 +84,9 @@ export function createExtensionThemeOverrides(tokens: Readonly<ThemeTokens>): Gl
     },
   }
 }
+
+/** Compatibility alias for integrations that imported the original extension-only name. */
+export const createExtensionThemeOverrides = createThemeOverrides
 
 /** Dark glass palette for every teleported surface in the extension. */
 export const extensionDarkThemeOverrides: GlobalThemeOverrides = {

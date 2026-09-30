@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import type { FormInst, FormRules } from 'naive-ui'
 import { NButton, NForm, NFormItem, NGrid, NGridItem, NInput, NInputGroup, NModal, NSelect, useMessage } from 'naive-ui'
 import IconEditor from './IconEditor.vue'
+import { cacheSavedIconImage } from '@/icons/localImageCache'
 import { edit, getSiteFavicon } from '@/api/panel/itemIcon'
 import { getList as getGroupList } from '@/api/panel/itemIconGroup'
 import { t } from '@/locales'
@@ -17,7 +18,8 @@ interface Props {
 const props = defineProps<Props>()
 const emit = defineEmits<Emit>()
 const ms = useMessage()
-const modalTo = getRuntime().kind === 'extension' ? '.pn-theme-root' : undefined
+const runtime = getRuntime()
+const modalTo = runtime.kind === 'extension' ? '.pn-theme-root' : undefined
 const submitLoading = ref(false)
 const getIconLoading = ref([false, false])
 const itemIconGroupOptions = ref<{
@@ -90,8 +92,21 @@ async function editApi() {
   try {
     const payload = { ...model.value }
     delete (payload as any).revision
+    const iconSource = payload.icon?.itemType === 2 ? payload.icon.src?.trim() : ''
+    const previousSource = props.itemInfo?.icon?.itemType === 2 ? props.itemInfo.icon.src?.trim() : ''
+    let iconCacheTask: Promise<boolean> | null = null
+    if (iconSource && iconSource !== previousSource) {
+      try {
+        const resolved = new URL(runtime.resolveUrl(iconSource), `${runtime.getServerOrigin() || window.location.origin}/`)
+        if (resolved.protocol === 'http:' || resolved.protocol === 'https:')
+          iconCacheTask = cacheSavedIconImage(resolved.href)
+      }
+      catch { /* Invalid or non-network icon sources keep their normal fallback. */ }
+    }
     const { code, data, msg, queued, conflict } = await edit<Panel.ItemInfo>(payload)
     if (code === 0) {
+      if (iconCacheTask && navigator.onLine && !await iconCacheTask)
+        ms.warning(t('iconItem.localCacheUnavailable'))
       show.value = false
       model.value = { ...restoreDefault }
       if (queued)
@@ -198,14 +213,14 @@ async function getGroupListOptions() {
     content-style="padding: 16px 20px; flex: 1 1 0%; min-height: 0; overflow-y: auto; overscroll-behavior: contain;"
     footer-style="padding: 12px 20px 14px; border-top: 1px solid rgba(255, 255, 255, 0.08); flex-shrink: 0;"
     :bordered="false"
-    :title="itemInfo ? t('iconItem.edit') : t('iconItem.add')"
+    :title="itemInfo?.id ? t('iconItem.edit') : t('iconItem.add')"
   >
     <div class="edit-item-content">
       <NForm ref="formRef" :model="model" :rules="rules" size="small">
         <!-- 基础信息 (分组 & 标题) -->
         <div class="form-glass-card mb-3.5">
           <div class="card-section-title">
-            {{ t('common.basicInfo') || '基础信息' }}
+            {{ t('common.basicInfo') }}
           </div>
           <NGrid cols="2" :x-gap="12" item-responsive class="mt-2">
             <NGridItem span="2 500:1">
@@ -227,7 +242,7 @@ async function getGroupListOptions() {
             {{ $t('common.icon') }}
           </div>
           <div class="mt-2">
-            <IconEditor v-model:item-icon="model.icon" />
+            <IconEditor v-model:item-icon="model.icon" :fallback-text="model.title" :site-url="model.url" />
           </div>
         </div>
 
@@ -259,7 +274,7 @@ async function getGroupListOptions() {
         <!-- 详细选项区 -->
         <div class="form-glass-card">
           <div class="card-section-title">
-            {{ t('apps.baseSettings.other') || '其他设置' }}
+            {{ t('iconItem.otherSettings') }}
           </div>
           <div class="flex flex-col gap-2.5 mt-2">
             <NFormItem path="description" :label="$t('common.description')" :show-feedback="false">

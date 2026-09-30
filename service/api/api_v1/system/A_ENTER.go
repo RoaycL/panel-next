@@ -8,6 +8,7 @@ type ApiSystem struct {
 	ClientCapabilitiesApi ClientCapabilitiesApi
 	SyncBootstrapApi      SyncBootstrapApi
 	SyncChangesApi        SyncChangesApi
+	SyncWaitApi           SyncWaitApi
 	FileApi               FileApi
 	NoticeApi             NoticeApi
 	ModuleConfigApi       ModuleConfigApi
