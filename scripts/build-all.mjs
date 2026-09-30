@@ -34,6 +34,8 @@ runStep('validate:runtime-navigation', node, [path.resolve('scripts/validate-run
 runStep('validate:lazy-management', node, [path.resolve('scripts/validate-lazy-management.mjs')])
 runStep('validate:status-ui', node, [path.resolve('scripts/validate-status-ui.mjs')])
 runStep('validate:responsive-ui', node, [path.resolve('scripts/validate-responsive-ui.mjs')])
+runStep('test:profile-avatar-upload', node, [path.resolve('scripts/test-profile-avatar-upload.mjs')])
+runStep('test:brand-icons', node, [path.resolve('scripts/test-brand-icons.mjs')])
 runStep('validate:widget-registry', node, [path.resolve('scripts/validate-widget-registry.mjs')])
 runStep('validate:offline-sync', node, [path.resolve('scripts/validate-offline-sync.mjs')])
 

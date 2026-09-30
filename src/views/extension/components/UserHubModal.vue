@@ -1,23 +1,24 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, nextTick, ref, watch } from 'vue'
 import {
-  NAvatar,
   NButton,
   NDivider,
   NInput,
   NModal,
-  NPopconfirm,
   NSelect,
   NSpin,
   NSwitch,
   useMessage,
+  useDialog,
 } from 'naive-ui'
 import { useAuthStore, usePanelState } from '@/store/modules'
 import { getRuntime } from '@/runtime'
 import { saveExtensionAppearance } from '@/runtime/extensionAppearance'
 import { enqueueAppearanceSave } from '@/themes/appearanceSaveQueue'
 import SvgIcon from '@/components/common/SvgIcon/index.vue'
+import ProfileAvatar from '@/components/common/ProfileAvatar/index.vue'
 import { logout } from '@/api'
+import { openExtensionLogin } from '@/runtime/extensionLogin'
 
 const props = defineProps<{
   show: boolean
@@ -61,6 +62,7 @@ const emit = defineEmits<{
 
 const authStore = useAuthStore()
 const ms = useMessage()
+const dialog = useDialog()
 const runtime = getRuntime()
 const profileName = computed(() => authStore.userInfo?.name?.trim() || authStore.userInfo?.username?.trim() || '访客模式')
 // 账号栏以登录用户名(username)为准；与 UserInfo/extension 等入口保持一致。
@@ -368,17 +370,33 @@ async function handleSaveServer() {
 }
 
 // 退出登录
+function confirmLogout() {
+  dialog.warning({
+    title: '退出当前账号',
+    content: '退出后将返回访客主页。云端资料会保留，再次登录后可继续同步。',
+    positiveText: '退出登录',
+    negativeText: '取消',
+    autoFocus: false,
+    onPositiveClick: handleLogout,
+  })
+}
+
+function showLogin() {
+  visible.value = false
+  openExtensionLogin()
+}
+
 async function handleLogout() {
   try {
     const response = await logout()
     if (response.code !== 0 && authStore.token) {
       ms.error('服务器未确认退出，请联网后重试')
-      return
+      return false
     }
   }
   catch {
     ms.error('暂时无法连接服务器，登录状态未清除；请联网后重试退出')
-    return
+    return false
   }
   authStore.removeToken()
   try {
@@ -427,16 +445,12 @@ async function handleLogout() {
           >
             <div class="flex items-center space-x-3 relative z-10">
               <div class="avatar-glow relative">
-                <NAvatar
-                  :key="profileAvatarUrl"
+                <ProfileAvatar
                   round
                   :size="46"
-                  :src="profileAvatarUrl || undefined"
-                  fallback-src="/favicon.svg"
+                  :src="profileAvatarUrl"
                   class="hub-profile-avatar"
-                >
-                  {{ profileName[0].toUpperCase() }}
-                </NAvatar>
+                />
                 <span
                   class="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-slate-900"
                   :class="authStore.token ? 'bg-emerald-400 shadow-[0_0_6px_#34d399]' : 'bg-slate-400'"
@@ -497,23 +511,20 @@ async function handleLogout() {
 
         <!-- 底部快捷退出/登录按钮 -->
         <div class="sidebar-bottom pt-3 mt-3 border-t border-white/10">
-          <NPopconfirm v-if="authStore.token" @positive-click="handleLogout">
-            <template #trigger>
-              <button
-                type="button"
-                class="w-full flex items-center justify-center space-x-2 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs font-medium transition-all"
-              >
-                <SvgIcon icon="tabler:logout" class="text-sm" />
-                <span>退出当前账号</span>
-              </button>
-            </template>
-            确定要退出当前账号吗？退出后扩展将返回访客模式。
-          </NPopconfirm>
+          <button
+            v-if="authStore.token"
+            type="button"
+            class="w-full flex items-center justify-center space-x-2 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs font-medium transition-all"
+            @click="confirmLogout"
+          >
+            <SvgIcon icon="tabler:logout" class="text-sm" />
+            <span>退出当前账号</span>
+          </button>
           <button
             v-else
             type="button"
             class="w-full flex items-center justify-center space-x-2 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-medium shadow-md transition-all"
-            @click="visible = false; $router.push('/login')"
+            @click="showLogin"
           >
             <SvgIcon icon="ph:user-bold" class="text-sm" />
             <span>登录以同步云端配置</span>
@@ -540,6 +551,9 @@ async function handleLogout() {
           </div>
 
           <div class="flex items-center space-x-2">
+            <button v-if="authStore.token" type="button" class="hub-header-action hub-mobile-logout" title="退出当前账号" aria-label="退出当前账号" @click="confirmLogout">
+              <SvgIcon icon="tabler:logout" />
+            </button>
             <button
               type="button"
               class="hub-header-action"
@@ -564,7 +578,7 @@ async function handleLogout() {
                 <span class="settings-section-icon"><SvgIcon icon="material-symbols:account-circle" /></span>
                 <div><h3>登录后进入个人中心</h3><p>访客模式可以直接使用主页；登录后可管理资料、密码和多端设备会话。</p></div>
               </div>
-              <button type="button" class="guest-login-action" @click="visible = false; $router.push('/login')">
+              <button type="button" class="guest-login-action" @click="showLogin">
                 <SvgIcon icon="ph:user-bold" />
                 <span>登录并同步个人资料</span>
               </button>
@@ -695,7 +709,7 @@ async function handleLogout() {
               </div>
               <div class="grid gap-3 sm:grid-cols-2">
                 <label class="sidebar-setting-row"><span><SvgIcon icon="panel-next:swap-horizontal" /><span><b>侧边栏位置</b><small>固定在屏幕左侧或右侧</small></span></span><NSelect v-model:value="sidebarPositionModel" :options="sidebarPositionOptions" size="small" class="w-24" /></label>
-                <label class="sidebar-setting-row"><span><SvgIcon icon="panel-next:visibility-off" /><span><b>自动隐藏</b><small>移开鼠标三秒后隐藏</small></span></span><NSwitch v-model:value="sidebarAutoHideModel" /></label>
+                <label class="sidebar-setting-row"><span><SvgIcon icon="panel-next:visibility-off" /><span><b>自动隐藏</b><small>鼠标靠近屏幕边缘展开，移开后收起</small></span></span><NSwitch v-model:value="sidebarAutoHideModel" /></label>
                 <label class="sidebar-setting-row"><span><SvgIcon icon="panel-next:swap-horizontal" /><span><b>滚轮切换分组</b><small>页面到达顶部或底部时切换</small></span></span><NSwitch v-model:value="sidebarWheelSwitchModel" /></label>
                 <label class="sidebar-setting-row"><span><SvgIcon icon="majesticons-applications" /><span><b>侧边栏密度</b><small>调整图标尺寸与栏宽</small></span></span><NSelect v-model:value="sidebarDensityModel" :options="sidebarDensityOptions" size="small" class="w-24" /></label>
               </div>
@@ -945,19 +959,21 @@ async function handleLogout() {
 }
 
 .account-center-shell {
-  padding: 18px;
-  border: 1px solid var(--hub-border);
-  border-radius: 22px;
-  background: var(--hub-surface);
-  box-shadow: 0 22px 60px var(--hub-shadow);
-  backdrop-filter: blur(24px);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none;
 }
 
 .account-center-content { display: flex; min-width: 0; flex-direction: column; gap: 18px; }
 .device-session-section {
   min-width: 0;
-  padding-top: 18px;
-  border-top: 1px solid var(--hub-border);
+  padding: 18px;
+  border: 1px solid var(--hub-border);
+  border-radius: 18px;
+  background: var(--hub-surface);
 }
 
 .settings-section-heading { display: flex; align-items: flex-start; gap: 12px; }
@@ -1197,7 +1213,7 @@ async function handleLogout() {
 .profile-hero { border: 1px solid var(--hub-border) !important; background: var(--hub-surface-strong) !important; box-shadow: none !important; }
 .profile-hero:hover { border-color: var(--hub-accent) !important; }
 .hub-brand:focus-visible, .profile-hero:focus-visible, .nav-item-btn:focus-visible, .hub-header-action:focus-visible, .hub-close-button:focus-visible { outline: 2px solid var(--hub-accent); outline-offset: 2px; }
-.hub-profile-avatar { border: 2px solid rgba(46, 184, 240, .5) !important; color: #fff !important; background: linear-gradient(145deg, #55cce4, #5467d9 55%, #9458d3) !important; }
+.hub-profile-avatar { --pn-profile-avatar-color: #fff; border: 2px solid rgba(46, 184, 240, .5) !important; color: #fff !important; background: linear-gradient(145deg, #55cce4, #5467d9 55%, #9458d3) !important; }
 .profile-config-link { color: var(--hub-accent); font-size: 10px; font-weight: 700; }
 .profile-name { overflow: hidden; margin: 0; color: var(--hub-text-strong); font-size: 14px; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; }
 .profile-subtitle { overflow: hidden; margin: 2px 0 0; color: var(--hub-text-muted); font-size: 11px; white-space: nowrap; text-overflow: ellipsis; }
@@ -1219,7 +1235,7 @@ async function handleLogout() {
   scrollbar-width: thin;
 }
 .hub-nav-group { display: flex; flex-direction: column; gap: 2px; }
-.hub-nav-caption { margin: 0 10px 3px; color: var(--hub-text-muted); font-size: 9px; font-weight: 750; letter-spacing: .08em; }
+.hub-nav-caption { margin: 0 10px 3px; color: var(--hub-text); font-size: 11px; font-weight: 750; letter-spacing: .08em; }
 .nav-item-btn {
   display: flex;
   width: 100%;
@@ -1228,13 +1244,14 @@ async function handleLogout() {
   gap: 9px;
   padding: 5px 9px !important;
   border: 0 !important;
-  color: var(--hub-text-muted);
+  color: var(--hub-text-strong);
   background: transparent;
   text-align: left;
   cursor: pointer;
 }
 .nav-item-btn:hover { color: var(--hub-text-strong); background: var(--hub-surface-strong); }
-.nav-item-btn.active-nav { color: var(--hub-accent); background: var(--hub-accent-soft); box-shadow: none; }
+.nav-item-btn.active-nav { color: var(--hub-text-strong); background: var(--hub-accent-soft); box-shadow: none; }
+.nav-item-btn.active-nav .nav-icon-wrap { color: var(--pn-sidebar-active-text-color, var(--hub-text-strong)); }
 .nav-icon-wrap { display: grid; width: 28px; height: 28px; flex: none; place-items: center; border-radius: 9px; color: inherit; background: var(--hub-surface-strong); font-size: 14px; }
 .active-nav .nav-icon-wrap { background: color-mix(in srgb, var(--hub-accent) 14%, transparent); }
 .nav-item-label { overflow: hidden; color: inherit; font-size: 12px; font-weight: 650; white-space: nowrap; text-overflow: ellipsis; }
@@ -1246,8 +1263,9 @@ async function handleLogout() {
 .content-description { overflow: hidden; margin: 3px 0 0; color: var(--hub-text-muted) !important; font-size: 12px; white-space: nowrap; text-overflow: ellipsis; }
 .content-body { padding: 22px !important; }
 .hub-header-action, .hub-close-button { color: var(--hub-text-muted); border-color: var(--hub-border); background: var(--hub-surface); }
+.hub-mobile-logout { display: none; }
 .hub-header-action:hover, .hub-close-button:hover { color: var(--hub-accent); border-color: var(--hub-accent); background: var(--hub-accent-soft); }
-.settings-glass-card, .account-center-shell { border-radius: 18px; background: var(--hub-surface); box-shadow: var(--pn-glass-highlight); backdrop-filter: none; }
+.settings-glass-card { border-radius: 18px; background: var(--hub-surface); box-shadow: var(--pn-glass-highlight); backdrop-filter: none; }
 .settings-section-heading p { font-size: 12px; }
 .server-field-label { display: block; color: var(--hub-text-strong); font-size: 13px; font-weight: 650; }
 .server-field-hint { margin: 6px 0 0; color: var(--hub-text-muted); font-size: 12px; line-height: 1.6; }
@@ -1299,6 +1317,7 @@ async function handleLogout() {
   .nav-item-btn { width: auto; flex: 0 0 auto; }
   .hub-nav-caption { display: none; }
   .content-header { min-height: 60px; padding: 0 15px !important; }
+  .hub-mobile-logout { display: inline-flex; color: var(--pn-color-error, #ef4444); }
   .content-body { padding: 14px !important; }
 }
 

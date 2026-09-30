@@ -16,7 +16,7 @@ assert.match(home, /defineAsyncComponent\(\(\) => import\('\.\/components\/EditI
 assert.match(home, /<AppStarter v-if="settingModalShow"/)
 assert.match(home, /<EditItem v-if="editItemInfoShow"/)
 assert.match(loader, /import\(`\.\.\/\.\.\/apps\/\$\{props\.componentName\}\/index\.vue`\)/)
-assert.match(editor, /watch\(\(\) => props\.visible,[\s\S]*\{ immediate: true \}\)/)
+assert.match(editor, /watch\(\[\(\) => props\.visible, \(\) => props\.itemInfo\],[\s\S]*\{ immediate: true \}\)/)
 assert.doesNotMatch(themeBarrel, /\.vue['"]/)
 assert.match(app, /import ThemeProvider from '@\/themes\/ThemeProvider\.vue'/)
 assert.match(app, /import NaiveProvider from '@\/components\/common\/NaiveProvider\/index\.vue'/)

@@ -9,7 +9,18 @@ const themeRef = ref<'light' | 'dark'>('light')
 const configProviderPropsRef = computed<ConfigProviderProps>(() => ({
   theme: themeRef.value === 'light' ? lightTheme : darkTheme,
 }))
-export const { message } = createDiscreteApi(['message'], { configProviderProps: configProviderPropsRef })
+const { message: fallbackMessage } = createDiscreteApi(['message'], {
+  configProviderProps: configProviderPropsRef,
+  messageProviderProps: { placement: 'top-right', max: 4, duration: 2800 },
+})
+// API errors use the same themed provider as component feedback after mounting.
+export const message = new Proxy(fallbackMessage, {
+  get(_target, key) {
+    const provider = window.$message ?? fallbackMessage
+    const value = Reflect.get(provider, key)
+    return typeof value === 'function' ? value.bind(provider) : value
+  },
+})
 
 // 在组件上下文外检测系统主题，避免 naive-ui 的 useOsTheme 依赖 provider 环境
 function osThemePreference(): 'light' | 'dark' {

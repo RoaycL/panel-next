@@ -19,6 +19,8 @@ const props = defineProps<{
   pageName?: string
   addedCounts?: Record<string, number>
   busy?: boolean
+  embedded?: boolean
+  searchQuery?: string
 }>()
 const emit = defineEmits<{
   (event: 'update:show', value: boolean): void
@@ -27,7 +29,15 @@ const emit = defineEmits<{
 const { locale, t } = useI18n()
 
 const visible = computed({ get: () => props.show, set: value => emit('update:show', value) })
+const modalProps = computed(() => ({
+  show: visible.value,
+  'onUpdate:show': (value: boolean) => { visible.value = value },
+  to: '.pn-theme-root',
+  preset: 'card' as const,
+  title: t('widgetGallery.title'),
+}))
 const query = ref('')
+watch(() => props.searchQuery, (value) => { if (value !== undefined) query.value = value }, { immediate: true })
 const category = ref<Category>('all')
 const filter = ref<Filter>('all')
 const previewNow = ref(new Date())
@@ -104,13 +114,11 @@ function add(type: string) {
 </script>
 
 <template>
-  <NModal
-    v-model:show="visible"
-    to=".pn-theme-root"
-    preset="card"
-    :title="t('widgetGallery.title')"
-    class="widget-gallery-modal"
-    style="width: min(1080px, calc(100vw - 24px)); max-height: calc(100dvh - 24px);"
+  <component
+    :is="embedded ? 'div' : NModal"
+    v-bind="embedded ? {} : modalProps"
+    :class="embedded ? 'widget-gallery-embedded' : 'widget-gallery-modal'"
+    :style="embedded ? undefined : 'width: min(1080px, calc(100vw - 24px)); max-height: calc(100dvh - 24px);'"
   >
     <div class="gallery-layout">
       <aside class="gallery-sidebar" :aria-label="t('widgetGallery.categoryLabel')">
@@ -234,7 +242,7 @@ function add(type: string) {
         </div>
       </div>
     </div>
-  </NModal>
+  </component>
 </template>
 
 <style scoped>
@@ -338,4 +346,16 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--pn-color-ac
   .gallery-filters > span { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .gallery-card { transition: none; } }
+.widget-gallery-embedded { height: 100%; min-height: 0; }
+.widget-gallery-embedded .gallery-layout { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.widget-gallery-embedded .gallery-sidebar { flex: none; flex-direction: row; align-items: center; gap: 6px; overflow-x: auto; padding: 0 0 10px; border: 0; background: transparent; }
+.widget-gallery-embedded .gallery-sidebar-label, .widget-gallery-embedded .gallery-sidebar-foot, .widget-gallery-embedded .gallery-tools { display: none; }
+.widget-gallery-embedded .gallery-category { flex: none; width: auto; min-height: 30px; padding: 5px 10px; border-radius: 999px; font-size: 12px; }
+.widget-gallery-embedded .gallery-category svg { display: none; }
+.widget-gallery-embedded .gallery-category.active { box-shadow: none; }
+.widget-gallery-embedded .gallery-main { flex: 1; padding: 0; }
+.widget-gallery-embedded .gallery-filters { margin: 0 0 12px; }
+.widget-gallery-embedded .gallery-card-details { padding: 14px; }
+.widget-gallery-embedded .gallery-preview { height: 175px; }
+@media (max-width: 540px) { .widget-gallery-embedded .gallery-preview { height: 145px; } }
 </style>

@@ -3,7 +3,8 @@ import { computed, ref, watch } from 'vue'
 import SvgIcon from '@/components/common/SvgIcon/index.vue'
 import SvgIconOnline from '@/components/common/SvgIconOnline/index.vue'
 import { getLocalIconImage } from '@/icons/localImageCache'
-import { findIconPresetForUrl } from '@/icons/presets'
+import { findIconPresetForUrl, resolveBundledPresetId } from '@/icons/presets'
+import { getBundledBrandIcon } from '@/icons/brandAssets'
 import { getRuntime } from '@/runtime'
 import { isIconifyName } from '@/themes/icons'
 
@@ -22,6 +23,7 @@ const fallbackColors = ['#4275bd', '#7564b0', '#278b87', '#bd684d', '#526f9e', '
 
 const preset = computed(() => findIconPresetForUrl(props.siteUrl))
 const iconType = computed(() => props.itemIcon?.itemType)
+const brandIcon = computed(() => getBundledBrandIcon(resolveBundledPresetId(props.itemIcon, props.siteUrl)))
 const localSprite = computed(() => {
   const source = iconType.value === 2 ? props.itemIcon?.src : iconType.value === 3 ? props.itemIcon?.text : ''
   if (!source || !isIconifyName(source))
@@ -30,6 +32,7 @@ const localSprite = computed(() => {
   return localSpriteNames.has(name) ? name : ''
 })
 const fallbackSprite = computed(() => iconType.value === 1 ? '' : localSprite.value || preset.value?.sprite || '')
+const fallbackBrand = computed(() => iconType.value === 1 || localSprite.value ? '' : getBundledBrandIcon(preset.value?.id || ''))
 const imageSrc = computed(() => {
   const source = props.itemIcon?.src?.trim()
   if (iconType.value !== 2 || !source || isIconifyName(source))
@@ -42,7 +45,7 @@ const imageSrc = computed(() => {
     return ''
   }
 })
-const onlineIcon = computed(() => iconType.value === 3 && !localSprite.value ? props.itemIcon?.text?.trim() || '' : '')
+const onlineIcon = computed(() => iconType.value === 3 && !brandIcon.value && !localSprite.value ? props.itemIcon?.text?.trim() || '' : '')
 const imageFailed = ref(false)
 const displayImageSrc = ref('')
 watch(imageSrc, (source, _previous, onCleanup) => {
@@ -89,6 +92,8 @@ const generatedColor = computed(() => {
 const backgroundColor = computed(() => {
   if (props.forceBackground)
     return props.forceBackground
+  if (brandIcon.value || (fallbackBrand.value && (!displayImageSrc.value || imageFailed.value)))
+    return '#ffffff'
   const savedColor = props.itemIcon?.backgroundColor
   if (preset.value && (iconType.value === 2 || onlineIcon.value || !savedColor || savedColor === '#2a2a2a6b'))
     return preset.value.color
@@ -106,9 +111,10 @@ const markFontSize = computed(() => `${Math.round(props.size * (Array.from(fallb
     <slot>
       <div
         class="item-icon-surface"
-        :style="{ width: `${size}px`, height: `${size}px`, backgroundColor, color: foregroundColor }"
+        :style="{ backgroundColor, color: foregroundColor }"
       >
-        <SvgIcon v-if="fallbackSprite" :icon="fallbackSprite" class="item-icon-glyph" />
+        <img v-if="brandIcon || fallbackBrand" :src="brandIcon || fallbackBrand" alt="" class="item-icon-brand">
+        <SvgIcon v-else-if="fallbackSprite" :icon="fallbackSprite" class="item-icon-glyph" />
         <span v-else class="item-icon-mark" :style="{ fontSize: markFontSize }">{{ fallbackMark }}</span>
         <img v-if="displayImageSrc && !imageFailed" :src="displayImageSrc" alt="" class="item-icon-image" @error="imageFailed = true">
         <SvgIconOnline v-if="onlineIcon" :icon="onlineIcon" class="item-icon-remote" />
@@ -118,11 +124,13 @@ const markFontSize = computed(() => `${Math.round(props.size * (Array.from(fallb
 </template>
 
 <style scoped>
-.item-icon-surface { position: relative; display: grid; place-items: center; overflow: hidden; border-radius: var(--pn-bookmark-icon-radius, 16px); }
+.item-icon-surface { position: relative; display: grid; width: 100%; height: 100%; place-items: center; overflow: hidden; border-radius: var(--pn-bookmark-icon-radius, 16px); }
 .item-icon-glyph { width: 56%; height: 56%; flex: none; }
 .item-icon-mark { max-width: 94%; overflow: hidden; font-weight: 800; line-height: 1; letter-spacing: -.05em; text-overflow: clip; white-space: nowrap; }
 .item-icon-image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.item-icon-brand { width: 78%; height: 78%; object-fit: contain; }
 .item-icon-remote { position: absolute; inset: 20%; width: 60%; height: 60%; }
 .item-icon-surface:has(> svg.item-icon-remote) > .item-icon-glyph,
-.item-icon-surface:has(> svg.item-icon-remote) > .item-icon-mark { visibility: hidden; }
+.item-icon-surface:has(> svg.item-icon-remote) > .item-icon-mark,
+.item-icon-surface:has(> svg.item-icon-remote) > .item-icon-brand { visibility: hidden; }
 </style>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { NButton, NCard, NForm, NFormItem, NInput, NSelect, useMessage } from 'naive-ui'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { login } from '@/api'
 import { getSiteInfo } from '@/api/site'
 import { useAppStore, useAuthStore } from '@/store'
@@ -11,12 +11,17 @@ import { languageOptions } from '@/utils/defaultData'
 import type { Language } from '@/store/modules/app/helper'
 import { getRuntime } from '@/runtime'
 
+const { embedded = false } = defineProps<{ embedded?: boolean }>()
+const emit = defineEmits<{ (event: 'close'): void; (event: 'authenticated'): void; (event: 'busy', value: boolean): void }>()
+
 const authStore = useAuthStore()
 const appStore = useAppStore()
 const runtime = getRuntime()
 const isExtension = runtime.kind === 'extension'
 const ms = useMessage()
 const loading = ref(false)
+watch(loading, value => emit('busy', value))
+onUnmounted(() => emit('busy', false))
 const languageValue = ref<Language>(appStore.language)
 const siteTitle = ref('')
 const showCaptcha = ref(false)
@@ -89,7 +94,10 @@ async function loginPost() {
         ms.warning(t('login.sessionSaveWarning'))
       }
       ms.success(`Hi ${user.name}, ${t('login.welcomeMessage')}`)
-      await router.push({ path: '/' })
+      if (embedded)
+        emit('authenticated')
+      else
+        await router.push({ path: '/' })
     }
     else {
       ms.error(t(`apiErrorCode.${res.code}`, {}, res.msg))
@@ -131,9 +139,10 @@ onMounted(async () => {
     if (res.code === 0 && res.data) {
       siteTitle.value = res.data.siteTitle
       siteBranding.value = { loginBackground: res.data.loginBackground }
-      if (res.data.siteTitle)
+      if (res.data.siteTitle && !embedded)
         document.title = res.data.siteTitle
-      applyFavicon(res.data.siteFavicon)
+      if (!embedded)
+        applyFavicon(res.data.siteFavicon)
     }
   }
   catch (error) {
@@ -149,9 +158,12 @@ function handleChangeLanuage(value: Language) {
 </script>
 
 <template>
-  <div class="login-container" :style="loginBackgroundStyle">
-    <div class="login-backdrop" aria-hidden="true" />
+  <div class="login-container" :class="{ 'embedded-login': embedded }" :style="embedded ? undefined : loginBackgroundStyle" :role="embedded ? 'dialog' : undefined" :aria-modal="embedded ? true : undefined" :aria-label="embedded ? '账号登录' : undefined">
+    <div v-if="!embedded" class="login-backdrop" aria-hidden="true" />
     <NCard class="login-card" :bordered="false">
+      <button v-if="embedded" type="button" class="login-close" aria-label="关闭登录" :disabled="loading" @click="emit('close')">
+        <SvgIcon icon="line-md:close-small" />
+      </button>
       <div class="login-toolbar">
         <div class="login-brand-mark">
           <img src="/logo.png" alt="">
@@ -235,7 +247,7 @@ function handleChangeLanuage(value: Language) {
           <span class="login-security-dot" aria-hidden="true" />
           {{ $t('login.secureHint') }}
         </p>
-        <button v-if="isExtension" type="button" class="login-guest-link" @click="router.push('/')">
+        <button v-if="isExtension" type="button" class="login-guest-link" :disabled="loading" @click="embedded ? emit('close') : router.push('/')">
           {{ $t('login.continueAsGuest') }}
         </button>
       </NForm>
@@ -244,6 +256,28 @@ function handleChangeLanuage(value: Language) {
 </template>
 
 <style scoped>
+.login-container.embedded-login {
+  display: block;
+  width: min(440px, calc(100vw - 24px));
+  min-height: 0;
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  padding: 0;
+  border-radius: var(--pn-radius-large, 18px);
+  background: transparent;
+}
+.embedded-login .login-card { width: 100%; margin: 0; }
+.embedded-login .login-toolbar { padding-right: 30px; }
+.embedded-login .login-heading { margin: 24px 0 20px; }
+.login-close {
+  position: absolute; top: 14px; right: 12px;
+  display: grid; place-items: center; width: 30px; height: 30px;
+  border: 0; border-radius: 10px; cursor: pointer;
+  color: var(--pn-color-text-secondary); background: var(--pn-glass-control, transparent);
+}
+.login-close svg { width: 22px; height: 22px; }
+.login-close:focus-visible { outline: 2px solid var(--pn-color-accent); outline-offset: 2px; }
+.login-close:disabled, .login-guest-link:disabled { cursor: wait; opacity: .6; }
 .login-container {
   position: relative;
   display: grid;

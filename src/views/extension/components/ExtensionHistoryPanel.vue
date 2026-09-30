@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { NButton, NEmpty, NPopconfirm, useMessage } from 'naive-ui'
+import { NButton, NEmpty, useDialog, useMessage } from 'naive-ui'
 import { readExtensionLayoutHistory, restoreExtensionLayoutHistory } from '@/runtime/extensionHistory'
 import type { ExtensionLayoutHistoryEntry } from '@/runtime/extensionHistory'
 
 const message = useMessage()
+const dialog = useDialog()
 const entries = ref<ExtensionLayoutHistoryEntry[]>(readExtensionLayoutHistory())
 const restoring = ref<string | null>(null)
 const selected = ref<string | null>(null)
@@ -12,6 +13,20 @@ const selectedEntry = computed(() => entries.value.find(entry => entry.id === se
 
 function refresh() {
   entries.value = readExtensionLayoutHistory()
+}
+
+function confirmRestore() {
+  const entry = selectedEntry.value
+  if (!entry || restoring.value)
+    return
+  dialog.warning({
+    title: '恢复布局历史',
+    content: `确定用 ${new Date(entry.createdAt).toLocaleString()} 的布局替换当前布局吗？恢复前会先保留当前布局。`,
+    positiveText: '恢复此版本',
+    negativeText: '取消',
+    autoFocus: false,
+    onPositiveClick: () => restore(entry.id),
+  })
 }
 
 function widgetCount(entry: ExtensionLayoutHistoryEntry) {
@@ -30,6 +45,7 @@ async function restore(id: string) {
   catch (error) {
     message.error(error instanceof Error ? error.message : '恢复失败，请检查当前布局与恢复前备份')
     refresh()
+    return false
   }
   finally {
     restoring.value = null
@@ -67,14 +83,9 @@ async function restore(id: string) {
     </div>
     <div v-if="selectedEntry" class="history-restore">
       <span>恢复前会先保留当前布局，方便再次找回。</span>
-      <NPopconfirm @positive-click="restore(selectedEntry.id)">
-        <template #trigger>
-          <NButton type="primary" size="small" :loading="restoring === selectedEntry.id">
-            恢复此版本
-          </NButton>
-        </template>
-        确定用 {{ new Date(selectedEntry.createdAt).toLocaleString() }} 的布局替换当前布局吗？
-      </NPopconfirm>
+      <NButton type="primary" size="small" :loading="restoring === selectedEntry.id" @click="confirmRestore">
+        恢复此版本
+      </NButton>
     </div>
   </section>
 </template>

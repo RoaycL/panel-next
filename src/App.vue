@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue'
-import { darkTheme, NConfigProvider } from 'naive-ui'
+import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
+import { darkTheme, NConfigProvider, NModal } from 'naive-ui'
 import NaiveProvider from '@/components/common/NaiveProvider/index.vue'
 import { useTheme } from '@/hooks/useTheme'
 import { useLanguage } from '@/hooks/useLanguage'
@@ -13,6 +13,20 @@ import { registerThemeStoreAccessor } from '@/themes/storage'
 import { buildProviderResult, getThemePreview } from '@/themes/runtime'
 import { createDefaultSelection } from '@/themes/legacyAdapter'
 import { themeRegistry } from '@/themes/registry'
+import { extensionLoginVisible } from '@/runtime/extensionLogin'
+
+const LoginForm = defineAsyncComponent(() => import('@/views/login/index.vue'))
+const extensionDashboardRevision = ref(0)
+const extensionLoginBusy = ref(false)
+const overlaysReady = ref(false)
+onMounted(() => { overlaysReady.value = true })
+
+function handleExtensionAuthenticated() {
+  extensionLoginVisible.value = false
+  // Reinitialize account-scoped bookmarks, layouts and sync without routing
+  // away from the dashboard or reloading the browser tab.
+  extensionDashboardRevision.value++
+}
 
 const { isDark: legacyIsDark } = useTheme(false)
 const { language } = useLanguage()
@@ -46,7 +60,17 @@ watch(isDark, (dark) => {
     <ThemeProvider :surface="runtime.kind" :selection="effectiveThemeSelection">
       <div class="h-full" @click.capture="handleRuntimeLink" @auxclick.capture="handleRuntimeLink">
         <NaiveProvider>
-          <RouterView />
+          <RouterView :key="extensionDashboardRevision" />
+          <NModal
+            v-if="runtime.kind === 'extension' && overlaysReady"
+            v-model:show="extensionLoginVisible"
+            to=".pn-theme-root"
+            :mask-closable="false"
+            :close-on-esc="!extensionLoginBusy"
+            :auto-focus="true"
+          >
+            <LoginForm embedded @busy="extensionLoginBusy = $event" @close="extensionLoginVisible = false" @authenticated="handleExtensionAuthenticated" />
+          </NModal>
         </NaiveProvider>
       </div>
     </ThemeProvider>

@@ -557,6 +557,15 @@
     }
   },
   "iconGallery": {
+    "sites": "Websites",
+    "widgets": "Widgets",
+    "searchAll": "Type to search",
+    "target": "Add to",
+    "saveContinue": "Save and continue",
+    "advanced": "More options",
+    "requiredFields": "Enter a website name and URL",
+    "iconText": "Icon text",
+    "officialIcon": "Official icon · Bundled for offline use",
     "title": "Add shortcuts",
     "categoryLabel": "Shortcut categories",
     "explore": "DISCOVER SHORTCUTS",

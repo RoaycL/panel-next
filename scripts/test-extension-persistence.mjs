@@ -144,7 +144,8 @@ flushShouldFail = false
 
 const defaultSidebarPreferences = readExtensionWidgets()
 assert.equal(defaultSidebarPreferences.sidebarPosition, 'left')
-assert.equal(defaultSidebarPreferences.sidebarAutoHide, false)
+assert.equal(defaultSidebarPreferences.sidebarAutoHide, true)
+assert.equal(defaultSidebarPreferences.sidebarBehaviorVersion, 2)
 assert.equal(defaultSidebarPreferences.sidebarWheelSwitch, true)
 assert.equal(defaultSidebarPreferences.sidebarDensity, 'comfortable')
 assert.equal(defaultSidebarPreferences.clockSeconds, true)
@@ -156,6 +157,13 @@ assert.equal(defaultSidebarPreferences.searchHistoryEnabled, true)
 assert.deepEqual(defaultSidebarPreferences.searchHistory, [])
 assert.deepEqual(defaultSidebarPreferences.bookmarkLayouts, {})
 assert.deepEqual(defaultSidebarPreferences.pageLayouts, {})
+
+memoryMap.set('PANEL_NEXT_EXTENSION_WIDGETS_V1', JSON.stringify({ sidebarAutoHide: false, sidebarPosition: 'right' }))
+assert.equal(readExtensionWidgets().sidebarAutoHide, true, 'old full-height sidebar migrates to the new auto-hide default')
+assert.equal(readExtensionWidgets().sidebarPosition, 'right')
+memoryMap.set('PANEL_NEXT_EXTENSION_WIDGETS_V1', JSON.stringify({ sidebarAutoHide: false, sidebarBehaviorVersion: 2 }))
+assert.equal(readExtensionWidgets().sidebarAutoHide, false, 'a new explicit always-visible choice survives reload')
+memoryMap.clear()
 
 const prefsA = {
   clock: true,

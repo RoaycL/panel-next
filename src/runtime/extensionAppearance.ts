@@ -23,6 +23,8 @@ export interface ExtensionWidgetPreferences {
   trending: boolean
   sidebarPosition: 'left' | 'right'
   sidebarAutoHide: boolean
+  /** Versioned default migration; explicit choices made in v2 are retained. */
+  sidebarBehaviorVersion?: 2
   sidebarWheelSwitch: boolean
   sidebarDensity: 'compact' | 'comfortable'
   /** Extension-only bookmark tile sizes. Keys are accountId:itemId. */
@@ -74,7 +76,8 @@ export const defaultExtensionWidgets: ExtensionWidgetPreferences = {
   weather: true,
   trending: true,
   sidebarPosition: 'left',
-  sidebarAutoHide: false,
+  sidebarAutoHide: true,
+  sidebarBehaviorVersion: 2,
   sidebarWheelSwitch: true,
   sidebarDensity: 'comfortable',
   bookmarkLayouts: {},
@@ -218,7 +221,8 @@ export function readExtensionWidgets(): ExtensionWidgetPreferences {
       weather: parsed.weather !== false,
       trending: parsed.trending !== false,
       sidebarPosition: parsed.sidebarPosition === 'right' ? 'right' : 'left',
-      sidebarAutoHide: parsed.sidebarAutoHide === true,
+      sidebarAutoHide: parsed.sidebarBehaviorVersion === 2 ? parsed.sidebarAutoHide !== false : true,
+      sidebarBehaviorVersion: 2,
       sidebarWheelSwitch: parsed.sidebarWheelSwitch !== false,
       sidebarDensity: parsed.sidebarDensity === 'compact' ? 'compact' : 'comfortable',
       bookmarkLayouts,

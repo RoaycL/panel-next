@@ -82,3 +82,18 @@ export function findIconPresetForUrl(url?: string | null): IconPreset | null {
   const host = url && hostname(url)
   return host ? presetByHost.get(host) ?? null : null
 }
+export function createPresetIcon(preset: IconPreset): Panel.ItemIcon {
+  return { itemType: 3, text: `brand:${preset.id}`, backgroundColor: '#ffffff' }
+}
+
+/** Upgrade only old defaults; keep user-chosen text, pictures and online icons. */
+export function resolveBundledPresetId(icon: Panel.ItemIcon | null | undefined, siteUrl?: string): string {
+  if (icon?.itemType === 3 && icon.text?.startsWith('brand:'))
+    return ICON_PRESETS.find(preset => preset.id === icon.text!.slice(6))?.id || ''
+  const preset = findIconPresetForUrl(siteUrl)
+  if (!preset) return ''
+  if (!icon) return preset.id
+  if (icon.itemType === 1 && icon.text === preset.mark && icon.backgroundColor === preset.color) return preset.id
+  if ([2, 3].includes(icon.itemType) && preset.sprite && (icon.src || icon.text)?.replace(':', '-') === preset.sprite) return preset.id
+  return ''
+}

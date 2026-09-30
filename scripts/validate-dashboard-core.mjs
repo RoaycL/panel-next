@@ -76,7 +76,7 @@ assert.equal(selectItemUrl({ ...dashboard.groups[0].items[0], lanUrl: '' }, true
 assert.match(extensionView, /groups\.value = dashboard\.groups \|\| \[\]/)
 assert.match(extensionView, /if \(authStore\.visitMode !== VisitMode\.VISIT_MODE_LOGIN\)\s+return/)
 assert.match(extensionView, /type="button" class="rail-avatar"[\s\S]*@click="handleAvatarClick"/)
-assert.match(extensionView, /v-for="\(group, index\) in groupTabs"/)
+assert.match(extensionView, /v-for="group in groupTabs"/)
 assert.match(extensionView, /function openGroupManager\(\)[\s\S]*VisitMode\.VISIT_MODE_LOGIN/)
 assert.match(extensionView, /if \(!authStore\.token\) \{[\s\S]*VisitMode\.VISIT_MODE_PUBLIC[\s\S]*groups\.value = defaultPresetGroups/)
 

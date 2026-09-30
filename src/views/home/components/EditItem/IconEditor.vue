@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { NButton, NColorPicker, NInput, NModal, NUpload } from 'naive-ui'
 import type { UploadFileInfo } from 'naive-ui'
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ItemIcon } from '@/components/common'
+import SvgIcon from '@/components/common/SvgIcon/index.vue'
 import GallerySelector from '@/components/common/GallerySelector/index.vue'
 import { useAuthStore } from '@/store'
 import { apiRespErrMsg } from '@/utils/request/apiMessage'
@@ -41,6 +42,7 @@ const initData: Panel.ItemIcon = {
 }
 
 const itemIconInfo = ref<Panel.ItemIcon>({ ...initData })
+const isBundledBrand = computed(() => itemIconInfo.value.itemType === 3 && itemIconInfo.value.text?.startsWith('brand:'))
 watch(() => props.itemIcon, (icon) => {
   itemIconInfo.value = {
     ...initData,
@@ -50,7 +52,8 @@ watch(() => props.itemIcon, (icon) => {
 }, { immediate: true, deep: true })
 
 function handleIconTypeRadioChange(type: number) {
-  // checkedValueRef.value = type
+  if (isBundledBrand.value && type !== 3)
+    itemIconInfo.value.text = type === 1 ? Array.from(props.fallbackText || 'A').slice(0, 2).join('') : ''
   itemIconInfo.value.itemType = type
   handleChange()
 }
@@ -123,7 +126,7 @@ function handleGallerySelect(url: string) {
         @click="handleIconTypeRadioChange(3)"
       >
         <SvgIcon icon="mdi-web" class="text-sm" />
-        <span>{{ $t('iconItem.onlineIcon') }}</span>
+        <span>{{ isBundledBrand ? $t('common.icon') : $t('iconItem.onlineIcon') }}</span>
       </button>
     </div>
 
@@ -139,13 +142,14 @@ function handleGallerySelect(url: string) {
         <!-- 文字模式 -->
         <div v-if="itemIconInfo.itemType === 1">
           <div class="text-xs text-slate-400 dark:text-zinc-400 mb-1">
-            {{ $t('common.textContent') || '图标显示文字' }}
+            {{ $t('iconGallery.iconText') }}
           </div>
           <NInput v-model:value="itemIconInfo.text" size="small" type="text" placeholder="如：GPT" @input="handleChange" />
         </div>
 
         <!-- 在线图标模式 (Iconify) -->
-        <div v-if="itemIconInfo.itemType === 3" class="flex flex-col gap-1.5">
+        <small v-if="isBundledBrand" class="icon-cache-hint">{{ $t('iconGallery.officialIcon') }}</small>
+        <div v-if="itemIconInfo.itemType === 3 && !isBundledBrand" class="flex flex-col gap-1.5">
           <div class="flex items-center justify-between text-xs text-slate-400 dark:text-zinc-400">
             <span>{{ $t('iconItem.onlineIcon') }} (Iconify 名称)</span>
             <a target="_blank" href="https://icon-sets.iconify.design/" class="text-sky-400 hover:underline flex items-center gap-0.5">
@@ -163,7 +167,7 @@ function handleGallerySelect(url: string) {
           </div>
           <NInput v-model:value="itemIconInfo.src" size="small" type="text" placeholder="https://... 或本地上传" @input="handleChange" />
           <small class="icon-cache-hint">{{ $t('iconItem.localCacheHint') }}</small>
-          <div class="flex gap-2">
+          <div class="icon-upload-actions flex gap-2">
             <NUpload
               :action="uploadAction"
               :show-file-list="false"
@@ -192,7 +196,7 @@ function handleGallerySelect(url: string) {
         </div>
 
         <!-- 背景色调节 -->
-        <div class="flex items-center gap-2.5 mt-3 pt-2.5 border-t border-white/10 dark:border-white/10">
+        <div class="icon-color-controls flex items-center gap-2.5 mt-3 pt-2.5 border-t border-white/10 dark:border-white/10">
           <span class="text-xs text-slate-400 dark:text-zinc-400 whitespace-nowrap">{{ $t('common.backgroundColor') }}:</span>
           <div class="w-[120px]">
             <NColorPicker
@@ -288,5 +292,9 @@ function handleGallerySelect(url: string) {
 }
 
 .icon-cache-hint { color: var(--pn-color-text-muted, #64748b); font-size: 11px; line-height: 1.4; }
+.icon-color-controls, .icon-upload-actions { flex-wrap: wrap; }
+.icon-upload-actions :deep(.n-upload) { width: auto; flex: none; }
+.icon-color-controls > div { flex: 0 0 120px; }
+.icon-color-controls button { flex: none; white-space: nowrap; }
 
 </style>

@@ -1,18 +1,20 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type { FormInst, FormRules } from 'naive-ui'
-import { NButton, NForm, NFormItem, NGrid, NGridItem, NInput, NInputGroup, NModal, NSelect, useMessage } from 'naive-ui'
+import { NButton, NCard, NForm, NFormItem, NGrid, NGridItem, NInput, NInputGroup, NModal, NSelect, useMessage } from 'naive-ui'
 import IconEditor from './IconEditor.vue'
 import { cacheSavedIconImage } from '@/icons/localImageCache'
 import { edit, getSiteFavicon } from '@/api/panel/itemIcon'
 import { getList as getGroupList } from '@/api/panel/itemIconGroup'
 import { t } from '@/locales'
+import { createPresetIcon, findIconPresetForUrl } from '@/icons/presets'
 import { getRuntime } from '@/runtime'
 
 interface Props {
   visible: boolean
   itemInfo: Panel.Info | null
   itemGroupId?: number
+  embedded?: boolean
 }
 
 const props = defineProps<Props>()
@@ -38,10 +40,14 @@ const restoreDefault: Panel.Info = {
 
 interface Emit {
   (e: 'update:visible', visible: boolean): void
-  (e: 'done', item: Panel.Info, meta: { queued: boolean, conflict: boolean }): void// 创建完成
+  (e: 'done', item: Panel.Info, meta: { queued: boolean, conflict: boolean, keepOpen: boolean }): void// 创建完成
+  (e: 'busy', value: boolean): void
 }
 
-const model = ref<Panel.Info>(props.itemInfo ? { ...props.itemInfo } : { ...restoreDefault })
+function newItemModel(): Panel.Info {
+  return { ...restoreDefault, ...(props.embedded ? { icon: { itemType: 1, text: 'A', backgroundColor: '#168eff' } } : {}) }
+}
+const model = ref<Panel.Info>(props.itemInfo ? { ...props.itemInfo } : newItemModel())
 const formRef = ref<FormInst | null>(null)
 
 const rules: FormRules = {
@@ -87,7 +93,11 @@ const show = computed({
   },
 })
 
-async function editApi() {
+watch(submitLoading, value => emit('busy', value))
+
+async function editApi(keepOpen = false) {
+  if (submitLoading.value)
+    return
   submitLoading.value = true
   try {
     const payload = { ...model.value }
@@ -107,13 +117,14 @@ async function editApi() {
     if (code === 0) {
       if (iconCacheTask && navigator.onLine && !await iconCacheTask)
         ms.warning(t('iconItem.localCacheUnavailable'))
-      show.value = false
-      model.value = { ...restoreDefault }
+      if (!keepOpen)
+        show.value = false
+      model.value = { ...newItemModel(), itemIconGroupId: props.itemGroupId ?? model.value.itemIconGroupId }
       if (queued)
         ms.info(conflict ? t('iconItem.queuedWithConflict') : t('iconItem.queuedOffline'))
       else
         ms.success(t('common.saveSuccess'))
-      emit('done', data || payload, { queued: Boolean(queued), conflict: Boolean(conflict) })
+      emit('done', data || payload, { queued: Boolean(queued), conflict: Boolean(conflict), keepOpen })
     }
     else {
       ms.error(`${t('common.saveFail')}:${msg}`)
@@ -125,15 +136,26 @@ async function editApi() {
   submitLoading.value = false
 }
 
-const handleValidateButtonClick = (e: MouseEvent) => {
+const handleValidateButtonClick = async (e: MouseEvent, keepOpen = false) => {
   e.preventDefault()
-  formRef.value?.validate((errors) => {
-    if (!errors)
-      editApi()
-  })
+  if (submitLoading.value || !formRef.value)
+    return
+  try {
+    await formRef.value.validate()
+  }
+  catch {
+    ms.error(t('iconGallery.requiredFields'))
+    return
+  }
+  await editApi(keepOpen)
 }
 
 async function getIconByUrl(url: string, loadingIndex: number) {
+  const preset = findIconPresetForUrl(url)
+  if (preset) {
+    model.value.icon = createPresetIcon(preset)
+    return
+  }
   getIconLoading.value[loadingIndex] = true
   try {
     const { code, data } = await getSiteFavicon<{ iconUrl: string; iconUrls?: string[] }>(url)
@@ -157,15 +179,36 @@ async function getIconByUrl(url: string, loadingIndex: number) {
   getIconLoading.value[loadingIndex] = false
 }
 
-watch(() => props.visible, (newValue) => {
+watch([() => props.visible, () => props.itemInfo], ([newValue]) => {
   if (newValue === true) {
-    model.value = props.itemInfo ? { ...props.itemInfo } : { ...restoreDefault }
+    model.value = props.itemInfo ? { ...props.itemInfo } : newItemModel()
     if (props.itemGroupId)
       model.value.itemIconGroupId = props.itemGroupId
   }
 
   getGroupListOptions()
 }, { immediate: true })
+
+watch(() => props.itemGroupId, (id) => {
+  if (props.embedded && id)
+    model.value.itemIconGroupId = id
+})
+
+const frameProps = computed(() => props.embedded
+  ? { bordered: false, contentStyle: 'padding: 0;', footerStyle: 'padding: 16px 0 0;' }
+  : {
+      show: show.value,
+      'onUpdate:show': (value: boolean) => { show.value = value },
+      to: modalTo,
+      preset: 'card' as const,
+      size: 'small' as const,
+      style: 'width: min(620px, calc(100vw - 24px)); max-height: min(720px, calc(100vh - 32px)); display: flex; flex-direction: column; overflow: hidden;',
+      headerStyle: 'padding: 14px 20px 12px; border-bottom: 1px solid rgba(255,255,255,.08); flex-shrink: 0;',
+      contentStyle: 'padding: 16px 20px; flex: 1 1 0%; min-height: 0; overflow-y: auto; overscroll-behavior: contain;',
+      footerStyle: 'padding: 12px 20px 14px; border-top: 1px solid rgba(255,255,255,.08); flex-shrink: 0;',
+      bordered: false,
+      title: props.itemInfo?.id ? t('iconItem.edit') : t('iconItem.add'),
+    })
 
 async function getGroupListOptions() {
   try {
@@ -202,18 +245,10 @@ async function getGroupListOptions() {
 </script>
 
 <template>
-  <NModal
-    v-model:show="show"
-    :to="modalTo"
-    preset="card"
-    size="small"
-    class="edit-item-glass-modal"
-    style="width: min(620px, calc(100vw - 24px)); max-height: min(720px, calc(100vh - 32px)); display: flex; flex-direction: column; overflow: hidden;"
-    header-style="padding: 14px 20px 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); flex-shrink: 0;"
-    content-style="padding: 16px 20px; flex: 1 1 0%; min-height: 0; overflow-y: auto; overscroll-behavior: contain;"
-    footer-style="padding: 12px 20px 14px; border-top: 1px solid rgba(255, 255, 255, 0.08); flex-shrink: 0;"
-    :bordered="false"
-    :title="itemInfo?.id ? t('iconItem.edit') : t('iconItem.add')"
+  <component
+    :is="embedded ? NCard : NModal"
+    v-bind="frameProps"
+    :class="embedded ? 'edit-item-glass-modal edit-item-embedded' : 'edit-item-glass-modal'"
   >
     <div class="edit-item-content">
       <NForm ref="formRef" :model="model" :rules="rules" size="small">
@@ -223,12 +258,12 @@ async function getGroupListOptions() {
             {{ t('common.basicInfo') }}
           </div>
           <NGrid cols="2" :x-gap="12" item-responsive class="mt-2">
-            <NGridItem span="2 500:1">
+            <NGridItem v-if="!embedded" span="2 500:1">
               <NFormItem path="itemIconGroupId" :label="t('iconItem.iconGroup')" :show-feedback="false">
                 <NSelect v-model:value="model.itemIconGroupId" :options="itemIconGroupOptions" />
               </NFormItem>
             </NGridItem>
-            <NGridItem span="2 500:1">
+            <NGridItem :span="embedded ? 2 : '2 500:1'">
               <NFormItem path="title" :label="$t('common.title')" :show-feedback="false">
                 <NInput v-model:value="model.title" type="text" show-count :maxlength="20" placeholder="请输入名称" />
               </NFormItem>
@@ -260,7 +295,7 @@ async function getGroupListOptions() {
                 </NButton>
               </NInputGroup>
             </NFormItem>
-            <NFormItem path="lanUrl" :label="$t('iconItem.lanUrl')" :show-feedback="false">
+            <NFormItem v-if="!embedded" path="lanUrl" :label="$t('iconItem.lanUrl')" :show-feedback="false">
               <NInputGroup>
                 <NInput v-model:value="model.lanUrl" type="text" :maxlength="1000" :placeholder="$t('iconItem.lanUrlInputPlaceholder')" />
                 <NButton :disabled="!model.lanUrl" :loading="getIconLoading[1]" type="primary" secondary @click="getIconByUrl(model.lanUrl || '', 1)">
@@ -272,11 +307,17 @@ async function getGroupListOptions() {
         </div>
 
         <!-- 详细选项区 -->
-        <div class="form-glass-card">
-          <div class="card-section-title">
+        <component :is="embedded ? 'details' : 'div'" class="form-glass-card edit-item-advanced">
+          <summary v-if="embedded" class="card-section-title">
+            {{ t('iconGallery.advanced') }}
+          </summary>
+          <div v-if="!embedded" class="card-section-title">
             {{ t('iconItem.otherSettings') }}
           </div>
           <div class="flex flex-col gap-2.5 mt-2">
+            <NFormItem v-if="embedded" path="lanUrl" :label="$t('iconItem.lanUrl')" :show-feedback="false">
+              <NInput v-model:value="model.lanUrl" :maxlength="1000" :placeholder="$t('iconItem.lanUrlInputPlaceholder')" />
+            </NFormItem>
             <NFormItem path="description" :label="$t('common.description')" :show-feedback="false">
               <NInput v-model:value="model.description" type="text" show-count :maxlength="100" placeholder="项目简短描述" />
             </NFormItem>
@@ -284,21 +325,24 @@ async function getGroupListOptions() {
               <NSelect v-model:value="model.openMethod" :options="options" />
             </NFormItem>
           </div>
-        </div>
+        </component>
       </NForm>
     </div>
 
     <template #footer>
       <div class="flex items-center justify-end gap-2.5 w-full">
-        <NButton @click="show = false">
+        <NButton v-if="!embedded" :disabled="submitLoading" @click="show = false">
           {{ t('common.cancel') }}
         </NButton>
-        <NButton type="primary" :loading="submitLoading" @click="handleValidateButtonClick">
+        <NButton type="primary" :loading="submitLoading" @click="handleValidateButtonClick($event)">
           {{ $t('common.save') }}
+        </NButton>
+        <NButton v-if="embedded && !itemInfo?.id" secondary type="primary" :disabled="submitLoading" @click="handleValidateButtonClick($event, true)">
+          {{ t('iconGallery.saveContinue') }}
         </NButton>
       </div>
     </template>
-  </NModal>
+  </component>
 </template>
 
 <style>
@@ -334,4 +378,13 @@ async function getGroupListOptions() {
 .edit-item-glass-modal .n-form-item:last-child {
   margin-bottom: 0;
 }
+.edit-item-embedded.n-card { margin: 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important; }
+.edit-item-embedded .form-glass-card { background: var(--pn-glass-panel); border-color: var(--pn-glass-border); padding: 16px; }
+.edit-item-embedded .form-glass-card:not(.edit-item-advanced) > .card-section-title { display: none; }
+.edit-item-embedded .n-form { display: flex; flex-direction: column; }
+.edit-item-embedded .form-glass-card:nth-child(3) { order: -2; }
+.edit-item-embedded .form-glass-card:first-child { order: -1; }
+.edit-item-embedded .n-card__footer, .edit-item-embedded .n-card-footer { position: sticky; z-index: 1; bottom: 0; background: var(--pn-glass-panel); border-radius: 12px; backdrop-filter: var(--pn-glass-filter); }
+.edit-item-advanced summary { cursor: pointer; }
+.edit-item-advanced[open] summary { margin-bottom: 12px; }
 </style>

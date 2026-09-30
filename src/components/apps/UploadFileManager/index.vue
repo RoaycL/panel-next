@@ -215,14 +215,16 @@ onMounted(() => {
         style="width: 160px"
         @update-value="getFileList"
       />
-      <div class="pn-app-toolbar-controls">
+      <div class="pn-app-toolbar-controls upload-manager-actions">
         <NSelect
           v-model:value="uploadFileType"
           :options="uploadTypeOptions"
           size="small"
-          style="width: 120px"
+          class="upload-type-select"
+          aria-label="上传文件类型"
         />
         <NUpload
+          class="upload-manager-trigger"
           :action="uploadAction"
           :show-file-list="false"
           name="imgfile"
@@ -237,7 +239,7 @@ onMounted(() => {
             {{ $t('apps.uploadsFileManager.upload') }}
           </NButton>
         </NUpload>
-        <NButton size="small" tertiary type="warning" @click="handleCleanInvalid">
+        <NButton size="small" tertiary type="warning" class="upload-clean-action" @click="handleCleanInvalid">
           {{ $t('apps.uploadsFileManager.cleanInvalid') }}
         </NButton>
       </div>
@@ -342,3 +344,30 @@ onMounted(() => {
     </RoundCardModal>
   </div>
 </template>
+
+<style scoped>
+.upload-manager-actions {
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+.upload-manager-actions > :deep(.upload-type-select) {
+  width: 120px !important;
+  flex: 0 0 120px;
+}
+.upload-manager-actions > :deep(.upload-manager-trigger) {
+  width: auto;
+  flex: none;
+}
+.upload-manager-actions :deep(.n-upload-trigger) { display: inline-flex; }
+.upload-manager-actions > :deep(.n-button) { flex: none; white-space: nowrap; }
+.upload-manager-actions > :deep(.upload-clean-action) {
+  color: var(--pn-color-text-primary, #0f172a);
+  border: 1px solid color-mix(in srgb, var(--pn-color-warning, #f59e0b) 50%, transparent);
+  background: color-mix(in srgb, var(--pn-color-warning, #f59e0b) 12%, var(--pn-glass-control, var(--pn-color-surface)));
+}
+@media (max-width: 560px) {
+  .upload-manager-actions { justify-content: flex-start; gap: 6px; }
+  .upload-manager-actions > :deep(.upload-type-select) { width: 80px !important; flex-basis: 80px; }
+  .upload-manager-actions :deep(.n-button) { padding-inline: 10px; font-size: 12px; }
+}
+</style>

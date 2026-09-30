@@ -1,6 +1,7 @@
 import type { Router } from 'vue-router'
 import { useAuthStore } from '@/store'
 import { useUserStore } from '@/store/modules/user'
+import { openExtensionLogin } from '@/runtime/extensionLogin'
 
 export function setupPageGuard(router: Router) {
   router.beforeEach(async (to, from, next) => {
@@ -9,7 +10,9 @@ export function setupPageGuard(router: Router) {
 
     // An extension tab can restore an old #/login URL. Guest mode is the
     // default entry; the form is reached explicitly from the dashboard.
-    if (__PANEL_RUNTIME__ === 'extension' && to.name === 'login' && !authStore.token && !from.name) {
+    if (__PANEL_RUNTIME__ === 'extension' && to.name === 'login') {
+      if (!authStore.token && from.name)
+        openExtensionLogin()
       next({ name: 'Home', replace: true })
       return
     }

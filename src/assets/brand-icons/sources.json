@@ -1,0 +1,322 @@
+[
+  {
+    "id": "baidu",
+    "file": "baidu.ico",
+    "website": "https://www.baidu.com",
+    "source": "https://www.baidu.com/favicon.ico",
+    "sha256": "c70088079fe9441a726c66ce0e73ae38315ec80051d3dd542c41b82fa0a1993a",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "bilibili",
+    "file": "bilibili.ico",
+    "website": "https://www.bilibili.com",
+    "source": "https://www.bilibili.com/favicon.ico",
+    "sha256": "2681561eb24e7435fea1acf26f3af95e4efc9f7d451587b58bef62f030f337e9",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "bing",
+    "file": "bing.png",
+    "website": "https://www.bing.com",
+    "source": "https://www.bing.com/sa/simg/favicon-trans-bg-blue-mg-png.png",
+    "sha256": "5cbda906c7db6d50c7e200d73841a7bb7404bcff1b3c9121aa5bc79dbc608b9a",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "chatgpt",
+    "file": "chatgpt.webp",
+    "website": "https://chatgpt.com",
+    "source": "https://images.ctfassets.net/j22is2dtoxu1/intercom-img-d177d076c9a5453052925143/49d5d812b0a6fcc20a14faa8c629d9fb/icon-ios-1024_401x.png?fm=webp&q=80&w=1024",
+    "sha256": "6060801051538ac1c16d7bf8cedf66f668e4bdec3b3e73a9d2c71f2dccd38b6c",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "claude",
+    "file": "claude.ico",
+    "website": "https://claude.ai",
+    "source": "https://claude.ai/favicon.ico",
+    "sha256": "525d5c063365f7656ba0fe8b9165742c4874e70852d9bed7153b6faca8663a02",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "cloudflare",
+    "file": "cloudflare.png",
+    "website": "https://dash.cloudflare.com",
+    "source": "https://dash.cloudflare.com/favicon.ico",
+    "sha256": "5414bc6e4b3f6e10f99b5d37abf4420da4dcaece66f8f2c08e090e87267adbc5",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "codepen",
+    "file": "codepen.svg",
+    "website": "https://codepen.io",
+    "source": "https://blog.codepen.io/wp-content/uploads/2014/03/codepen-logo.svg",
+    "sha256": "2fdaf711d93f1df408bc648f8583b600014bc70227311cf7c854cc871c6a6a93",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "deepseek",
+    "file": "deepseek.svg",
+    "website": "https://chat.deepseek.com",
+    "source": "https://fe-static.deepseek.com/chat/favicon.svg",
+    "sha256": "90d7e400ca261d28dfb7982bfade335912b3a27a620faee9a787f8a52164fd43",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "discord",
+    "file": "discord.ico",
+    "website": "https://discord.com",
+    "source": "https://cdn.prod.website-files.com/6257adef93867e50d84d30e2/6266bc493fb42d4e27bb8393_847541504914fd33810e70a0ea73177e.ico",
+    "sha256": "0ff2884845f93cd730470ad755f5c38d334e6976ad59c8016b1353b8e30e64f8",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "docker",
+    "file": "docker.png",
+    "website": "https://hub.docker.com",
+    "source": "https://hub.docker.com/favicon.ico",
+    "sha256": "2d0ac2506e1df28bf8a08fdbd767416d320b1bc91c09587b95a669bb9e53e169",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "douban",
+    "file": "douban.ico",
+    "website": "https://www.douban.com",
+    "source": "https://www.douban.com/favicon.ico",
+    "sha256": "14ad1b885c1103123e17d16ed68986e3e9fb911a1ca411d03a9e90f58dd0ba39",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "drive",
+    "file": "drive.ico",
+    "website": "https://drive.google.com",
+    "source": "https://drive.google.com/favicon.ico",
+    "sha256": "16640c06f6249fdafd7828fd8425753abc360864dfd88f66704a32c38943c805",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "facebook",
+    "file": "facebook.ico",
+    "website": "https://www.facebook.com",
+    "source": "https://static.xx.fbcdn.net/rsrc.php/y1/r/ay1hV6OlegS.ico",
+    "sha256": "8924f44d76426a340b105cbdc5b93678c6b772e847b393f2568d94847c0d8d80",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "feishu",
+    "file": "feishu.ico",
+    "website": "https://www.feishu.cn",
+    "source": "https://www.feishu.cn/favicon.ico",
+    "sha256": "69da9be6053530750202e4f674d621274bd86a9fc23f44a16c5e6c7aa56dfd9e",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "figma",
+    "file": "figma.svg",
+    "website": "https://www.figma.com",
+    "source": "https://static.figma.com/app/icon/2/favicon.svg",
+    "sha256": "e6227b7dbc49c86da6f4ccfa02ba439428106b0ca627a0a33ea6ad1e09f335b3",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "gemini",
+    "file": "gemini.png",
+    "website": "https://gemini.google.com",
+    "source": "https://www.gstatic.com/lamda/images/gemini_sparkle_4g_512_lt_f94943af3be039176192d.png",
+    "sha256": "5e7cfecaa53f4f65a313fe89b0f389548126544a78fad8489510c70ae641a4a1",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "github",
+    "file": "github.svg",
+    "website": "https://github.com",
+    "source": "https://github.githubassets.com/favicons/favicon.svg",
+    "sha256": "6a9577cd4f7fa6b75bde1025af85b944e9dd1388373b55ccba6e9f80ac2eae60",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "gitlab",
+    "file": "gitlab.png",
+    "website": "https://gitlab.com",
+    "source": "https://gitlab.com/favicon.ico",
+    "sha256": "72a2cad5025aa931d6ea56c3201d1f18e68a8cd39788c7c80d5b2b82aa5143ef",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "gmail",
+    "file": "gmail.ico",
+    "website": "https://mail.google.com",
+    "source": "https://mail.google.com/favicon.ico",
+    "sha256": "5d1630612955e0924aac7746f94a8a83bd37d87d929c74c7a1e5e822a88a4bb6",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "google",
+    "file": "google.ico",
+    "website": "https://www.google.com",
+    "source": "https://www.google.com/favicon.ico",
+    "sha256": "6da5620880159634213e197fafca1dde0272153be3e4590818533fab8d040770",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "huggingface",
+    "file": "huggingface.ico",
+    "website": "https://huggingface.co",
+    "source": "https://huggingface.co/favicon.ico",
+    "sha256": "7266292a5073388702cfca169d26766460cb90ba978bacc95c914ad7a5c611cb",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "instagram",
+    "file": "instagram.webp",
+    "website": "https://www.instagram.com",
+    "source": "https://static.cdninstagram.com/rsrc.php/yr/r/rzWiSjZRxk5.webp",
+    "sha256": "5ea73220ab5bda046e21d3f0cba26eafadeb3cc2bbd07a91978774048c84b6ee",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "mdn",
+    "file": "mdn.svg",
+    "website": "https://developer.mozilla.org",
+    "source": "https://developer.mozilla.org/favicon.svg",
+    "sha256": "77b58351b9f57ca4f663812879efb28988da716038b9cf22ad9c3af7fcdeee39",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "netflix",
+    "file": "netflix.ico",
+    "website": "https://www.netflix.com",
+    "source": "https://www.netflix.com/favicon.ico",
+    "sha256": "abe8012eb65c0dc0ac3e87dcc1e60e1908ebd8f12b7c47a5df1856f7a7bb1edd",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "notion",
+    "file": "notion.png",
+    "website": "https://www.notion.so",
+    "source": "https://www.notion.so/front-static/logo-ios.png",
+    "sha256": "483846a85e43e22879445047b83b22033e70fcc25ab34809ebadb7f856507ee0",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "npm",
+    "file": "npm.svg",
+    "website": "https://www.npmjs.com",
+    "source": "https://raw.githubusercontent.com/npm/logos/master/npm%20square/n.svg",
+    "sha256": "2f39719d596d7141fccd4f66ad61b0396e9b358bddaba78fa4747ce559e458cf",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "outlook",
+    "file": "outlook.ico",
+    "website": "https://outlook.live.com",
+    "source": "https://outlook.live.com/favicon.ico",
+    "sha256": "e35d94b76894d6eca96ff5b1a12d94dfe73485ef3c52cb5b4395be8ffac1cb45",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "reddit",
+    "file": "reddit.png",
+    "website": "https://www.reddit.com",
+    "source": "https://www.reddit.com/favicon.ico",
+    "sha256": "3fcb0febd3450b5edbd536a86dbfe6dd7bad6bd39d3976801b069e14d15da5d3",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "spotify",
+    "file": "spotify.png",
+    "website": "https://open.spotify.com",
+    "source": "https://open.spotifycdn.com/cdn/images/favicon32.b64ecc03.png",
+    "sha256": "b64ecc030dcc47688f94d6c4b14d747f2b8dbcdc7012e5c69574f8354eac7257",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "stackoverflow",
+    "file": "stackoverflow.ico",
+    "website": "https://stackoverflow.com",
+    "source": "https://stackoverflow.com/favicon.ico",
+    "sha256": "1fb72fef0a0698fda92fafe9dd1e3dce35fb7eb7151dfaf6977fa5a3770b1bb8",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "steam",
+    "file": "steam.ico",
+    "website": "https://store.steampowered.com",
+    "source": "https://store.steampowered.com/favicon.ico",
+    "sha256": "9f890a9debcdfccc339149a7943be9aff9e4c9203c2fa37d5671a5b2c88503ad",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "telegram",
+    "file": "telegram.png",
+    "website": "https://web.telegram.org",
+    "source": "https://web.telegram.org/favicon.ico",
+    "sha256": "462c72824442b77689e0650dfe56a218cbea68b48669d68f3f7b3247af187d09",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "twitch",
+    "file": "twitch.png",
+    "website": "https://www.twitch.tv",
+    "source": "https://assets.twitch.tv/assets/favicon-32-e29e246c157142c94346.png",
+    "sha256": "4d87b8e63982e6f22b71048d310922e0c23858d3df0f7f3f0b362e7db7b25abb",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "v2ex",
+    "file": "v2ex.png",
+    "website": "https://www.v2ex.com",
+    "source": "https://www.v2ex.com/static/icon-192.png",
+    "sha256": "f160bf4ecae6db26ecfd84f2ff5f6c66a47402e62099ac15c78d7e46571807af",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "weibo",
+    "file": "weibo.ico",
+    "website": "https://weibo.com",
+    "source": "https://weibo.com/favicon.ico",
+    "sha256": "b86c00f90f8b742d1fb477034fb1916832857b8ac8a77f34a9c2904f3051194a",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "x",
+    "file": "x.png",
+    "website": "https://x.com",
+    "source": "https://x.com/apple-touch-icon.png",
+    "sha256": "a83542eb0563242949d7dbde720014fb7ab48ae14ed59f43eec34907cb90c477",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "xiaohongshu",
+    "file": "xiaohongshu.png",
+    "website": "https://www.xiaohongshu.com",
+    "source": "https://picasso-static.xiaohongshu.com/fe-platform/f43dc4a8baf03678996c62d8db6ebc01a82256ff.png",
+    "sha256": "2912c4df1ab479d734ef132e9c45b4f17afa80b2aa3eaf4438acd54afc70b20a",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "youtube",
+    "file": "youtube.png",
+    "website": "https://www.youtube.com",
+    "source": "https://www.youtube.com/s/desktop/d57c41d2/img/favicon_144x144.png",
+    "sha256": "e39dc3d8c2f82ad2375132a8efcf521c232d5e2cf08abeb9bebe1ad94afb2157",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "yuque",
+    "file": "yuque.svg",
+    "website": "https://www.yuque.com",
+    "source": "https://mdn.alipayobjects.com/huamei_0prmtq/afts/img/A*sRUdR543RjcAAAAAAAAAAAAADvuFAQ/original",
+    "sha256": "d4ceb0d7544da97d57d973292e2bb5e07648d8d70fb668328680ea97ed0c1dd9",
+    "retrievedAt": "2026-09-30"
+  },
+  {
+    "id": "zhihu",
+    "file": "zhihu.ico",
+    "website": "https://www.zhihu.com",
+    "source": "https://www.zhihu.com/favicon.ico",
+    "sha256": "ca501e1d6c35f64b94d78bbabad986fe888d6aab08702a0083ba88076ad60f37",
+    "retrievedAt": "2026-09-30"
+  }
+]

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import type { UploadFileInfo } from 'naive-ui'
-import { NButton, NCard, NColorPicker, NGrid, NGridItem, NInput, NInputGroup, NInputNumber, NModal, NPopconfirm, NSelect, NSlider, NSwitch, NUpload, NUploadDragger, useMessage } from 'naive-ui'
+import { NButton, NCard, NColorPicker, NGrid, NGridItem, NInput, NInputGroup, NInputNumber, NModal, NSelect, NSlider, NSwitch, NUpload, NUploadDragger, useDialog, useMessage } from 'naive-ui'
 import { useAuthStore, usePanelState } from '@/store'
 import { set as setUserConfig } from '@/api/panel/userConfig'
 import { PanelPanelConfigStyleEnum } from '@/enums/panel'
@@ -21,6 +21,18 @@ function handleWallpaperGallerySelect(url: string) {
   showWallpaperGallery.value = false
 }
 const ms = useMessage()
+const dialog = useDialog()
+
+function confirmReset() {
+  dialog.warning({
+    title: t('common.reset'),
+    content: t('apps.baseSettings.resetWarnText'),
+    positiveText: t('common.confirm'),
+    negativeText: t('common.cancel'),
+    autoFocus: false,
+    onPositiveClick: resetPanelConfig,
+  })
+}
 const showWallpaperInput = ref(false)
 const uploadAction = getRuntime().resolveUrl('/api/file/uploadImg')
 const isExtension = getRuntime().kind === 'extension'
@@ -358,14 +370,9 @@ function resetPanelConfig() {
 
     <NCard class="pn-app-card" size="small">
       <div class="pn-app-actions">
-        <NPopconfirm @positive-click="resetPanelConfig">
-          <template #trigger>
-            <NButton size="small" quaternary type="error">
-              {{ $t('common.reset') }}
-            </NButton>
-          </template>
-          {{ $t('apps.baseSettings.resetWarnText') }}
-        </NPopconfirm>
+        <NButton size="small" quaternary type="error" @click="confirmReset">
+          {{ $t('common.reset') }}
+        </NButton>
         <NButton size="small" type="primary" @click="uploadCloud">
           {{ $t('common.save') }}
         </NButton>

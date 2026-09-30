@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, h, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
-  NAvatar,
   NDropdown,
   NModal,
   NSwitch,
@@ -16,14 +15,15 @@ import { generateWidgetInstanceId } from '@/widgets/builtins'
 import { resizeInstanceToWithinBounds, resolveWidgetSize, serializeWidgetLayout, widgetRegistry } from '@/widgets/registry'
 import { applyWidgetDisplayOrder, buildWidgetDisplayGroups, canStackWidgets, normalizeWidgetStacks, stackWidgets, unstackWidget } from '@/widgets/stack'
 import { useWidgetGridResize } from '@/widgets/useGridResize'
-import { useRouter } from 'vue-router'
 import SvgIcon from '@/components/common/SvgIcon/index.vue'
 import ItemIcon from '@/components/common/ItemIcon/index.vue'
+import ProfileAvatar from '@/components/common/ProfileAvatar/index.vue'
 import { useAppStore, useAuthStore, usePanelState, useUserStore } from '@/store'
 import { getLocalState as getLocalPanelState } from '@/store/modules/panel/helper'
 import { PanelStateNetworkModeEnum } from '@/enums'
 import { VisitMode } from '@/enums/auth'
 import { getRuntime } from '@/runtime'
+import { extensionLoginVisible, openExtensionLogin } from '@/runtime/extensionLogin'
 import type { StorageChangeEvent } from '@/runtime/types'
 import { EXTENSION_APPEARANCE_KEY, EXTENSION_WIDGETS_KEY, processPendingWidgetCleanups, readExtensionAppearance, readExtensionWidgets, removeExtensionWidgetFlow, saveExtensionAppearance, saveExtensionWidgets } from '@/runtime/extensionAppearance'
 import type { ExtensionBookmarkLayout, ExtensionPageLayout, ExtensionSearchEngineId } from '@/runtime/extensionAppearance'
@@ -40,8 +40,7 @@ import { deletes as deleteItems, getListByGroupId, saveSort as saveItemSort } fr
 import type { DashboardGroup } from '@/dashboard/core'
 import { createDashboardState, createItemSortRequest, selectItemUrl } from '@/dashboard/core'
 import { VueDraggable } from 'vue-draggable-plus'
-import { ICON_PRESETS } from '@/icons/presets'
-import type { IconPreset } from '@/icons/presets'
+import { ICON_PRESETS, createPresetIcon } from '@/icons/presets'
 
 import SvgSrcBaidu from '@/assets/search_engine_svg/baidu.svg'
 import SvgSrcBing from '@/assets/search_engine_svg/bing.svg'
@@ -52,12 +51,10 @@ const EditItem = defineAsyncComponent(() => import('@/views/home/components/Edit
 const ItemGroupManage = defineAsyncComponent(() => import('@/components/apps/ItemGroupManage/index.vue'))
 const GallerySelector = defineAsyncComponent(() => import('@/components/common/GallerySelector/index.vue'))
 const WidgetSettingsModal = defineAsyncComponent(() => import('@/widgets/WidgetSettingsModal.vue'))
-const WidgetGalleryModal = defineAsyncComponent(() => import('./components/WidgetGalleryModal.vue'))
 const IconGalleryModal = defineAsyncComponent(() => import('./components/IconGalleryModal.vue'))
 const ConflictResolverModal = defineAsyncComponent(() => import('@/components/common/ConflictResolverModal/index.vue'))
 const OfflineQueueManager = defineAsyncComponent(() => import('@/components/common/OfflineQueueManager/index.vue'))
 
-const router = useRouter()
 const ms = useMessage()
 const dialog = useDialog()
 const appStore = useAppStore()
@@ -118,8 +115,12 @@ async function triggerOfflineReplay() {
 
 const showWallpaperModal = ref(false)
 const showWidgetManager = ref(false)
-const showWidgetGallery = ref(false)
 const showIconGallery = ref(false)
+const addCenterSection = ref<'sites' | 'widgets'>('sites')
+function openAddCenter(section: 'sites' | 'widgets' = 'sites') {
+  addCenterSection.value = section
+  showIconGallery.value = true
+}
 const showGroupManager = ref(false)
 const widgetPreferences = ref(readExtensionWidgets())
 const sidebarPosition = computed({
@@ -743,9 +744,7 @@ const defaultPresetGroups: DashboardGroup[] = [
       title: preset.title,
       url: preset.url,
       description: preset.url,
-      icon: preset.sprite
-        ? { itemType: 3, text: preset.sprite.replace('-', ':'), backgroundColor: preset.color }
-        : { itemType: 1, text: preset.mark, backgroundColor: preset.color },
+      icon: createPresetIcon(preset),
       openMethod: 1,
       itemIconGroupId: 1,
     })),
@@ -966,7 +965,12 @@ let bookmarkSortSnapshot: Panel.ItemInfo[] | null = null
 let dashboardOrderSnapshot: string[] | null = null
 let sideHideTimer: number | null = null
 
-const sideRailVisible = computed(() => !sidebarAutoHide.value || sideRailRevealed.value)
+const sideRailElement = ref<HTMLElement | null>(null)
+const sideRailSuppressed = computed(() => settingsModalVisible.value || extensionLoginVisible.value
+  || showWallpaperModal.value || showWidgetManager.value
+  || showIconGallery.value || showGroupManager.value || extensionWidgetSettingsVisible.value || editCardModalVisible.value
+  || conflictModalVisible.value || queueManagerVisible.value)
+const sideRailVisible = computed(() => !sideRailSuppressed.value && (!sidebarAutoHide.value || sideRailRevealed.value))
 
 function clearSideHideTimer() {
   if (sideHideTimer) {
@@ -976,6 +980,8 @@ function clearSideHideTimer() {
 }
 
 function revealSideArea() {
+  if (sideRailSuppressed.value)
+    return
   clearSideHideTimer()
   sideRailRevealed.value = true
 }
@@ -983,10 +989,12 @@ function revealSideArea() {
 function scheduleSideAreaHide() {
   clearSideHideTimer()
   sideHideTimer = window.setTimeout(() => {
-    if (sidebarAutoHide.value)
+    const keyboardFocusWithin = sideRailElement.value?.contains(document.activeElement)
+      && document.activeElement?.matches(':focus-visible')
+    if (sidebarAutoHide.value && !keyboardFocusWithin)
       sideRailRevealed.value = false
     sideHideTimer = null
-  }, sidebarAutoHide.value ? 3000 : 220)
+  }, 260)
 }
 
 function closeSideArea() {
@@ -1005,6 +1013,13 @@ watch(sidebarAutoHide, (hidden) => {
 watch(sidebarPosition, () => {
   closeSideArea()
 })
+
+watch(sideRailSuppressed, (suppressed) => {
+  if (suppressed) {
+    clearSideHideTimer()
+    sideRailRevealed.value = false
+  }
+}, { flush: 'sync' })
 
 const groupTabs = computed(() => {
   return groups.value.map(g => ({
@@ -1113,6 +1128,7 @@ function bookmarkLayout(card: Panel.ItemInfo): ExtensionBookmarkLayout {
 function bookmarkCardStyle(card: Panel.ItemInfo) {
   const layout = bookmarkLayout(card)
   return {
+    '--bookmark-columns': layout.columns,
     gridColumn: `span ${layout.columns}`,
     gridRow: `span ${layout.rows}`,
   }
@@ -1182,7 +1198,7 @@ function closeGroupManager() {
 function handleGroupWheel(event: WheelEvent) {
   if (!widgetPreferences.value.sidebarWheelSwitch)
     return
-  if (settingsModalVisible.value || showWallpaperModal.value || showWidgetManager.value || showWidgetGallery.value || showIconGallery.value || editCardModalVisible.value || conflictModalVisible.value)
+  if (settingsModalVisible.value || showWallpaperModal.value || showWidgetManager.value || showIconGallery.value || editCardModalVisible.value || conflictModalVisible.value)
     return
   const target = event.target as HTMLElement | null
   if (target?.closest('input, textarea, [role="dialog"], .side-panel-scroll'))
@@ -1230,40 +1246,9 @@ function openCardEditor(card: Panel.ItemInfo) {
   editCardModalVisible.value = true
 }
 
-function selectIconPreset(preset: IconPreset | null) {
-  if (authStore.visitMode !== VisitMode.VISIT_MODE_LOGIN || !authStore.token)
-    return
-  const groupId = activeGroupRecord.value?.id
-  if (!groupId)
-    return
-  if (!preset) {
-    editCardData.value = null
-    editCardGroupId.value = groupId
-    showIconGallery.value = false
-    editCardModalVisible.value = true
-    return
-  }
-
-  const icon: Panel.ItemIcon = preset.sprite
-    ? { itemType: 3, text: preset.sprite.replace('-', ':'), backgroundColor: preset.color }
-    : { itemType: 1, text: preset.mark, backgroundColor: preset.color }
-  editCardData.value = {
-    title: preset.title,
-    url: preset.url,
-    lanUrl: '',
-    description: '',
-    openMethod: 2,
-    itemIconGroupId: groupId,
-    icon,
-  }
-  editCardGroupId.value = groupId
-  showIconGallery.value = false
-  editCardModalVisible.value = true
-}
-
 function goToIconLogin() {
   showIconGallery.value = false
-  void router.push('/login')
+  openExtensionLogin()
 }
 
 function handleBookmarkDragStart() {
@@ -1548,7 +1533,7 @@ function openSettings() {
 
 function handleAvatarClick() {
   if (!authStore.token) {
-    void router.push('/login')
+    openExtensionLogin()
     return
   }
   openSettings()
@@ -1688,6 +1673,7 @@ onUnmounted(() => {
       'sidebar-right': sidebarPosition === 'right',
       'sidebar-auto-hide': sidebarAutoHide,
       'sidebar-compact': sidebarDensity === 'compact',
+      'sidebar-suppressed': sideRailSuppressed,
     }"
   >
     <!-- 用户自定义壁纸层 -->
@@ -1702,17 +1688,21 @@ onUnmounted(() => {
 
     <!-- 侧边热区：自动隐藏时，靠近用户指定的屏幕边缘重新显示。 -->
     <button
-      v-if="sidebarAutoHide"
+      v-if="sidebarAutoHide && !sideRailSuppressed"
       type="button"
       class="edge-trigger"
       :aria-label="sidebarPosition === 'left' ? '展开左侧功能区' : '展开右侧功能区'"
       @mouseenter="revealSideArea"
+      @mouseleave="scheduleSideAreaHide"
       @focus="revealSideArea"
       @click="revealSideArea"
     />
     <div
+      ref="sideRailElement"
       class="side-rail"
       :class="{ revealed: sideRailVisible }"
+      :inert="!sideRailVisible"
+      :aria-hidden="!sideRailVisible"
       @mouseenter="revealSideArea"
       @mouseleave="scheduleSideAreaHide"
       @focusin="revealSideArea"
@@ -1720,9 +1710,7 @@ onUnmounted(() => {
     >
       <button type="button" class="rail-avatar" :title="authStore.token ? `${extensionProfileName} · 打开我的设置` : '点击头像登录'" @click="handleAvatarClick">
         <span class="rail-avatar-frame">
-          <NAvatar :key="extensionAvatarUrl" round :size="42" :src="extensionAvatarUrl || undefined" fallback-src="/favicon.svg">
-            {{ extensionProfileName[0].toUpperCase() }}
-          </NAvatar>
+          <ProfileAvatar round :size="42" :src="extensionAvatarUrl" />
           <span
             class="rail-avatar-status"
             :class="`is-${extensionSyncPresentation.tone}`"
@@ -1734,7 +1722,7 @@ onUnmounted(() => {
       <div class="rail-divider" />
       <div class="rail-groups" aria-label="书签分组">
         <button
-          v-for="(group, index) in groupTabs"
+          v-for="group in groupTabs"
           :key="group.id"
           type="button"
           class="rail-group-button"
@@ -1743,7 +1731,10 @@ onUnmounted(() => {
           :title="`${group.title}（${group.count} 项）`"
           @click="selectGroup(group.id)"
         >
-          <span class="rail-group-icon" aria-hidden="true">{{ group.title.trim().slice(0, 1) || index + 1 }}</span>
+          <span class="rail-group-icon" aria-hidden="true">
+            <ItemIcon v-if="group.icon && !['material-symbols:folder-outline', 'material-symbols-folder-outline'].includes(group.icon)" :item-icon="{ itemType: 3, text: group.icon }" :size="28" :fallback-text="group.title" />
+            <ThemeIcon v-else name="folder" class="rail-icon" />
+          </span>
           <span class="rail-group-label">{{ group.title }}</span>
         </button>
         <button type="button" class="rail-group-button rail-group-add" title="新增或管理分组" @click="openGroupManager">
@@ -1915,10 +1906,6 @@ onUnmounted(() => {
               <strong>正在编辑当前页面</strong>
               <small>书签与组件可混合拖动 · 组件尺寸严格吸附统一网格</small>
             </div>
-            <button type="button" class="modal-secondary-action flex items-center gap-1" :title="t('widgetLayout.add')" :aria-label="t('widgetLayout.add')" @click="showWidgetGallery = true">
-              <SvgIcon icon="material-symbols:add-rounded" class="w-4 h-4" />
-              <span>{{ t('widgetLayout.add') }}</span>
-            </button>
             <button type="button" class="modal-secondary-action flex items-center gap-1" :title="extensionWidgetEditMode ? t('widgetLayout.done') : t('widgetLayout.edit')" :aria-label="extensionWidgetEditMode ? t('widgetLayout.done') : t('widgetLayout.edit')" @click="extensionWidgetEditMode = !extensionWidgetEditMode">
               <SvgIcon :icon="extensionWidgetEditMode ? 'material-symbols:check-rounded' : 'material-symbols:dashboard-customize-outline-rounded'" class="w-4 h-4" />
               <span>{{ extensionWidgetEditMode ? t('widgetLayout.done') : t('widgetLayout.edit') }}</span>
@@ -2002,14 +1989,10 @@ onUnmounted(() => {
           <div v-else class="extension-widget-empty">
             <SvgIcon icon="material-symbols:dashboard-customize-outline-rounded" class="w-10 h-10 opacity-60" />
             <p>当前页面还是空的</p>
-            <small>添加小组件开始布置；书签可使用下方的加号添加</small>
-            <button type="button" @click="showWidgetGallery = true">
-              <SvgIcon icon="material-symbols:add-rounded" />
-              添加小组件
-            </button>
+            <small>点击添加图标，选择网站或小组件开始布置</small>
           </div>
 
-          <button v-if="activeGroup" type="button" class="dashboard-add-icon" :title="t('iconGallery.title')" :aria-label="t('iconGallery.title')" @click="showIconGallery = true">
+          <button v-if="activeGroup" type="button" class="dashboard-add-icon" :title="t('iconGallery.title')" :aria-label="t('iconGallery.title')" @click="openAddCenter()">
             <span class="dashboard-add-icon-symbol"><SvgIcon icon="material-symbols-add-rounded" /></span>
             <span>{{ t('iconGallery.title') }}</span>
           </button>
@@ -2193,7 +2176,7 @@ onUnmounted(() => {
         <div class="extension-widget-library">
           <div class="extension-widget-library-head">
             <div><b>{{ t('widgetLayout.manager.contentWidgetsTitle') }}</b><small>{{ t('widgetLayout.manager.contentWidgetsDesc') }}</small></div>
-            <button type="button" class="modal-secondary-action" @click="showWidgetManager = false; showWidgetGallery = true">
+            <button type="button" class="modal-secondary-action" @click="showWidgetManager = false; openAddCenter('widgets')">
               {{ t('widgetLayout.add') }}
             </button>
           </div>
@@ -2218,8 +2201,7 @@ onUnmounted(() => {
       </div>
     </NModal>
 
-    <WidgetGalleryModal v-model:show="showWidgetGallery" :page-name="activeGroup?.title" :added-counts="extensionWidgetAddedCounts" :busy="addingExtensionWidget" @add="addExtensionWidget" />
-    <IconGalleryModal v-model:show="showIconGallery" :page-name="activeGroup?.title" :can-add="authStore.visitMode === VisitMode.VISIT_MODE_LOGIN && Boolean(authStore.token)" @select="selectIconPreset" @login="goToIconLogin" />
+    <IconGalleryModal v-model:show="showIconGallery" v-model:page-id="activeTabId" :pages="groupTabs" :initial-section="addCenterSection" :can-add="authStore.visitMode === VisitMode.VISIT_MODE_LOGIN && Boolean(authStore.token)" :added-counts="extensionWidgetAddedCounts" :busy="addingExtensionWidget" @add-widget="addExtensionWidget" @done="handleEditSuccess" @login="goToIconLogin" />
 
     <WidgetSettingsModal v-model:show="extensionWidgetSettingsVisible" :instance="extensionWidgetSettingsInstance" @save="applyExtensionWidgetSettings" />
 
@@ -2844,10 +2826,12 @@ onUnmounted(() => {
 }
 
 .side-rail {
-  inset: 12px auto 12px 12px;
-  width: 72px;
-  padding: 10px 7px;
-  gap: 4px;
+  inset: 50% auto auto 12px;
+  translate: 0 -50%;
+  width: 152px;
+  max-height: calc(100dvh - 32px);
+  padding: 12px;
+  gap: 8px;
   color: var(--ext-text-muted);
   border: 1px solid var(--ext-border);
   border-radius: 20px;
@@ -2857,27 +2841,31 @@ onUnmounted(() => {
 }
 
 .sidebar-right .side-rail {
-  inset: 12px 12px 12px auto;
+  inset: 50% 12px auto auto;
   border: 1px solid var(--ext-border);
   box-shadow: var(--ext-elevation);
 }
 
-.sidebar-compact .side-rail { width: 60px; padding-inline: 5px; }
+.sidebar-compact .side-rail { width: 64px; padding-inline: 5px; }
 .sidebar-compact .rail-avatar { width: 48px; }
+.sidebar-compact .rail-avatar, .sidebar-compact .rail-group-button, .sidebar-compact .rail-settings { flex-direction: column; justify-content: center; }
+.sidebar-compact .rail-group-label, .sidebar-compact .rail-avatar-label { width: 50px; text-align: center; font-size: 10px; }
+.sidebar-compact .rail-group-button { min-height: 52px; padding: 5px 2px; gap: 3px; }
+.sidebar-compact .rail-settings { gap: 3px; padding-inline: 0; }
 .sidebar-compact .rail-avatar-frame { width: 36px; height: 36px; }
 .sidebar-compact .rail-avatar-frame :deep(.n-avatar) { width: 36px !important; height: 36px !important; }
 .sidebar-compact .rail-group-button, .sidebar-compact .rail-button { min-height: 40px; }
 
-.sidebar-auto-hide .side-rail:not(.revealed) { transform: translateX(calc(-100% - 15px)); }
-.sidebar-right.sidebar-auto-hide .side-rail:not(.revealed) { transform: translateX(calc(100% + 15px)); }
+.side-rail:not(.revealed) { opacity: 0; pointer-events: none; transform: translateX(calc(-100% - 15px)); }
+.sidebar-right .side-rail:not(.revealed) { transform: translateX(calc(100% + 15px)); }
 
 .main-content {
   padding-top: 54px !important;
   padding-right: 52px !important;
-  padding-left: 112px !important;
+  padding-left: 192px !important;
   transition: padding 220ms cubic-bezier(.2, .8, .2, 1);
 }
-.sidebar-right .main-content { padding-right: 112px !important; padding-left: 52px !important; }
+.sidebar-right .main-content { padding-right: 192px !important; padding-left: 52px !important; }
 .sidebar-auto-hide .main-content { padding-left: 52px !important; }
 .sidebar-right.sidebar-auto-hide .main-content { padding-right: 52px !important; }
 .sidebar-compact .main-content { padding-left: 96px !important; }
@@ -2885,9 +2873,10 @@ onUnmounted(() => {
 .sidebar-auto-hide.sidebar-compact .main-content { padding-left: 52px !important; }
 .sidebar-right.sidebar-auto-hide.sidebar-compact .main-content { padding-right: 52px !important; }
 
-.rail-avatar { position: relative; width: 58px; gap: 5px; color: var(--ext-text-muted); }
-.rail-avatar-frame { position: relative; display: block; width: 42px; height: 42px; }
+.rail-avatar { position: relative; width: 100%; flex-direction: row; gap: 10px; padding: 3px 0; color: var(--ext-text-muted); }
+.rail-avatar-frame { position: relative; display: block; flex: none; width: 42px; height: 42px; }
 .rail-avatar-frame :deep(.n-avatar) {
+  --pn-profile-avatar-color: #fff;
   border: 2px solid rgba(46, 184, 240, .45);
   border-radius: 15px !important;
   color: #fff;
@@ -2909,27 +2898,36 @@ onUnmounted(() => {
 .rail-avatar-status.is-cached { background: #9979e8; }
 .rail-avatar-status.is-offline { background: #8b98aa; }
 .rail-avatar-status.is-error { background: var(--ext-danger); }
-.rail-avatar-label { color: var(--ext-text-muted); }
-.rail-divider { width: 32px; margin: 7px 0; background: var(--ext-divider); }
-.rail-group-button, .rail-button { color: var(--ext-text-muted); border-radius: 14px; }
+.rail-avatar-label { color: var(--ext-text); font-size: 11px; width: auto; flex: 1; text-align: left; font-weight: 650; line-height: 1.4; }
+.rail-divider { width: 100%; flex: none; margin: 3px 0; background: var(--ext-divider); }
+.rail-group-button, .rail-button { color: var(--ext-text); border-radius: 14px; }
+.rail-group-button { display: flex; align-items: center; justify-content: flex-start; flex: none; min-height: 42px; padding: 6px 8px; gap: 10px; border-radius: 12px; }
+.rail-group-label { width: auto; min-width: 0; text-align: left; font-size: 12px; font-weight: 650; line-height: 1.4; }
+.rail-groups { flex: 0 1 auto; gap: 4px; overscroll-behavior: contain; }
+.rail-spacer { flex: none; width: 100%; min-height: 1px; height: 1px; background: var(--ext-divider); }
+.rail-settings { width: 100%; min-height: 38px; flex-direction: row; justify-content: flex-start; gap: 10px; padding: 6px 8px; }
+.rail-group-button:focus-visible, .rail-button:focus-visible, .rail-avatar:focus-visible { outline: 2px solid var(--ext-accent); outline-offset: 2px; }
+.rail-button { font-size: 11px; font-weight: 650; }
 .rail-group-button:hover, .rail-group-button.active, .rail-button:hover, .rail-button.active {
   color: var(--ext-text);
   background: var(--ext-surface-raised);
 }
-.rail-group-button.active { color: var(--ext-accent); background: var(--ext-accent-soft); }
+.rail-group-button.active { color: var(--ext-text); background: var(--ext-accent-soft); }
 .rail-group-button.active::before { left: -7px; width: 3px; height: 26px; border-radius: 3px; background: var(--ext-accent); }
 .sidebar-right .rail-group-button.active::before { right: -7px; }
 .rail-group-icon {
-  width: 25px;
-  height: 25px;
+  flex: none;
+  width: 28px;
+  height: 28px;
   border: 0;
   border-radius: 8px;
   color: inherit;
-  background: transparent;
+  background: var(--ext-surface-raised);
   font: 750 11px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
-.rail-group-button.active .rail-group-icon { color: inherit; border: 0; background: transparent; }
-.rail-group-add { color: var(--ext-accent); }
+.rail-group-button.active .rail-group-icon { color: var(--pn-sidebar-active-text-color, var(--ext-text)); border: 0; background: color-mix(in srgb, var(--ext-accent) 16%, transparent); }
+.rail-group-add { color: var(--ext-text); }
+.rail-group-add .rail-icon { color: var(--pn-sidebar-active-text-color, var(--ext-text)); }
 
 .clock-hero { margin-bottom: 24px; color: #fff; }
 .time-display { letter-spacing: -.06em; }
@@ -3197,12 +3195,16 @@ onUnmounted(() => {
 }
 
 @media (max-width: 720px) {
-  .side-rail { inset-block: 8px; left: 8px; width: 64px; border-radius: 18px; }
+  .side-rail { left: 8px; max-height: calc(100dvh - 24px); border-radius: 18px; }
   .sidebar-right .side-rail { right: 8px; left: auto; }
-  .main-content { padding: 46px 14px 32px 84px !important; }
-  .sidebar-right .main-content { padding-right: 84px !important; padding-left: 14px !important; }
+  .main-content { padding: 46px 14px 32px 176px !important; }
+  .sidebar-right .main-content { padding-right: 176px !important; padding-left: 14px !important; }
+  .sidebar-compact .main-content { padding-left: 84px !important; }
+  .sidebar-right.sidebar-compact .main-content { padding-right: 84px !important; padding-left: 14px !important; }
   .sidebar-auto-hide .main-content { padding-left: 14px !important; }
   .sidebar-right.sidebar-auto-hide .main-content { padding-right: 14px !important; }
+  .sidebar-auto-hide.sidebar-compact .main-content { padding-left: 14px !important; }
+  .sidebar-right.sidebar-auto-hide.sidebar-compact .main-content { padding-right: 14px !important; }
   .extension-widget-toolbar { margin-top: -36px; }
   .extension-edit-mode-copy small { display: none; }
   .cards-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -3250,11 +3252,11 @@ onUnmounted(() => {
 }
 .extension-dashboard-track { display: contents; }
 .dashboard-canvas-item { min-width: 0; min-height: 0; }
-.dashboard-add-icon { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 7px; grid-column: span 1; grid-row: span 1; min-width: 0; min-height: 0; padding: 3px 2px 6px; border: 1px dashed rgb(255 255 255 / 48%); border-radius: 14px; color: #fff; background: rgb(12 21 38 / 30%); cursor: pointer; font: inherit; font-size: 10px; font-weight: 650; text-shadow: 0 1px 5px rgb(0 0 0 / 75%); transition: border-color .18s ease, color .18s ease, transform .18s ease, background .18s ease; }
-.dashboard-add-icon:hover { border-color: #fff; color: #fff; background: rgb(12 21 38 / 50%); transform: translateY(-2px); }
+.dashboard-add-icon { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 7px; grid-column: span 1; grid-row: span 1; min-width: 0; min-height: 0; padding: 3px 2px 6px; border: 0; border-radius: 14px; color: #fff; background: transparent; cursor: pointer; font: inherit; font-size: 10px; font-weight: 650; text-shadow: 0 1px 5px rgb(0 0 0 / 75%); transition: transform .18s ease; }
+.dashboard-add-icon:hover { transform: translateY(-2px); }
 .dashboard-add-icon:focus-visible { outline: 2px solid var(--ext-accent); outline-offset: 3px; }
-.dashboard-add-icon-symbol { display: grid; width: 54px; height: 54px; place-items: center; border: 1px solid rgb(255 255 255 / 65%); border-radius: var(--pn-bookmark-icon-radius, 14px); background: rgb(255 255 255 / 13%); }
-.dashboard-add-icon-symbol svg { width: 27px; height: 27px; }
+.dashboard-add-icon-symbol { display: grid; width: 54px; height: 54px; place-items: center; border: 1px solid rgb(255 255 255 / 65%); border-radius: var(--pn-bookmark-icon-radius, 14px); background: #fff; box-shadow: 0 5px 16px rgb(2 6 23 / 16%); }
+.dashboard-add-icon-symbol svg { box-sizing: border-box; width: 36px; height: 36px; padding: 7px; border-radius: 50%; color: #fff; background: #168eff; }
 .extension-dashboard-grid .extension-widget-cell { height: 100%; border-radius: 20px; }
 .extension-dashboard-grid.is-editing .extension-widget-cell {
   outline: 1px dashed color-mix(in srgb, var(--ext-accent) 58%, transparent);
@@ -3288,6 +3290,12 @@ onUnmounted(() => {
   outline-offset: 3px;
 }
 
+/* Keep the shared 12-column widget grid, but reserve usable icon width on laptops. */
+@media (min-width: 721px) and (max-width: 1000px) {
+  .extension-dashboard-grid .speed-card { grid-column: span calc(var(--bookmark-columns, 1) * 2) !important; }
+  .extension-dashboard-grid .dashboard-add-icon { grid-column: span 2; }
+}
+
 @media (max-width: 720px) {
   .dashboard-canvas-header { align-items: center; flex-wrap: wrap; }
   .dashboard-canvas-header .active-group-meta { flex: 1; }
@@ -3314,7 +3322,7 @@ onUnmounted(() => {
   box-shadow: var(--pn-glass-highlight), var(--ext-elevation);
 }
 .extension-widget-editor { background: var(--pn-glass-surface); }
-.dashboard-add-icon {
+.dashboard-add-icon-symbol {
   -webkit-backdrop-filter: var(--pn-glass-control-filter);
   backdrop-filter: var(--pn-glass-control-filter);
   box-shadow: var(--pn-glass-highlight);

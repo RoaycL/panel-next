@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import type { FormInst, FormRules } from 'naive-ui'
-import { NAvatar, NButton, NForm, NFormItem, NInput, NSelect, useDialog, useMessage } from 'naive-ui'
+import type { FormInst, FormRules, UploadFileInfo } from 'naive-ui'
+import { NButton, NForm, NFormItem, NInput, NSelect, NUpload, useDialog, useMessage } from 'naive-ui'
 import { computed, ref, watch } from 'vue'
 import { useAppStore, useAuthStore, usePanelState, useUserStore } from '@/store'
 import { languageOptions } from '@/utils/defaultData'
 import type { Language, Theme } from '@/store/modules/app/helper'
 import { logout } from '@/api'
 import { RoundCardModal, SvgIcon } from '@/components/common/'
+import ProfileAvatar from '@/components/common/ProfileAvatar/index.vue'
 import { updateInfo, updatePassword } from '@/api/system/user'
 import { updateLocalUserInfo } from '@/utils/cmn'
 import { t } from '@/locales'
@@ -14,6 +15,9 @@ import { getRuntime } from '@/runtime'
 import { createDefaultSelection } from '@/themes/legacyAdapter'
 import { persistThemeSelection } from '@/themes/storage'
 import { themeRegistry } from '@/themes/registry'
+import { router } from '@/router'
+import { openExtensionLogin } from '@/runtime/extensionLogin'
+import { AVATAR_UPLOAD_ACCEPT, readUploadedAvatar, validateAvatarUpload } from '@/utils/profileAvatarUpload'
 
 const { embedded = false } = defineProps<{ embedded?: boolean }>()
 
@@ -25,6 +29,13 @@ const ms = useMessage()
 const dialog = useDialog()
 const runtime = getRuntime()
 
+function showLogin() {
+  if (runtime.kind === 'extension')
+    openExtensionLogin()
+  else
+    void router.push('/login')
+}
+
 const languageValue = ref<Language>(appStore.language)
 const themeValue = computed<Theme>(() => panelState.panelConfig.theme?.mode ?? appStore.theme)
 const themeChanging = ref(false)
@@ -32,11 +43,12 @@ const nickName = ref(authStore.userInfo?.name || authStore.userInfo?.username ||
 const profileMail = ref(authStore.userInfo?.mail || '')
 const profileHeadImage = ref(authStore.userInfo?.headImage || '')
 const isSavingProfile = ref(false)
+const isUploadingAvatar = ref(false)
+const avatarUploadAction = runtime.resolveUrl('/api/file/uploadImg')
 const formRef = ref<FormInst | null>(null)
 
 const isAdmin = computed(() => authStore.userInfo?.role === 1)
 const displayName = computed(() => authStore.userInfo?.name || authStore.userInfo?.username || t('apps.userInfo.guestTitle'))
-const avatarInitial = computed(() => displayName.value.trim().charAt(0).toUpperCase())
 const profileAvatarUrl = computed(() => runtime.resolveUrl(authStore.userInfo?.headImage?.trim() || ''))
 const draftAvatarUrl = computed(() => runtime.resolveUrl(profileHeadImage.value.trim()))
 const isProfileDirty = computed(() => nickName.value.trim() !== (authStore.userInfo?.name || authStore.userInfo?.username || '').trim()
@@ -54,6 +66,40 @@ function resetProfileDraft() {
   nickName.value = authStore.userInfo?.name || authStore.userInfo?.username || ''
   profileMail.value = authStore.userInfo?.mail || ''
   profileHeadImage.value = authStore.userInfo?.headImage || ''
+}
+
+function beforeAvatarUpload({ file }: { file: UploadFileInfo }) {
+  if (isUploadingAvatar.value || isSavingProfile.value || !authStore.token)
+    return false
+  const error = file.file ? validateAvatarUpload(file.file) : '无法读取头像文件，请重新选择'
+  if (error) {
+    ms.warning(error)
+    return false
+  }
+  isUploadingAvatar.value = true
+  return true
+}
+
+function finishAvatarUpload({ file, event }: { file: UploadFileInfo; event?: ProgressEvent }) {
+  try {
+    const xhr = event?.target as XMLHttpRequest | null
+    profileHeadImage.value = readUploadedAvatar(xhr?.responseText || '')
+    ms.success('头像已上传，点击保存后生效')
+    return file
+  }
+  catch (error) {
+    file.status = 'error'
+    ms.error(error instanceof Error ? error.message : '头像上传失败')
+    return file
+  }
+  finally {
+    isUploadingAvatar.value = false
+  }
+}
+
+function failAvatarUpload() {
+  isUploadingAvatar.value = false
+  ms.error('头像上传失败，请检查网络或登录状态后重试')
 }
 
 function isValidEmail(value: string) {
@@ -119,6 +165,8 @@ async function logoutApi() {
 }
 
 async function handleSaveInfo() {
+  if (isUploadingAvatar.value || isSavingProfile.value)
+    return
   const name = nickName.value.trim()
   const mail = profileMail.value.trim()
   const headImage = profileHeadImage.value.trim()
@@ -244,17 +292,13 @@ async function handleChangeTheme(value: Theme) {
       : 'h-full overflow-y-auto p-3'"
   >
     <!-- 个人身份卡片 -->
-    <div class="profile-hero relative overflow-hidden" :class="{ 'embedded-profile-hero': embedded }">
+    <div v-if="!embedded" class="profile-hero relative overflow-hidden">
       <div class="relative flex items-center gap-4 p-5">
-        <NAvatar
-          :key="profileAvatarUrl"
+        <ProfileAvatar
           :size="64"
-          :src="profileAvatarUrl || undefined"
-          fallback-src="/favicon.svg"
+          :src="profileAvatarUrl"
           class="profile-avatar shrink-0"
-        >
-          <span class="text-2xl font-black">{{ avatarInitial }}</span>
-        </NAvatar>
+        />
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-2">
             <span class="profile-name text-lg font-bold truncate">{{ displayName }}</span>
@@ -281,66 +325,90 @@ async function handleChangeTheme(value: Theme) {
       <p class="pn-app-muted">
         {{ t('apps.userInfo.guestDescription') }}
       </p>
-      <NButton type="primary" @click="$router.push('/login')">
+      <NButton type="primary" @click="showLogin">
         {{ t('apps.userInfo.guestAction') }}
       </NButton>
     </section>
 
-    <section v-if="authStore.token" class="pn-app-panel mt-3">
+    <section v-if="authStore.token" class="pn-app-panel profile-details-panel" :class="{ 'mt-3': !embedded }">
       <header class="flex items-center gap-2 px-4 pt-3.5 pb-1">
         <SvgIcon icon="material-symbols-person-edit-outline-rounded" class="pn-app-heading-icon" />
         <h3 class="pn-app-heading">
           {{ t('apps.userInfo.profile') }}
         </h3>
       </header>
-      <div class="profile-editor px-4 pb-4 pt-2 space-y-3">
-        <div class="flex items-center justify-between gap-3 py-1.5">
-          <span class="pn-app-muted text-xs">{{ $t('common.username') }}</span>
-          <span class="text-sm font-medium truncate">{{ authStore.userInfo?.username || '-' }}</span>
-        </div>
-        <div class="profile-divider" />
-        <div class="profile-field-grid">
-          <label for="profile-nickname">昵称</label>
-          <NInput id="profile-nickname" v-model:value="nickName" maxlength="15" show-count type="text" placeholder="昵称（3～15 个字符）" />
-        </div>
-        <div class="profile-field-grid">
-          <label for="profile-email">邮箱</label>
-          <NInput id="profile-email" v-model:value="profileMail" maxlength="50" type="text" placeholder="邮箱（可选）" />
-        </div>
-        <div class="profile-preview flex items-center gap-3 p-3">
-          <NAvatar
-            :key="draftAvatarUrl"
-            :size="52"
-            :src="draftAvatarUrl || undefined"
-            fallback-src="/favicon.svg"
-            class="!rounded-xl shrink-0"
-          >
-            {{ (nickName || 'U').charAt(0).toUpperCase() }}
-          </NAvatar>
-          <div class="min-w-0">
-            <b class="block truncate text-sm">{{ nickName || '未设置昵称' }}</b>
-            <small class="pn-app-muted block truncate">账号：{{ authStore.userInfo?.username || '-' }}</small>
+      <div class="profile-editor">
+        <div class="profile-avatar-editor">
+          <ProfileAvatar
+            :size="64"
+            :src="draftAvatarUrl"
+            class="profile-avatar shrink-0"
+          />
+          <div class="profile-avatar-copy">
+            <div class="profile-account-line">
+              <strong>{{ authStore.userInfo?.username || '-' }}</strong>
+              <span class="profile-role" :class="{ 'profile-role-admin': isAdmin }">{{ isAdmin ? t('apps.userInfo.roleAdmin') : t('apps.userInfo.roleUser') }}</span>
+            </div>
+            <p>上传自己的图片，或选择下方预设头像。修改后点击保存。</p>
           </div>
         </div>
-        <div class="profile-field-grid">
-          <label for="profile-avatar">头像地址</label>
-          <NInput id="profile-avatar" v-model:value="profileHeadImage" maxlength="200" type="text" placeholder="头像 URL 或服务端素材路径" />
+        <div class="profile-avatar-upload-row">
+          <NUpload
+            class="profile-avatar-upload"
+            :action="avatarUploadAction"
+            :accept="AVATAR_UPLOAD_ACCEPT"
+            :show-file-list="false"
+            :disabled="isUploadingAvatar || isSavingProfile"
+            name="imgfile"
+            :data="{ fileType: 'icon' }"
+            :headers="{ Authorization: `Bearer ${authStore.token}`, token: authStore.token as string }"
+            @before-upload="beforeAvatarUpload"
+            @finish="finishAvatarUpload"
+            @error="failAvatarUpload"
+          >
+            <NButton secondary type="primary" :loading="isUploadingAvatar" :disabled="isSavingProfile">
+              <template #icon>
+                <SvgIcon icon="tabler-file-upload" />
+              </template>
+              上传自定义头像
+            </NButton>
+          </NUpload>
+          <small>PNG / JPG / WebP / GIF · 最大 2 MB</small>
         </div>
-        <div class="flex flex-wrap gap-2" aria-label="预设头像">
+        <div class="profile-avatar-presets" aria-label="预设头像">
           <button
-            v-for="url in avatarPresets"
+            v-for="(url, index) in avatarPresets"
             :key="url"
             type="button"
             class="avatar-preset-button"
             :class="{ active: profileHeadImage === url }"
+            :aria-label="`选择预设头像 ${index + 1}`"
+            :aria-pressed="profileHeadImage === url"
+            :disabled="isUploadingAvatar || isSavingProfile"
             @click="profileHeadImage = url"
           >
-            <img :src="url" alt="预设头像">
+            <ProfileAvatar :src="url" :size="36" />
           </button>
         </div>
-        <div class="flex items-center justify-between gap-3 pt-1">
-          <small class="profile-save-hint">{{ isProfileDirty ? '资料尚未保存' : '资料已同步' }}</small>
-          <NButton size="small" type="primary" :loading="isSavingProfile" :disabled="!isProfileDirty" @click="handleSaveInfo">
+        <details class="profile-avatar-custom">
+          <summary>自定义头像地址</summary>
+          <label class="sr-only" for="profile-avatar">头像地址</label>
+          <NInput v-model:value="profileHeadImage" :disabled="isUploadingAvatar || isSavingProfile" :input-props="{ id: 'profile-avatar' }" maxlength="200" type="text" placeholder="头像 URL 或服务端素材路径" />
+        </details>
+        <div class="profile-divider" />
+        <div class="profile-fields">
+          <div class="profile-field-grid">
+            <label for="profile-nickname">昵称</label>
+            <NInput v-model:value="nickName" :input-props="{ id: 'profile-nickname' }" maxlength="15" show-count type="text" placeholder="昵称（3～15 个字符）" />
+          </div>
+          <div class="profile-field-grid">
+            <label for="profile-email">邮箱</label>
+            <NInput v-model:value="profileMail" :input-props="{ id: 'profile-email' }" maxlength="50" type="text" placeholder="邮箱（可选）" />
+          </div>
+        </div>
+        <div class="profile-save-bar">
+          <small class="profile-save-hint" role="status">{{ isProfileDirty ? '有未保存的修改' : '资料已保存' }}</small>
+          <NButton type="primary" :loading="isSavingProfile" :disabled="!isProfileDirty || isUploadingAvatar" @click="handleSaveInfo">
             {{ t('common.save') }}
           </NButton>
         </div>
@@ -413,7 +481,7 @@ async function handleChangeTheme(value: Theme) {
 
     <!-- 退出登录 -->
     <NButton
-      v-if="authStore.token"
+      v-if="authStore.token && !embedded"
       block
       size="medium"
       type="error"
@@ -499,21 +567,39 @@ async function handleChangeTheme(value: Theme) {
 
 .profile-field-grid {
   display: grid;
-  grid-template-columns: 72px minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
 }
 
 .profile-field-grid label {
-  color: var(--pn-color-text-muted, #64748b);
-  font-size: 11px;
+  color: var(--pn-color-text-secondary, #475569);
+  font-size: 12px;
   font-weight: 650;
 }
 
-.profile-save-hint { color: var(--pn-color-text-muted, #64748b); font-size: 10px; }
+.profile-save-hint { color: var(--pn-color-text-secondary, #475569); font-size: 12px; }
+.profile-editor { display: grid; gap: 16px; padding: 16px 20px 20px; }
+.profile-avatar-editor { display: flex; align-items: center; gap: 16px; }
+.profile-avatar-copy { min-width: 0; flex: 1; }
+.profile-account-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.profile-account-line strong { overflow-wrap: anywhere; font-size: 16px; }
+.profile-account-line .profile-role { padding: 3px 8px; border-radius: 20px; font-size: 11px; }
+.profile-avatar-copy p { margin: 6px 0 0; color: var(--pn-color-text-secondary); font-size: 12px; line-height: 1.6; }
+.profile-avatar-presets { display: flex; flex-wrap: wrap; gap: 8px; }
+.profile-avatar-upload-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.profile-avatar-upload-row > :deep(.profile-avatar-upload) { width: auto; flex: none; }
+.profile-avatar-upload-row small { color: var(--pn-color-text-secondary); font-size: 11px; }
+.avatar-preset-button:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+.profile-avatar-custom { min-width: 0; color: var(--pn-color-text-secondary); font-size: 12px; }
+.profile-avatar-custom summary { cursor: pointer; width: fit-content; padding: 4px 0; }
+.profile-avatar-custom[open] summary { margin-bottom: 8px; }
+.profile-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.profile-save-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 16px; border-top: 1px solid var(--pn-glass-border, var(--pn-color-border)); }
 
 @media (max-width: 520px) {
   .profile-field-grid { grid-template-columns: 1fr; gap: 5px; }
+  .profile-fields { grid-template-columns: minmax(0, 1fr); }
+  .profile-editor { padding: 14px; }
 }
 
 .avatar-preset-button {
@@ -534,6 +620,7 @@ async function handleChangeTheme(value: Theme) {
   background: color-mix(in srgb, var(--pn-color-accent, #10b981) 14%, var(--pn-color-surface, #fff));
   transform: translateY(-1px);
 }
+.avatar-preset-button:focus-visible { outline: 2px solid var(--pn-color-accent); outline-offset: 3px; }
 
 .avatar-preset-button img {
   width: 100%;
