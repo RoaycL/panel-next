@@ -138,7 +138,6 @@ const markFontSize = computed(() => `${Math.round(props.size * (Array.from(fallb
 .item-icon-glyph { width: 56%; height: 56%; flex: none; }
 .item-icon-mark { max-width: 94%; overflow: hidden; font-weight: 800; line-height: 1; letter-spacing: -.05em; text-overflow: clip; white-space: nowrap; }
 .item-icon-image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.item-icon-surface-transparent { overflow: visible; border-radius: 0; }
 .item-icon-surface-transparent .item-icon-image { object-fit: contain; }
 .item-icon-brand { width: 78%; height: 78%; object-fit: contain; }
 .item-icon-remote { position: absolute; inset: 20%; width: 60%; height: 60%; }

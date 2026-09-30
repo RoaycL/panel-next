@@ -3272,7 +3272,7 @@ onUnmounted(() => {
 .dashboard-widget-caption { display: block; height: var(--dashboard-caption-space); padding-top: 10px; overflow: hidden; color: var(--ext-text); font-size: 12px; font-weight: 500; line-height: 16px; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
 .extension-dashboard-grid .speed-card, .extension-dashboard-grid .dashboard-add-icon { padding: 0; gap: 10px; }
 .extension-dashboard-grid .card-icon-box, .extension-dashboard-grid .dashboard-add-icon-symbol { flex: none; width: var(--dashboard-icon-size); height: var(--dashboard-icon-size); }
-.extension-dashboard-grid .card-icon-box { overflow: visible; box-shadow: none; }
+.extension-dashboard-grid .card-icon-box { overflow: hidden; box-shadow: none; }
 .extension-dashboard-grid.is-editing .extension-widget-cell {
   outline: 1px dashed color-mix(in srgb, var(--ext-accent) 58%, transparent);
   outline-offset: 2px;
