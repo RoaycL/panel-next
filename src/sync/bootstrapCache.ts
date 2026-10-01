@@ -1,8 +1,6 @@
 import { getBootstrap } from '@/api/sync'
-import { getAuthInfo } from '@/api/system/user'
 import { getRuntime } from '@/runtime'
 import { parseBootstrapSnapshot, serializeBootstrapSnapshot, withBootstrapAccount } from './bootstrapSnapshot'
-import { synchronizeBootstrap } from './changes'
 import { retryNetworkOperation } from './retry'
 
 export const BOOTSTRAP_SNAPSHOT_KEY_PREFIX = 'PANEL_NEXT_BOOTSTRAP_SNAPSHOT_V1.'
@@ -98,17 +96,8 @@ export async function refreshBootstrapSnapshot(accountId: number): Promise<Boots
   if (runtime.kind !== 'extension' || !origin)
     return { data: null, savedAt: null, attempts: 0 }
 
-  const cached = readBootstrapSnapshot(accountId)
   const result = await retryNetworkOperation(async () => {
-    if (cached) {
-      const incremental = await synchronizeBootstrap(cached.data)
-      if (incremental) {
-        const profile = await getAuthInfo<{ user: User.Info }>()
-        if (profile.code !== 0 || !profile.data?.user)
-          return null
-        return withBootstrapAccount(incremental.data, profile.data.user)
-      }
-    }
+    // Latest-state synchronization: do not replay a chain of historic versions.
     const bootstrap = await getBootstrap()
     return bootstrap.code === 0 ? bootstrap.data : null
   })

@@ -48,6 +48,9 @@ runStep('test:search-history', node, [path.resolve('scripts/test-search-history.
 runStep('test:extension-updates', node, [path.resolve('scripts/test-extension-updates.mjs')])
 runStep('test:extension-startup', node, [path.resolve('scripts/test-extension-startup.mjs')])
 runStep('test:icon-cache', node, [path.resolve('scripts/test-icon-cache.mjs')])
+runStep('test:icon-edit-position', node, [path.resolve('scripts/test-icon-edit-position.mjs')])
+runStep('test:shared-settings', node, [path.resolve('scripts/test-shared-settings.mjs')])
+runStep('test:network-mode', node, [path.resolve('scripts/test-network-mode.mjs')])
 
 // 2. Type check (local binary, offline safe)
 runStep('type-check', node, [vueTscBin, '--noEmit'])

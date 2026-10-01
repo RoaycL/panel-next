@@ -23,7 +23,6 @@ import { getStorage as getAuthStorage } from '@/store/modules/auth/helper'
 import type { AuthState } from '@/store/modules/auth'
 import { getLocalState as getLocalUserState } from '@/store/modules/user/helper'
 import { getLocalState as getLocalPanelState } from '@/store/modules/panel/helper'
-import { PanelStateNetworkModeEnum } from '@/enums'
 import { VisitMode } from '@/enums/auth'
 import { getRuntime } from '@/runtime'
 import { extensionLoginVisible, openExtensionLogin } from '@/runtime/extensionLogin'
@@ -37,6 +36,7 @@ import { useLoadedWallpaper } from '@/runtime/wallpaperLoader'
 import type { ExtensionBookmarkLayout, ExtensionPageLayout, ExtensionSearchEngineId } from '@/runtime/extensionAppearance'
 import { enqueueAppearanceSave } from '@/themes/appearanceSaveQueue'
 import { resolveSyncedWallpaper, saveAndSyncExtensionWallpaper } from '@/runtime/extensionWallpaper'
+import { receiveSharedSettings, stageWidgetSettings } from '@/runtime/sharedSettings'
 import ThemeIcon from '@/themes/ThemeIcon.vue'
 import { BOOTSTRAP_SNAPSHOT_KEY_PREFIX, readBootstrapSnapshot, refreshBootstrapSnapshot } from '@/sync/bootstrapCache'
 import { onSyncConflict, setSyncRevision } from '@/sync/revision'
@@ -48,7 +48,7 @@ import { getBootstrap, waitForSyncChange } from '@/api/sync'
 import { getList as getGroupList } from '@/api/panel/itemIconGroup'
 import { deletes as deleteItems, getListByGroupId, saveSort as saveItemSort } from '@/api/panel/itemIcon'
 import type { DashboardGroup } from '@/dashboard/core'
-import { createDashboardState, createItemSortRequest, isDesktopGroup, selectItemUrl } from '@/dashboard/core'
+import { createDashboardState, createItemSortRequest, isDesktopGroup, resolveItemUrl } from '@/dashboard/core'
 import SearchHistoryPanel from '@/components/common/SearchHistoryPanel.vue'
 import { addSearchHistory } from '@/runtime/searchHistory'
 import { VueDraggable } from 'vue-draggable-plus'
@@ -250,6 +250,7 @@ async function persistExtensionWidgets(): Promise<boolean> {
 }
 
 function scheduleSaveExtensionWidgets(delay = 300) {
+  stageWidgetSettings(widgetPreferences.value)
   widgetSaveGeneration += 1
   isWidgetLayoutDirty.value = true
   if (saveTimer)
@@ -826,21 +827,26 @@ const bookmarkSearchResults = computed<BookmarkSearchResult[]>(() => {
 let isRefreshing = false
 
 async function applyBootstrapData(data: Sync.BootstrapResponseV1) {
+  if (isWidgetLayoutDirty.value && !await persistExtensionWidgets())
+    return
   const dashboard = createDashboardState(data)
   setSyncRevision(dashboard.revision)
   syncRevision.value = dashboard.revision
-  const localAppearance = readExtensionAppearance()
+  authStore.setUserInfo(dashboard.account)
+  const sharedConfig = receiveSharedSettings(dashboard.panelConfig, dashboard.account.id, dashboard.revision)
+  widgetPreferences.value = readExtensionWidgets()
+  const localAppearance = sharedConfig.sharedPreferences ? null : readExtensionAppearance()
   // 统一外观入口：每个入口只在 store.applyPanelConfig 内部跑一次 preparePanelAppearance，
   // 并只在 Extension 端把清理/迁移后的配置写回 EXTENSION_APPEARANCE_KEY（自带字节去重）。
   let writeBack: Promise<boolean> | undefined
   if (localAppearance) {
-    const syncedAppearance = resolveSyncedWallpaper(localAppearance, dashboard.panelConfig, dashboard.revision, dashboard.account.id)
+    const syncedAppearance = resolveSyncedWallpaper(localAppearance, sharedConfig, dashboard.revision, dashboard.account.id)
     writeBack = panelState.applyPanelConfig(syncedAppearance, { surface: 'extension', mode: appStore.theme ?? 'auto', writeBack: true }).writeBack
   }
   else {
     // Use the cloud appearance only as a first-run starting point, then fork it
     // locally so later extension changes cannot overwrite the web appearance.
-    writeBack = panelState.applyPanelConfig(dashboard.panelConfig, { surface: 'extension', mode: appStore.theme ?? 'auto', writeBack: true }).writeBack
+    writeBack = panelState.applyPanelConfig(sharedConfig, { surface: 'extension', mode: appStore.theme ?? 'auto', writeBack: true }).writeBack
   }
   authStore.setUserInfo(dashboard.account)
   authStore.setVisitMode(VisitMode.VISIT_MODE_LOGIN)
@@ -855,6 +861,9 @@ async function applyBootstrapData(data: Sync.BootstrapResponseV1) {
     if (group && typeof payload.icon === 'string') group.icon = payload.icon
   }
   groupsReady.value = true
+  const pageKey = readyPageLayoutKey.value
+  if (pageKey)
+    loadExtensionWidgetLayout(widgetPreferences.value.pageLayouts[pageKey]?.contentLayout ?? emptyPageLayout().contentLayout, pageKey)
   // 等待 Extension 回写真正持久化完成，失败时不假装同步成功。
   if (writeBack && (await writeBack) === false)
     extensionSyncStatus.value = 'offline'
@@ -1303,13 +1312,12 @@ function handleGroupWheel(event: WheelEvent) {
 }
 
 // 点击卡片在浏览器新标签页打开
-function handleCardClick(card: Panel.ItemInfo) {
+async function handleCardClick(card: Panel.ItemInfo) {
   if (suppressNextCardClick) {
     suppressNextCardClick = false
     return
   }
-  const isLan = panelState.networkMode === PanelStateNetworkModeEnum.lan
-  const targetUrl = selectItemUrl(card, isLan)
+  const targetUrl = await resolveItemUrl(card, panelState.networkMode)
   if (targetUrl)
     runtime.openUrl(targetUrl, 'tab')
 }
@@ -1618,11 +1626,18 @@ function handleAvatarClick() {
 function handleEditSuccess(updated: Panel.Info, meta: { queued: boolean } = { queued: false }) {
   editCardModalVisible.value = false
   const updatedItem = updated as Panel.ItemInfo
-  for (const group of groups.value)
-    group.items = (group.items || []).filter(item => item.id !== updatedItem.id)
   const targetGroup = groups.value.find(group => group.id === updatedItem.itemIconGroupId)
-  if (targetGroup)
+  const existingIndex = targetGroup?.items?.findIndex(item => item.id === updatedItem.id) ?? -1
+  for (const group of groups.value) {
+    if (group !== targetGroup)
+      group.items = (group.items || []).filter(item => item.id !== updatedItem.id)
+  }
+  if (targetGroup && existingIndex >= 0)
+    targetGroup.items.splice(existingIndex, 1, updatedItem)
+  else if (targetGroup) {
     targetGroup.items.push(updatedItem)
+    targetGroup.items.sort((a, b) => (a.sort ?? 9999) - (b.sort ?? 9999) || (a.createTime ?? '').localeCompare(b.createTime ?? '') || (a.id ?? 0) - (b.id ?? 0))
+  }
   // Keep the optimistic local edit visible while it waits in the durable
   // queue. A replay or remote storage update will refresh the snapshot later.
   if (!meta.queued)

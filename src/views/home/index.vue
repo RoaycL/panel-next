@@ -33,8 +33,9 @@ import { replayOfflineQueue } from '@/sync/offlineReplay'
 import { getPendingMutationCount } from '@/sync/offlineQueue'
 import type { ConflictDescriptor, ConflictResolutionChoice } from '@/sync/conflictResolver'
 import type { DashboardGroup } from '@/dashboard/core'
-import { createDashboardState, createItemSortRequest, filterDashboardGroups, isDesktopGroup, normalizeDashboardGroups, selectItemUrl } from '@/dashboard/core'
+import { createDashboardState, createItemSortRequest, filterDashboardGroups, isDesktopGroup, normalizeDashboardGroups, resolveItemUrl } from '@/dashboard/core'
 import ThemeIcon from '@/themes/ThemeIcon.vue'
+import { receiveSharedSettings } from '@/runtime/sharedSettings'
 import type { WidgetDisplayGroup, WidgetInstance } from '@/widgets'
 import { WidgetHost, WidgetStackHost, WidgetSettingsModal, applyWidgetDisplayOrder, buildWidgetDisplayGroups, canStackWidgets, clearWidgetStorage, createHeaderClockWidget, createHeaderSearchWidget, createHeaderWeatherWidget, createTrendingWidget, createCountdownWidget, generateWidgetInstanceId, moveWidgetWithinStack, normalizeWidgetStacks, resizeInstanceWithinBounds, serializeWidgetLayout, stackWidgets, unstackWidget, widgetRegistry } from '@/widgets'
 import { useWidgetGridResize } from '@/widgets/useGridResize'
@@ -502,14 +503,17 @@ function openPage(openMethod: number, url: string, title?: string) {
   }
 }
 
-function handleItemClick(itemGroup: DashboardGroup, item: Panel.ItemInfo) {
+async function handleItemClick(itemGroup: DashboardGroup, item: Panel.ItemInfo) {
   if (Date.now() < suppressBookmarkClickUntil)
     return
   if (itemGroup.sortStatus) {
     handleEditItem(item)
     return
   }
-  const jumpUrl = selectItemUrl(item, panelState.networkMode === PanelStateNetworkModeEnum.lan)
+  const reservedTab = panelState.networkMode === PanelStateNetworkModeEnum.auto && item.lanUrl && item.openMethod === 2
+    ? runtime.reserveTab?.() : null
+  const jumpUrl = await resolveItemUrl(item, panelState.networkMode)
+  if (reservedTab) { reservedTab.navigate(jumpUrl); return }
   openPage(item.openMethod, jumpUrl, item.title)
 }
 
@@ -601,16 +605,18 @@ async function updateItemIconGroupByNet(itemIconGroupIndex: number, itemIconGrou
   }
 }
 
-function handleRightMenuSelect(key: string | number) {
+async function handleRightMenuSelect(key: string | number) {
   dropdownShow.value = false
   // console.log(currentRightSelectItem, key)
-  const jumpUrl = currentRightSelectItem.value
-    ? selectItemUrl(currentRightSelectItem.value, panelState.networkMode === PanelStateNetworkModeEnum.lan)
-    : ''
   switch (key) {
-    case 'newWindows':
-      runtime.openUrl(jumpUrl || '', 'tab')
+    case 'newWindows': {
+      if (!currentRightSelectItem.value) break
+      const tab = runtime.reserveTab?.()
+      const url = await resolveItemUrl(currentRightSelectItem.value, panelState.networkMode)
+      if (tab) tab.navigate(url)
+      else runtime.openUrl(url, 'tab')
       break
+    }
     case 'openWanUrl':
       if (currentRightSelectItem.value)
         openPage(currentRightSelectItem.value?.openMethod, currentRightSelectItem.value?.url, currentRightSelectItem.value?.title)
@@ -649,11 +655,13 @@ function handleRightMenuSelect(key: string | number) {
 }
 
 // CARD-03: 鼠标中键在新窗口打开卡片地址
-function handleAuxClick(e: MouseEvent, itemGroup: DashboardGroup, item: Panel.ItemInfo) {
+async function handleAuxClick(e: MouseEvent, itemGroup: DashboardGroup, item: Panel.ItemInfo) {
   if (e.button === 1) {
     e.preventDefault()
-    const jumpUrl = selectItemUrl(item, panelState.networkMode === PanelStateNetworkModeEnum.lan)
-    runtime.openUrl(jumpUrl, 'tab')
+    const reservedTab = runtime.reserveTab?.()
+    const jumpUrl = await resolveItemUrl(item, panelState.networkMode)
+    if (reservedTab) reservedTab.navigate(jumpUrl)
+    else runtime.openUrl(jumpUrl, 'tab')
   }
 }
 
@@ -756,8 +764,8 @@ function applyBootstrapData(data: Sync.BootstrapResponseV1) {
   const dashboard = createDashboardState(data)
   setSyncRevision(dashboard.revision)
   webSyncRevision = dashboard.revision
-  panelState.applyPanelConfig(dashboard.panelConfig)
   authStore.setUserInfo(dashboard.account)
+  panelState.applyPanelConfig(receiveSharedSettings(dashboard.panelConfig, dashboard.account.id, dashboard.revision))
   authStore.setVisitMode(VisitMode.VISIT_MODE_LOGIN)
   userStore.updateUserInfo(dashboard.account)
   items.value = dashboard.groups

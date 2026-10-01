@@ -79,9 +79,9 @@ watch(apiKeyStorageKey, key => {
   wallhavenPurity.value = '100'
 }, { immediate: true })
 const purityOptions = computed(() => [
-  { label: '安全内容（SFW）', value: '100' },
-  { label: '安全 + Sketchy', value: '110' },
-  { label: '全部内容（含 NSFW）', value: '111', disabled: !wallhavenApiKey.value },
+  { label: 'SFW · 安全', value: '100' },
+  { label: 'Sketchy · 中间级', value: '010' },
+  { label: 'NSFW · 成人', value: '001', disabled: !wallhavenApiKey.value },
 ])
 async function saveApiKey() {
   const key = apiKeyDraft.value.trim()
@@ -128,11 +128,11 @@ const wallhavenSorting = ref<'toplist' | 'hot' | 'views' | 'random' | 'date_adde
 const wallhavenCategories = ref('110') // 110: General + Anime
 
 const wallhavenSortingOptions = [
-  { label: '🔥 最热榜单 (Toplist)', value: 'toplist' },
-  { label: '⚡ 近期热门 (Hot)', value: 'hot' },
-  { label: '👁️ 最多浏览 (Views)', value: 'views' },
-  { label: '🎲 随机发现 (Random)', value: 'random' },
-  { label: '✨ 最新上传 (Latest)', value: 'date_added' },
+  { label: '最热榜单', value: 'toplist' },
+  { label: '近期热门', value: 'hot' },
+  { label: '最多浏览', value: 'views' },
+  { label: '随机发现', value: 'random' },
+  { label: '最新上传', value: 'date_added' },
 ]
 
 const quickTags = [
@@ -313,7 +313,7 @@ onMounted(() => {
     </div>
 
     <!-- Wallhaven 专属快捷工具栏 -->
-    <div v-if="source === 'wallhaven'" class="wallhaven-toolbar mb-3 flex flex-col gap-2">
+    <div v-if="source === 'wallhaven'" class="wallhaven-toolbar">
       <details class="wallhaven-account-settings">
         <summary>Wallhaven 账号 API Key · {{ wallhavenApiKey ? '已配置' : '未配置' }}</summary>
         <div class="wallhaven-key-controls">
@@ -329,37 +329,39 @@ onMounted(() => {
         <a href="https://wallhaven.cc/settings/account" target="_blank" rel="noopener noreferrer">打开 Wallhaven 账号设置</a>
       </details>
       <!-- 搜索与排序 -->
-      <div class="flex items-center gap-2 flex-wrap">
-        <NInputGroup style="max-width: 320px;">
+      <div class="wallhaven-search-row">
+        <NInputGroup>
           <NInput
             v-model:value="wallhavenQuery"
-            size="small"
-            placeholder="搜索 4K 壁纸 (英文/中文)..."
+            placeholder="搜索壁纸，发现喜欢的风景…"
             clearable
             @keydown.enter="handleWallhavenSearch"
           />
-          <NButton size="small" type="primary" @click="handleWallhavenSearch">
+          <NButton type="primary" @click="handleWallhavenSearch">
             <template #icon>
               <SvgIcon icon="material-symbols:search-rounded" />
             </template>
             搜索
           </NButton>
         </NInputGroup>
-
-        <NSelect
-          v-model:value="wallhavenSorting"
-          :options="wallhavenSortingOptions"
-          size="small"
-          style="width: 170px"
-          @update-value="handleWallhavenSearch"
-        />
-        <NSelect v-model:value="wallhavenPurity" :options="purityOptions" size="small" style="width: 190px" aria-label="Wallhaven 内容范围" @update-value="handleWallhavenSearch" />
-        <NSelect v-model:value="wallhavenCategories" :options="[{ label: '全部分类', value: '111' }, { label: '综合 + 动漫', value: '110' }, { label: '综合', value: '100' }, { label: '动漫', value: '010' }, { label: '人物', value: '001' }]" size="small" style="width: 150px" aria-label="Wallhaven 分类" @update-value="handleWallhavenSearch" />
-
-        <span v-if="wallhavenTotal > 0" class="text-xs text-slate-500 dark:text-zinc-400 ml-auto">
-          找到约 {{ wallhavenTotal }} 张壁纸
-        </span>
       </div>
+      <div class="wallhaven-filters">
+        <label class="wallhaven-filter"><span>排序方式</span>
+          <NSelect
+            v-model:value="wallhavenSorting"
+            :options="wallhavenSortingOptions"
+            aria-label="Wallhaven 排序方式"
+            @update-value="handleWallhavenSearch"
+          />
+        </label>
+        <label class="wallhaven-filter"><span>内容分级</span>
+          <NSelect v-model:value="wallhavenPurity" :options="purityOptions" aria-label="Wallhaven 内容范围" @update-value="handleWallhavenSearch" />
+        </label>
+        <label class="wallhaven-filter"><span>壁纸分类</span>
+          <NSelect v-model:value="wallhavenCategories" :options="[{ label: '全部分类', value: '111' }, { label: '综合 + 动漫', value: '110' }, { label: '综合', value: '100' }, { label: '动漫', value: '010' }, { label: '人物', value: '001' }]" aria-label="Wallhaven 分类" @update-value="handleWallhavenSearch" />
+        </label>
+      </div>
+      <p v-if="!wallhavenApiKey" class="wallhaven-rating-hint">NSFW 需要配置有效的 Wallhaven 账号 API Key。</p>
 
       <!-- 热门快捷标签 -->
       <div class="quick-tags flex items-center gap-1.5 flex-wrap">
@@ -374,6 +376,7 @@ onMounted(() => {
           {{ tag.label }}
         </button>
       </div>
+      <div v-if="wallhavenTotal > 0" class="wallhaven-results-summary">找到约 {{ wallhavenTotal }} 张壁纸 · 第 {{ wallhavenPage }} 页</div>
     </div>
     <p v-if="selectingUrl" role="status" class="gallery-selection-status">
       正在加载原图，成功后应用；期间保留当前壁纸…
@@ -445,7 +448,7 @@ onMounted(() => {
         未找到相关壁纸，换个关键词试试吧
       </div>
 
-      <div v-else class="wallhaven-grid grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 flex-1">
+      <div v-else class="wallhaven-grid">
         <div
           v-for="item in wallhavenList"
           :key="item.id"
@@ -457,7 +460,7 @@ onMounted(() => {
             :src="item.thumbUrl"
             :alt="item.id"
             loading="lazy"
-            class="w-full h-32 object-cover transition-transform duration-500 group-hover:scale-105"
+            class="wallhaven-thumbnail transition-transform duration-500 group-hover:scale-105"
           >
 
           <!-- 分辨率与分类浮层徽标 -->
@@ -505,6 +508,8 @@ onMounted(() => {
 .gallery-selector {
   background: var(--pn-glass-panel, white);
   min-height: 480px;
+  padding: 20px;
+  container-type: inline-size;
 }
 
 .dark .gallery-selector {
@@ -536,6 +541,23 @@ onMounted(() => {
 .wallhaven-key-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
 .wallhaven-key-controls :deep(.n-input) { flex: 1 1 220px; }
 .gallery-selection-status { font-size: 12px; color: var(--pn-color-text-secondary); }
+.wallhaven-toolbar { display: flex; flex-direction: column; gap: 16px; margin: 4px 0 18px; }
+.wallhaven-search-row { width: 100%; }
+.wallhaven-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.wallhaven-filter { display: flex; min-width: 0; flex-direction: column; gap: 8px; }
+.wallhaven-filter > span { font-size: 12px; color: var(--pn-color-text-secondary); }
+.wallhaven-rating-hint { margin: -6px 0 0; font-size: 11px; color: var(--pn-color-text-secondary); }
+.wallhaven-results-summary { font-size: 12px; color: var(--pn-color-text-secondary); }
+.quick-tags { gap: 8px; }
+.wallhaven-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 18px; align-content: start; }
+.wallhaven-thumbnail { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; }
+@container (max-width: 580px) {
+  .wallhaven-filters { grid-template-columns: 1fr; gap: 12px; }
+  .wallhaven-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+}
+@container (max-width: 300px) {
+  .wallhaven-grid { grid-template-columns: 1fr; }
+}
 
 .source-tab-btn {
   display: inline-flex;
@@ -587,7 +609,7 @@ onMounted(() => {
 }
 
 .tag-btn {
-  padding: 3px 10px;
+  padding: 7px 12px;
   border-radius: 9999px;
   font-size: 11px;
   background: rgba(0, 0, 0, 0.04);

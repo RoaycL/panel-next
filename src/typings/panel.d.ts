@@ -40,6 +40,7 @@ declare namespace Panel {
     }
 
     interface panelConfig{
+        sharedPreferences?:import('@/runtime/sharedSettings').SharedPreferences
         backgroundImageSrc?:string
         backgroundBlur?:number
         backgroundMaskNumber?:number

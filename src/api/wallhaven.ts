@@ -30,7 +30,7 @@ export interface WallhavenResponse {
 export interface WallhavenSearchParams {
   q?: string
   categories?: string // '110' (General+Anime), '100', '010', '111'
-  purity?: string // '100' (SFW)
+  purity?: string // '100' (SFW), '010' (Sketchy), '001' (NSFW, requires API Key)
   sorting?: 'toplist' | 'hot' | 'views' | 'random' | 'date_added'
   order?: 'desc' | 'asc'
   topRange?: '1d' | '3d' | '1w' | '1M' | '1y'

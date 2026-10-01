@@ -46,7 +46,7 @@ export function defaultState(): Panel.State {
   return {
     rightSiderCollapsed: false,
     leftSiderCollapsed: false,
-    networkMode: PanelStateNetworkModeEnum.wan,
+    networkMode: PanelStateNetworkModeEnum.auto,
     panelConfig: { ...defaultStatePanelConfig() },
   }
 }

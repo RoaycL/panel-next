@@ -91,6 +91,12 @@ export function createWebRuntime(kind: RuntimeKind): RuntimeAdapter {
     resolveNavigationUrl(url) {
       return resolveHttpUrl(url, window.location.href)
     },
+    reserveTab() {
+      const tab = window.open('about:blank', '_blank')
+      if (!tab) return null
+      tab.opener = null
+      return { navigate: url => { tab.location.href = resolveHttpUrl(url, window.location.href) }, close: () => tab.close() }
+    },
     openUrl(url, mode) {
       const target = resolveHttpUrl(url, window.location.href)
       if (mode === 'current') {

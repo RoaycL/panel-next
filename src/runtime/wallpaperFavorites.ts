@@ -1,4 +1,5 @@
 import type { StorageAdapter } from './types'
+import { notifySettingsChanged } from './settingsEvents'
 
 export interface FavoriteWallpaper {
   url: string
@@ -54,6 +55,7 @@ export async function writeWallpaperFavorites(storage: StorageAdapter, key: stri
   try {
     storage.setItem(key, JSON.stringify(favorites))
     await storage.flush?.()
+    notifySettingsChanged()
   }
   catch (error) {
     try {

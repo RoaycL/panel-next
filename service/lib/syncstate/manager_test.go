@@ -33,7 +33,7 @@ func newTestManager(t *testing.T) (*gorm.DB, *Manager) {
 	return db, NewManager(db)
 }
 
-func TestAppendAndListChangesAreAccountScopedAndPaged(t *testing.T) {
+func TestAppendAndListKeepLatestAccountState(t *testing.T) {
 	_, manager := newTestManager(t)
 	ctx := context.Background()
 
@@ -63,14 +63,14 @@ func TestAppendAndListChangesAreAccountScopedAndPaged(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if page.FromRevision != 0 || page.NextRevision != 1 || page.CurrentRevision != 2 || !page.HasMore || len(page.Changes) != 1 {
+	if page.FromRevision != 0 || page.NextRevision != 2 || page.CurrentRevision != 2 || page.HasMore || len(page.Changes) != 1 {
 		t.Fatalf("unexpected first page: %+v", page)
 	}
-	if page.Changes[0].ResourceID != "11" || string(page.Changes[0].Payload) != `{"title":"Apps"}` || page.Changes[0].ChangedAt == "" {
+	if page.Changes[0].ResourceID != "12" || string(page.Changes[0].Payload) != `null` || page.Changes[0].ChangedAt == "" {
 		t.Fatalf("unexpected first change: %+v", page.Changes[0])
 	}
 
-	page, err = manager.List(ctx, 7, page.NextRevision, 1)
+	page, err = manager.List(ctx, 7, 1, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,6 +87,35 @@ func TestAppendAndListChangesAreAccountScopedAndPaged(t *testing.T) {
 	}
 	if len(otherPage.Changes) != 1 || otherPage.Changes[0].ResourceID != "8" {
 		t.Fatalf("account-scoped page is incorrect: %+v", otherPage)
+	}
+}
+
+func TestPruneRetiredVersionsPreservesCurrentCursor(t *testing.T) {
+	db, manager := newTestManager(t)
+	for _, id := range []uint{7, 8} {
+		if err := db.Create(&models.UserSyncState{UserID: id, Revision: 3}).Error; err != nil {
+			t.Fatal(err)
+		}
+		for revision := int64(1); revision <= 3; revision++ {
+			if err := db.Create(&models.UserSyncChange{UserID: id, Revision: revision, ResourceType: models.SyncResourcePanel, ResourceID: "7", Operation: models.SyncOperationUpsert, PayloadJSON: `{}`}).Error; err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	for repeat := 0; repeat < 2; repeat++ {
+		if err := PruneRetiredVersions(db); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, id := range []uint{7, 8} {
+		var count int64
+		if err := db.Model(&models.UserSyncChange{}).Where("user_id = ?", id).Count(&count).Error; err != nil || count != 1 {
+			t.Fatalf("account %d count=%d error=%v", id, count, err)
+		}
+		page, err := manager.List(context.Background(), id, 0, 200)
+		if err != nil || page.CurrentRevision != 3 || len(page.Changes) != 1 || page.Changes[0].Revision != 3 {
+			t.Fatalf("migration lost current state: %+v %v", page, err)
+		}
 	}
 }
 

@@ -35,5 +35,7 @@ export function getSiteFavicon<T>(url: string) {
   return post<T>({
     url: '/panel/itemIcon/getSiteFavicon',
     data: { url },
+    timeout: 25000,
+    silentNetworkError: true,
   })
 }

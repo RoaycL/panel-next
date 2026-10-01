@@ -14,6 +14,8 @@ import {
 import { useAuthStore, usePanelState } from '@/store/modules'
 import { getRuntime } from '@/runtime'
 import { saveExtensionAppearance } from '@/runtime/extensionAppearance'
+import NetworkModeSelect from '@/components/common/NetworkModeSelect.vue'
+import { settingsSyncState, settingsSyncError, flushLatestSettings } from '@/runtime/sharedSettings'
 import { enqueueAppearanceSave } from '@/themes/appearanceSaveQueue'
 import SvgIcon from '@/components/common/SvgIcon/index.vue'
 import ProfileAvatar from '@/components/common/ProfileAvatar/index.vue'
@@ -169,7 +171,6 @@ const AboutApp = defineAsyncComponent(() => import('@/components/apps/About/inde
 const BackupRestoreApp = defineAsyncComponent(() => import('@/components/apps/BackupRestore/index.vue'))
 const ImportExportApp = defineAsyncComponent(() => import('@/components/apps/ImportExport/index.vue'))
 const ThemeSettingsModal = defineAsyncComponent(() => import('@/themes/ThemeSettingsModal.vue'))
-const ExtensionHistoryPanel = defineAsyncComponent(() => import('./ExtensionHistoryPanel.vue'))
 const WallpaperSettingsPanel = defineAsyncComponent(() => import('./WallpaperSettingsPanel.vue'))
 const GroupAppearancePanel = defineAsyncComponent(() => import('./GroupAppearancePanel.vue'))
 
@@ -600,7 +601,7 @@ async function handleLogout() {
             <section class="settings-glass-card">
               <div class="settings-section-heading">
                 <span class="settings-section-icon"><SvgIcon icon="material-symbols:search-rounded" /></span>
-                <div><h3>桌面搜索栏</h3><p>此开关直接控制扩展首页的搜索框，并自动保存到扩展专属偏好。</p></div>
+                <div><h3>桌面搜索栏</h3><p>控制扩展首页的搜索框，登录后自动同步最新偏好。</p></div>
               </div>
               <label class="sidebar-setting-row">
                 <span><SvgIcon icon="material-symbols:search-rounded" /><span><b>显示搜索栏</b><small>关闭后首页不再占用搜索区域</small></span></span>
@@ -715,7 +716,14 @@ async function handleLogout() {
           </div>
 
           <div v-else-if="currentTab === 'backup'" class="view-panel space-y-6">
-            <ExtensionHistoryPanel />
+            <section class="settings-glass-card">
+              <h3>最新设置同步</h3>
+              <p class="settings-effective-state">只保留当前状态，不再记录布局历史版本。外观、主题及日夜壁纸、搜索、时间、侧栏、分组、小组件布局和壁纸喜欢会随账号同步。</p>
+              <p class="settings-effective-state">{{ ({ local: '访客设置保存在本机', pending: '最新设置等待同步', syncing: '正在同步最新设置', synced: '设置已同步', error: '同步暂未完成' })[settingsSyncState] }}</p>
+              <p v-if="settingsSyncError" role="status">{{ settingsSyncError }}</p>
+              <NButton @click="flushLatestSettings">重试同步</NButton>
+              <p class="settings-effective-state">登录凭据、API Key、搜索关键词、设备探测结果及插件代码包不跨设备复制。</p>
+            </section>
             <section class="settings-glass-card">
               <div class="settings-section-heading">
                 <span class="settings-section-icon"><SvgIcon icon="icon-park-outline:import-and-export" /></span>
@@ -762,6 +770,7 @@ async function handleLogout() {
 
           <!-- 5. 扩展特有：服务器节点连接与测试 -->
           <div v-else-if="currentTab === 'server'" class="view-panel max-w-xl mx-auto py-6">
+            <section class="settings-glass-card mb-6"><NetworkModeSelect /></section>
             <section class="settings-glass-card server-settings-card">
               <div class="settings-section-heading">
                 <span class="settings-section-icon">

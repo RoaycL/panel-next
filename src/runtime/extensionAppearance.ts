@@ -4,6 +4,7 @@ import type { WidgetInstance, WidgetLayout } from '@/widgets'
 import { clearWidgetStorage } from '@/widgets/context'
 import { recordExtensionLayoutHistory } from './extensionHistory'
 import type { ExtensionLayoutSnapshot } from './extensionHistory'
+import { notifySettingsChanged } from './settingsEvents'
 
 export const EXTENSION_APPEARANCE_KEY = 'PANEL_NEXT_EXTENSION_APPEARANCE_V1'
 export const EXTENSION_WIDGETS_KEY = 'PANEL_NEXT_EXTENSION_WIDGETS_V1'
@@ -150,6 +151,7 @@ export function saveExtensionAppearance(config: Panel.panelConfig): Promise<bool
     try {
       await runtime.storage.flush?.()
       await recordExtensionLayoutHistory({ appearance: config, widgets: readExtensionWidgets() }, '外观修改')
+      notifySettingsChanged()
       return true
     }
     catch (error) {
@@ -161,8 +163,6 @@ export function saveExtensionAppearance(config: Panel.panelConfig): Promise<bool
 
 export function readExtensionWidgets(): ExtensionWidgetPreferences {
   const runtime = getRuntime()
-  if (runtime.kind !== 'extension')
-    return defaultWidgetPreferences()
   try {
     const parsed = JSON.parse(runtime.storage.getItem(EXTENSION_WIDGETS_KEY) || '{}') as Partial<ExtensionWidgetPreferences>
     const contentLayout = parsed.contentLayout
@@ -346,6 +346,7 @@ export function updateExtensionWidgets(
     try {
       await runtime.storage.flush?.()
       await recordExtensionLayoutHistory({ appearance: readExtensionAppearance(), widgets: next }, '布局修改')
+      notifySettingsChanged()
       return true
     }
     catch (error) {

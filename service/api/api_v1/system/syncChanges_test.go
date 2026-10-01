@@ -64,10 +64,10 @@ func TestSyncChangesReturnsAccountScopedPage(t *testing.T) {
 		t.Fatal(err)
 	}
 	data := envelope.Data
-	if envelope.Code != 0 || data.SchemaVersion != 1 || data.FromRevision != "0" || data.NextRevision != "1" || data.CurrentRevision != "2" || !data.HasMore || len(data.Changes) != 1 {
+	if envelope.Code != 0 || data.SchemaVersion != 1 || data.FromRevision != "0" || data.NextRevision != "2" || data.CurrentRevision != "2" || data.HasMore || len(data.Changes) != 1 {
 		t.Fatalf("unexpected changes page: %+v", data)
 	}
-	if data.Changes[0].ResourceID != "11" || string(data.Changes[0].Data) != `{"title":"Apps"}` || data.Changes[0].ChangedAt == "" {
+	if data.Changes[0].ResourceID != "12" || data.Changes[0].ChangedAt == "" {
 		t.Fatalf("unexpected change: %+v", data.Changes[0])
 	}
 	if strings.Contains(response.Body.String(), "private") {

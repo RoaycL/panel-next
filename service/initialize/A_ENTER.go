@@ -19,6 +19,7 @@ import (
 	"panel-next/lib/cmn"
 	"panel-next/lib/cmn/systemSetting"
 	sessionlib "panel-next/lib/session"
+	"panel-next/lib/syncstate"
 	"panel-next/models"
 	"panel-next/structs"
 	"time"
@@ -201,6 +202,9 @@ func DatabaseConnect() {
 	}
 	if err := database.EnsureUserSyncStates(global.Db); err != nil {
 		log.Panicln("User sync state initialization error", err)
+	}
+	if err := syncstate.PruneRetiredVersions(global.Db); err != nil {
+		log.Panicln("Latest-state synchronization migration error", err)
 	}
 
 	if err := database.NotFoundAndCreateUser(global.Db); err != nil {

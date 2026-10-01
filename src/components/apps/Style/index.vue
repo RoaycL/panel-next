@@ -8,6 +8,7 @@ import { PanelPanelConfigStyleEnum } from '@/enums/panel'
 import { t } from '@/locales'
 import { getRuntime } from '@/runtime'
 import { saveExtensionAppearance } from '@/runtime/extensionAppearance'
+import NetworkModeSelect from '@/components/common/NetworkModeSelect.vue'
 import { enqueueAppearanceSave } from '@/themes/appearanceSaveQueue'
 import { saveAndSyncExtensionWallpaper } from '@/runtime/extensionWallpaper'
 import { pickWallpaper } from '@/sync/wallpaper'
@@ -332,6 +333,7 @@ function resetPanelConfig() {
         {{ $t('apps.baseSettings.contentArea') }}
       </div>
 
+      <NetworkModeSelect />
       <NGrid cols="2">
         <NGridItem span="12 400:12">
           <div class="flex items-center mt-[5px]">

@@ -79,9 +79,7 @@ export function selectItemUrl(
   return preferLan && item.lanUrl ? item.lanUrl : item.url
 }
 
-// CARD-08: 实验性智能选择内网/默认地址。
-// 当卡片同时配置了 wanUrl 和 lanUrl 时，通过简单延迟探测选择更快的地址。
-// 探测在浏览器空闲时进行，结果缓存到内存 Map 避免重复探测。
+// Browser-side conservative reachability checks; never probe from the server.
 const smartCache = new Map<string, 'lan' | 'wan'>()
 
 export async function smartSelectItemUrl(item: Panel.ItemInfo): Promise<string> {
@@ -95,26 +93,36 @@ export async function smartSelectItemUrl(item: Panel.ItemInfo): Promise<string> 
   if (cached === 'wan')
     return item.url
 
-  // 并行探测两个地址，取更快的
-  const probe = (url: string) => new Promise<number>((resolve) => {
+  // Only a successful response or loaded image proves reachability. Fast failures,
+  // blocked private-network requests and login pages must not count as success.
+  const probe = (target: string) => new Promise<boolean>((resolve) => {
     const img = new Image()
-    const start = performance.now()
-    img.onload = () => resolve(performance.now() - start)
-    img.onerror = () => resolve(performance.now() - start)
-    img.src = `${url}/favicon.ico?_=${Date.now()}`
-    setTimeout(() => resolve(9999), 3000)
+    const abort = new AbortController()
+    let finished = false
+    const finish = (reachable: boolean) => { if (finished) return; finished = true; clearTimeout(timer); abort.abort(); img.onload = null; img.onerror = null; resolve(reachable) }
+    const timer = setTimeout(() => finish(false), 1800)
+    img.onload = () => finish(true)
+    img.onerror = () => { /* The page probe may work even without a favicon. */ }
+    try {
+      img.src = new URL('/favicon.ico', target).href
+      void fetch(target, { method: 'HEAD', mode: 'no-cors', credentials: 'omit', cache: 'no-store', signal: abort.signal })
+        .then(response => { if (response.type === 'opaque' || response.ok) finish(true) })
+        .catch(() => { /* A browser security block is not proof of reachability. */ })
+    }
+    catch { finish(false) }
   })
 
   try {
-    const [wanTime, lanTime] = await Promise.all([
-      probe(item.url),
-      probe(item.lanUrl),
-    ])
-    const result = lanTime < wanTime ? 'lan' : 'wan'
+    const result = await probe(item.lanUrl) ? 'lan' : 'wan'
     smartCache.set(cacheKey, result)
+    setTimeout(() => smartCache.delete(cacheKey), 60_000)
     return result === 'lan' ? item.lanUrl : item.url
   }
   catch {
     return item.url
   }
+}
+
+export function resolveItemUrl(item: Panel.ItemInfo, mode: number | null | undefined): Promise<string> {
+  return mode === 2 ? smartSelectItemUrl(item) : Promise.resolve(selectItemUrl(item, mode))
 }

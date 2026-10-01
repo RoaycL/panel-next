@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import ts from 'typescript'
 
 const source = fs.readFileSync('src/runtime/wallpaperFavorites.ts', 'utf8')
-const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText
+const compiled = ts.transpileModule(source.replace(/import \{ notifySettingsChanged \} from '[^']+'/, 'const notifySettingsChanged = () => {}'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText
 const { readWallpaperFavorites, wallpaperFavoritesKey, wallpaperIdentity, writeWallpaperFavorites }
   = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`)
 const values = new Map()

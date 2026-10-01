@@ -146,6 +146,11 @@ func appendTx(tx *gorm.DB, request AppendRequest, expectedRevision *int64, mutat
 	if err := tx.Create(&change).Error; err != nil {
 		return 0, err
 	}
+	// Keep only the latest notification per account. Current business tables
+	// are authoritative; clients with a cursor gap fetch a full snapshot.
+	if err := tx.Where("user_id = ? AND revision < ?", request.UserID, next).Delete(&models.UserSyncChange{}).Error; err != nil {
+		return 0, err
+	}
 	return next, nil
 }
 
@@ -199,4 +204,21 @@ func validResourceType(value string) bool {
 
 func validOperation(value string) bool {
 	return value == models.SyncOperationUpsert || value == models.SyncOperationDelete
+}
+
+// PruneRetiredVersions removes old feed payloads without changing live data
+// or the monotonic conflict-detection cursor.
+func PruneRetiredVersions(db *gorm.DB) error {
+	return db.Transaction(func(tx *gorm.DB) error {
+		var states []models.UserSyncState
+		if err := tx.Find(&states).Error; err != nil {
+			return err
+		}
+		for _, state := range states {
+			if err := tx.Where("user_id = ? AND revision < ?", state.UserID, state.Revision).Delete(&models.UserSyncChange{}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }

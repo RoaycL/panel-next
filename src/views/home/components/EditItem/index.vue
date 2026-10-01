@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { FormInst, FormRules } from 'naive-ui'
 import { NButton, NCard, NForm, NFormItem, NGrid, NGridItem, NInput, NInputGroup, NModal, NSelect, useMessage } from 'naive-ui'
 import IconEditor from './IconEditor.vue'
@@ -25,6 +25,8 @@ const runtime = getRuntime()
 const modalTo = runtime.kind === 'extension' ? '.pn-theme-root' : undefined
 const submitLoading = ref(false)
 const getIconLoading = ref([false, false])
+let iconRequestGeneration = 0
+onBeforeUnmount(() => { iconRequestGeneration++ })
 const itemIconGroupOptions = ref<{
   label: string
   value: number
@@ -152,6 +154,9 @@ const handleValidateButtonClick = async (e: MouseEvent, keepOpen = false) => {
 }
 
 async function getIconByUrl(url: string, loadingIndex: number) {
+  if (getIconLoading.value.some(Boolean))
+    return
+  const generation = ++iconRequestGeneration
   const preset = findIconPresetForUrl(url)
   if (preset) {
     model.value.icon = createPresetIcon(preset)
@@ -159,28 +164,33 @@ async function getIconByUrl(url: string, loadingIndex: number) {
   }
   getIconLoading.value[loadingIndex] = true
   try {
-    const { code, data } = await getSiteFavicon<{ iconUrl: string; iconUrls?: string[] }>(url)
-    if (code === 0) {
-      // CARD-07: 如果有多个候选图标，提示用户选择
-      if (data.iconUrls && data.iconUrls.length > 1) {
-        ms.info(t('iconItem.multipleIconsFound', { count: data.iconUrls.length }))
-      }
+    const { code, data, msg } = await getSiteFavicon<{ iconUrl: string; iconUrls?: string[] }>(url)
+    if (generation !== iconRequestGeneration || !props.visible || url !== (loadingIndex === 0 ? model.value.url : model.value.lanUrl))
+      return
+    if (code === 0 && data?.iconUrl) {
       model.value.icon = {
         itemType: 2,
         src: data.iconUrl,
       }
+      ms.success('已获取网站图标')
     }
     else {
-      ms.error(t('iconItem.geticonFail'))
+      ms.error(msg || t('iconItem.geticonFail'))
     }
   }
   catch {
-    ms.error(t('iconItem.geticonFail'))
+    if (generation === iconRequestGeneration && props.visible)
+      ms.error('获取图标超时或服务不可达，请重试，也可以上传图片。内网地址需要服务器能够访问。')
   }
-  getIconLoading.value[loadingIndex] = false
+  finally {
+    if (generation === iconRequestGeneration)
+      getIconLoading.value[loadingIndex] = false
+  }
 }
 
 watch([() => props.visible, () => props.itemInfo], ([newValue]) => {
+  iconRequestGeneration++
+  getIconLoading.value = [false, false]
   if (newValue === true) {
     model.value = props.itemInfo ? { ...props.itemInfo } : newItemModel()
     if (props.itemGroupId)

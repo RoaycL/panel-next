@@ -17,7 +17,6 @@ import (
 	"panel-next/models"
 	"path"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -350,51 +349,10 @@ func (a *ItemIcon) GetSiteFavicon(c *gin.Context) {
 		return
 	}
 	resp := panelApiStructs.ItemIconGetSiteFaviconResp{}
-	fullUrl := ""
-	if iconUrl, err := siteFavicon.GetOneFaviconURL(req.Url); err != nil {
-		apiReturn.Error(c, "acquisition failed: get ico error:"+err.Error())
-		return
-	} else {
-		fullUrl = iconUrl
-	}
-
 	parsedURL, err := url.Parse(req.Url)
 	if err != nil {
 		apiReturn.Error(c, "acquisition failed:"+err.Error())
 		return
-	}
-
-	protocol := parsedURL.Scheme
-	global.Logger.Debug("protocol:", protocol)
-	global.Logger.Debug("fullUrl:", fullUrl)
-
-	// 如果URL以双斜杠（//）开头，则使用当前页面协议
-	if strings.HasPrefix(fullUrl, "//") {
-		fullUrl = protocol + "://" + fullUrl[2:]
-	} else if !strings.HasPrefix(fullUrl, "http://") && !strings.HasPrefix(fullUrl, "https://") {
-		// 如果URL既不以http://开头也不以https://开头，则默认为http协议
-		fullUrl = "http://" + fullUrl
-	}
-	global.Logger.Debug("fullUrl:", fullUrl)
-	// 去除图标的get参数
-	{
-		parsedIcoURL, err := url.Parse(fullUrl)
-		if err != nil {
-			apiReturn.Error(c, "acquisition failed: parsed ico URL :"+err.Error())
-			return
-		}
-		fullUrl = parsedIcoURL.Scheme + "://" + parsedIcoURL.Host + parsedIcoURL.Path
-	}
-	global.Logger.Debug("fullUrl:", fullUrl)
-
-	// CARD-07: 获取所有候选图标 URL
-	allIconURLs, _ := siteFavicon.GetAllFaviconURLs(req.Url)
-	resp.IconUrls = make([]string, 0, len(allIconURLs))
-	for _, iconURL := range allIconURLs {
-		normalized := siteFavicon.NormalizeIconURL(iconURL, parsedURL.Scheme)
-		if normalized != "" {
-			resp.IconUrls = append(resp.IconUrls, normalized)
-		}
 	}
 
 	// 生成保存目录
@@ -402,23 +360,25 @@ func (a *ItemIcon) GetSiteFavicon(c *gin.Context) {
 	savePath := fmt.Sprintf("%s/%d/%d/%d/", configUpload, time.Now().Year(), time.Now().Month(), time.Now().Day())
 	isExist, _ := cmn.PathExists(savePath)
 	if !isExist {
-		os.MkdirAll(savePath, os.ModePerm)
-	}
-
-	// 下载
-	var imgInfo *os.File
-	{
-		var err error
-		if imgInfo, err = siteFavicon.DownloadImage(fullUrl, savePath, 1024*1024); err != nil {
-			apiReturn.Error(c, "acquisition failed: download"+err.Error())
+		if err := os.MkdirAll(savePath, os.ModePerm); err != nil {
+			apiReturn.Error(c, "无法创建图标保存目录")
 			return
 		}
 	}
 
+	// 下载
+	imgInfo, candidates, err := siteFavicon.Acquire(c.Request.Context(), req.Url, savePath)
+	if err != nil {
+		apiReturn.Error(c, err.Error())
+		return
+	}
+	resp.IconUrls = candidates
+
 	// 保存到数据库
-	ext := path.Ext(fullUrl)
+	ext := path.Ext(imgInfo.Name())
 	mFile := models.File{}
-	if _, err := mFile.AddFile(userInfo.ID, parsedURL.Host, ext, imgInfo.Name()); err != nil {
+	if _, err := mFile.AddFileWithType(userInfo.ID, parsedURL.Host, ext, imgInfo.Name(), "icon"); err != nil {
+		os.Remove(imgInfo.Name())
 		apiReturn.ErrorDatabase(c, err.Error())
 		return
 	}

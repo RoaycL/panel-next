@@ -82,6 +82,7 @@ const bundleCode = [
   stackSource,
   registrySource,
   contextSource,
+  cleanImports(fs.readFileSync(new URL('../src/runtime/settingsEvents.ts', import.meta.url), 'utf8')),
   appearanceSource,
   historySource,
   extensionSource,
@@ -207,7 +208,7 @@ const storedWidgetBytes = prefs => JSON.stringify({ ...prefs, pendingWidgetClean
 // 1. Initial save succeeds: both memoryMap and durableMap are updated
 const saveResult1 = await saveExtensionWidgets(prefsA)
 assert.equal(saveResult1, true)
-assert.equal(flushCount, 3) // baseline history, layout, and resulting history
+assert.equal(flushCount, 1) // only the latest layout, no historic snapshots
 assert.equal(memoryMap.get(EXTENSION_WIDGETS_KEY), storedWidgetBytes(prefsA))
 assert.equal(durableMap.get(EXTENSION_WIDGETS_KEY), storedWidgetBytes(prefsA))
 
@@ -224,7 +225,7 @@ assert.equal(durableMap.get(EXTENSION_WIDGETS_KEY), storedWidgetBytes(prefsA))
 // 2. Saving identical content skips write & flush (deduplication)
 const saveResult2 = await saveExtensionWidgets(prefsA)
 assert.equal(saveResult2, true)
-assert.equal(flushCount, 3) // identical save performs no new flush
+assert.equal(flushCount, 1) // identical save performs no new flush
 
 console.log('Passed saveExtensionWidgets basic & deduplication tests.')
 
@@ -615,8 +616,8 @@ console.log('--- Running Local Layout History & Restore Tests ---')
   const before = { ...readExtensionWidgets(), searchHistory: ['keep search'] }
   await saveExtensionWidgets(before)
   const snapshot = { appearance: null, widgets: { ...before, clock: !before.clock, searchHistory: [], pendingWidgetCleanupIds: [] } }
-  assert.equal(await recordExtensionLayoutHistory(snapshot, '测试历史版本', false), true)
-  assert.equal(readExtensionLayoutHistory().some(entry => entry.label === '测试历史版本'), true)
+  assert.equal(await recordExtensionLayoutHistory(snapshot, '测试历史版本', false), false)
+  assert.deepEqual(readExtensionLayoutHistory(), [])
 
   await restoreExtensionLayoutSnapshot(snapshot)
   assert.equal(readExtensionAppearance(), null)
@@ -625,11 +626,7 @@ console.log('--- Running Local Layout History & Restore Tests ---')
   assert.deepEqual(readExtensionWidgets().pendingWidgetCleanupIds, ['old.cleanup'])
 
   await saveExtensionWidgets({ ...readExtensionWidgets(), clock: before.clock })
-  const savedVersion = readExtensionLayoutHistory().find(entry => entry.label === '测试历史版本')
-  assert.ok(savedVersion)
-  await restoreExtensionLayoutHistory(savedVersion.id)
-  assert.equal(readExtensionWidgets().clock, snapshot.widgets.clock)
-  assert.equal(readExtensionLayoutHistory().some(entry => entry.label === '恢复前备份' && entry.snapshot.widgets.clock === before.clock), true)
+  await assert.rejects(() => restoreExtensionLayoutHistory('retired-version'), /最新状态/)
 
   const originalWidgets = durableMap.get(EXTENSION_WIDGETS_KEY)
   const originalFlush = mockRuntime.storage.flush

@@ -29,4 +29,5 @@ export interface RuntimeAdapter {
   resolveUrl: (url: string) => string
   resolveNavigationUrl: (url: string) => string
   openUrl: (url: string, mode: OpenUrlMode) => void
+  reserveTab?: () => { navigate: (url: string) => void; close: () => void } | null
 }

@@ -11,6 +11,7 @@ import { initializeExtensionUpdates } from '@/runtime/extensionUpdates'
 import { canReadExtensionImage } from '@/runtime/extension'
 import { configureIconCachePermission } from '@/icons/localImageCache'
 import { installModalFocusGuard } from '@/plugins/modalFocus'
+import { initializeSharedSettings } from '@/runtime/sharedSettings'
 
 async function bootstrap() {
   const runtime = getRuntime()
@@ -27,6 +28,7 @@ async function bootstrap() {
   setupScrollbarStyle()
 
   setupStore(app)
+  initializeSharedSettings()
 
   setupI18n(app)
 
