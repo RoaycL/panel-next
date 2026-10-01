@@ -151,6 +151,7 @@ const iconScale = computed(() => normalizeIconScale(props.itemIcon?.scale))
         :class="{
           'item-icon-surface-transparent': transparentBackground || (hasImage && visibleAppearance.transparent),
           'item-icon-surface-image': hasImage,
+          'item-icon-surface-glass': hasImage && !forceBackground,
           'item-icon-image-transparent': hasImage && visibleAppearance.transparent,
           'item-icon-image-dark-mark': hasImage && visibleAppearance.transparent && visibleAppearance.darkMonochrome,
         }"
@@ -181,7 +182,20 @@ const iconScale = computed(() => normalizeIconScale(props.itemIcon?.scale))
 .item-icon-surface > .item-icon-glyph,
 .item-icon-surface > .item-icon-mark,
 .item-icon-surface > .item-icon-remote { transform: scale(var(--item-icon-scale, 1)); transform-origin: center; }
-html.dark .item-icon-surface-image { background-color: #000 !important; }
+.item-icon-surface-glass {
+  background: linear-gradient(145deg, rgba(255, 255, 255, .18), transparent 65%), rgba(255, 255, 255, .32) !important;
+  -webkit-backdrop-filter: var(--pn-glass-control-filter, blur(18px) saturate(115%));
+  backdrop-filter: var(--pn-glass-control-filter, blur(18px) saturate(115%));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .38), inset 0 1px 0 rgba(255, 255, 255, .28), 0 3px 10px rgba(0, 0, 0, .08);
+}
+html.dark .item-icon-surface-glass {
+  background: linear-gradient(145deg, rgba(255, 255, 255, .07), transparent 65%), rgba(24, 24, 28, .38) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14), inset 0 1px 0 rgba(255, 255, 255, .1), 0 3px 10px rgba(0, 0, 0, .12);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .item-icon-surface-glass { background: #f5f5f5 !important; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  html.dark .item-icon-surface-glass { background: #262626 !important; }
+}
 html.dark .item-icon-surface-image:not(.item-icon-image-transparent)::after { position: absolute; inset: 0; z-index: 1; border-radius: inherit; background: rgba(0, 0, 0, .14); pointer-events: none; content: ''; }
 html.dark .item-icon-image-transparent > img { filter: drop-shadow(0 0 1px rgba(255, 255, 255, .4)); }
 /* Only black monochrome transparent marks need a white night variant. */
