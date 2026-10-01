@@ -6,9 +6,9 @@
     "currentUseUsername": "当前账号",
     "deletePromptContent": "你确定删除{name}({username})？",
     "formRules": {
-      "passwordLimit": "6-20个字符",
+      "passwordLimit": "6–50 字节",
       "roleRequired": "请选择角色",
-      "usernameRequired": "请输入账号且大于5个字符"
+      "usernameRequired": "请输入 3–32 位用户名"
     },
     "passwordPlaceholder": "请输入密码",
     "captchaPlaceholder": "请输入验证码",
@@ -392,6 +392,23 @@
     "url": "地址"
   },
   "login": {
+    "registerButton": "创建账号",
+    "registerLink": "还没有账号？注册新账号",
+    "backToLogin": "已有账号，返回登录",
+    "registerSubtitle": "使用用户名创建独立账号，不需要邮箱或邮箱验证。",
+    "usernameRule": "3–32 位字母、数字、下划线、点或短横线",
+    "passwordRule": "6–50 字节，保留密码中的空格与符号",
+    "passwordMismatch": "两次输入的密码不一致",
+    "confirmPassword": "确认密码",
+    "optionalNickname": "昵称（可选）",
+    "nicknamePlaceholder": "最多 15 个字符，留空使用用户名",
+    "registerFailed": "注册失败，请重试",
+    "registerSuccess": "注册成功，请使用新账号登录",
+    "registrationClosed": "管理员未开放注册，请联系管理员创建账号。",
+    "registrationUnavailable": "暂时无法读取注册配置，请稍后重试。",
+    "accountSettings": "账号与注册",
+    "openRegistration": "开放用户注册",
+    "registrationSettingsHint": "新用户通过登录页面注册，仅获得普通用户权限，无需邮箱。关闭后不影响已有账号登录。",
     "captchaPlaceholder": "请输入验证码",
     "captchaRequired": "请输入验证码后再登录",
     "credentialsRequired": "请输入账号和密码",

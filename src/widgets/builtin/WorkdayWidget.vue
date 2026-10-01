@@ -54,12 +54,12 @@ const clock = computed(() => {
 </template>
 
 <style scoped>
-.workday-card { display: flex; flex-direction: column; justify-content: center; gap: 12px; width: 100%; height: 100%; min-height: 0; overflow: hidden; padding: 14px 18px; border: 1px solid var(--pn-widget-border, rgb(255 255 255 / 16%)); border-radius: var(--pn-radius-large, 16px); color: var(--pn-widget-text-color, white); background: linear-gradient(135deg, color-mix(in srgb, var(--pn-color-accent, #10b981) 10%, transparent), transparent 54%), var(--pn-widget-background, rgb(18 25 39 / 42%)); box-shadow: var(--pn-widget-shadow, 0 10px 30px rgb(0 0 0 / 14%)); backdrop-filter: blur(var(--pn-effect-blur, 14px)); }
-.workday-card header { display: flex; align-items: center; gap: 9px; }
+.workday-card { display: flex; flex-direction: column; justify-content: space-between; gap: 8px; width: 100%; height: 100%; min-height: 0; overflow: hidden; padding: 14px 18px; border: 1px solid var(--pn-widget-border, rgb(255 255 255 / 16%)); border-radius: var(--pn-radius-large, 16px); color: var(--pn-widget-text-color, white); background: linear-gradient(135deg, color-mix(in srgb, var(--pn-color-accent, #10b981) 10%, transparent), transparent 54%), var(--pn-widget-background, rgb(18 25 39 / 42%)); box-shadow: var(--pn-widget-shadow, 0 10px 30px rgb(0 0 0 / 14%)); backdrop-filter: blur(var(--pn-effect-blur, 14px)); }
+.workday-card header { display: flex; flex: none; align-items: center; gap: 9px; }
 .workday-icon { display: grid; flex: none; width: 28px; height: 28px; place-items: center; border-radius: 9px; color: var(--pn-color-accent, #10b981); background: color-mix(in srgb, var(--pn-color-accent, #10b981) 13%, transparent); font-size: 16px; }
 .workday-card h3 { overflow: hidden; margin: 0; font-size: 13px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-.workday-main { display: flex; flex-direction: column; gap: 5px; padding-left: 1px; }
-.workday-main strong { font-variant-numeric: tabular-nums; font-size: clamp(24px, 4cqw, 38px); font-weight: 800; letter-spacing: -.04em; line-height: 1.1; }
-.workday-main strong.workday-message { font-size: clamp(19px, 3cqw, 30px); }
+.workday-main { display: flex; flex: 1; min-width: 0; min-height: 0; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; }
+.workday-main strong { font-variant-numeric: tabular-nums; font-size: clamp(22px, 13cqw, 46px); font-weight: 600; letter-spacing: -.04em; line-height: 1.1; white-space: nowrap; }
+.workday-main strong.workday-message { font-size: clamp(18px, 10cqw, 34px); white-space: normal; overflow-wrap: anywhere; }
 .workday-main span { color: var(--pn-widget-muted-text, rgb(255 255 255 / 65%)); font-size: 11px; }
 </style>

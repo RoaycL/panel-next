@@ -84,21 +84,23 @@ function goToToday() {
   box-shadow: var(--pn-widget-shadow, 0 10px 30px rgb(0 0 0 / 14%));
   backdrop-filter: blur(var(--pn-effect-blur, 14px));
 }
-.calendar-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
-.calendar-header h3 { overflow: hidden; margin: 0; font-size: 14px; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; }
+.calendar-header { display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-bottom: 4px; }
+.calendar-header h3 { overflow: hidden; min-width: 0; margin: 0; font-size: 14px; line-height: 18px; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; }
 .calendar-actions { display: flex; align-items: center; gap: 2px; }
 .calendar-actions button { min-width: 24px; min-height: 24px; padding: 0 4px; border: 0; border-radius: 6px; color: inherit; background: transparent; cursor: pointer; }
 .calendar-actions button:hover { background: var(--pn-widget-retry-background, rgb(255 255 255 / 12%)); }
 .calendar-actions .today-action { font-size: 11px; }
-.calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px 2px; text-align: center; }
-.weekday { color: var(--pn-widget-muted-text, rgb(255 255 255 / 65%)); font-size: 10px; line-height: 24px; }
-.calendar-day { display: grid; min-width: 0; height: 24px; place-items: center; border-radius: 7px; font-size: 11px; }
+.calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 1px 2px; text-align: center; }
+.weekday { overflow: hidden; white-space: nowrap; color: var(--pn-widget-muted-text, rgb(255 255 255 / 65%)); font-size: 10px; line-height: 14px; }
+.calendar-day { display: grid; min-width: 0; height: 16px; place-items: center; border-radius: 5px; font-size: 10px; line-height: 1; }
 .calendar-day.is-outside { opacity: .36; }
 .calendar-day.is-today { color: var(--pn-color-surface, #0f172a); background: var(--pn-color-accent, #5eead4); font-weight: 800; opacity: 1; }
 button:focus-visible { outline: 2px solid var(--pn-color-accent, #5eead4); outline-offset: 2px; }
 @container (max-width: 270px) {
   .calendar-card { padding: 10px; }
   .calendar-grid { gap: 2px 0; }
-  .calendar-day { height: 21px; }
+  .calendar-day { height: 15px; }
+  .calendar-header h3 { font-size: 11px; }
+  .calendar-actions .today-action { display: none; }
 }
 </style>

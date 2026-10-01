@@ -24,6 +24,15 @@ class WebStorageAdapter implements StorageAdapter {
   clear() {
     this.storage.clear()
   }
+
+  subscribe(listener: (change: import('./types').StorageChangeEvent) => void) {
+    const handler = (event: StorageEvent) => {
+      if (event.storageArea === this.storage && event.key)
+        listener({ key: event.key, oldValue: event.oldValue, newValue: event.newValue, scope: 'data' })
+    }
+    window.addEventListener('storage', handler)
+    return () => window.removeEventListener('storage', handler)
+  }
 }
 
 /**

@@ -7,10 +7,10 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"path"
-	"strconv"
 	"panel-next/lib/cmn"
 	"panel-next/models"
+	"path"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -170,6 +170,13 @@ func GetLogger() logger.Interface {
 
 // 创建数据库
 func CreateDatabase(driver string, db *gorm.DB) error {
+	// Password verification no longer queries hashes. Remove only the obsolete
+	// composite index before widening the hash column; account rows remain intact.
+	if db.Migrator().HasIndex(&models.User{}, "idx_username_password") {
+		if err := db.Migrator().DropIndex(&models.User{}, "idx_username_password"); err != nil {
+			return err
+		}
+	}
 
 	// mysql特殊处理
 	if driver == MYSQL {
@@ -215,13 +222,16 @@ func NotFoundAndCreateUser(db *gorm.DB) error {
 		if err != gorm.ErrRecordNotFound {
 			return err
 		}
-		username := "admin@sun.cc"
-		fUser.Mail = username
+		username := cmn.DefaultAdminUsername
 		fUser.Username = username
 		fUser.Name = username
 		fUser.Status = 1
 		fUser.Role = 1
-		fUser.Password = cmn.PasswordEncryption("12345678")
+		hash, err := cmn.HashPassword(cmn.DefaultAdminPassword)
+		if err != nil {
+			return err
+		}
+		fUser.Password = hash
 
 		if errCreate := db.Create(&fUser).Error; errCreate != nil {
 			return errCreate
@@ -233,8 +243,7 @@ func NotFoundAndCreateUser(db *gorm.DB) error {
 
 func EnsureDefaultSystemSettings(db *gorm.DB) error {
 	application, err := json.Marshal(map[string]any{
-		"emailSuffix":  "",
-		"openRegister": false,
+		"openRegister": true,
 		"loginCaptcha": false,
 		"webSiteUrl":   "",
 	})

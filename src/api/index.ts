@@ -17,6 +17,10 @@ export function getLoginConfig<T>() {
   })
 }
 
+export function registerAccount(data: { username: string; password: string; name?: string }) {
+  return post<{ id: number; username: string }>({ url: '/v1/accounts/register', data })
+}
+
 export function logout<T>() {
   return post<T>({
     url: '/logout',

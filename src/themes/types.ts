@@ -251,10 +251,16 @@ export interface ThemeMeta {
  * - version 必须为 >= 1 的 JavaScript 安全整数；
  * - surfaces 缺省表示 Web 与 Extension 均可使用。
  */
+export interface ThemeWallpapers {
+  light?: string
+  dark?: string
+}
+
 export interface ThemeDefinition<TConfig = unknown> {
   id: string
   version: number
   meta: ThemeMeta
+  wallpapers?: ThemeWallpapers
   tokens?: {
     light?: ThemeTokenOverrides
     dark?: ThemeTokenOverrides
@@ -287,6 +293,8 @@ export interface ThemeSelection<TConfig = unknown> {
   /** 写入时的主题版本，用于触发连续迁移。 */
   themeVersion: number
   mode: ThemeMode
+  /** Per-theme wallpaper overrides; empty string explicitly selects a plain background. */
+  wallpapers?: Record<string, ThemeWallpapers>
   config?: TConfig
   overrides?: ThemeTokenOverrides
   variants?: ThemeVariantOverrides

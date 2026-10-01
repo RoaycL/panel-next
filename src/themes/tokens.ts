@@ -223,7 +223,7 @@ export function extensionDefaultTokens(mode: ResolvedThemeMode, overrides?: Them
   const text = dark ? '#f5f5f5' : '#171717'
   const secondary = dark ? '#d4d4d4' : '#404040'
   const muted = dark ? '#a3a3a3' : '#737373'
-  const surface = dark ? '#141414' : '#ffffff'
+  const surface = dark ? 'rgba(18,18,18,0.7)' : 'rgba(255,255,255,0.7)'
   const raised = dark ? '#262626' : '#f5f5f5'
   const border = dark ? '#383838' : '#e5e5e5'
   const accent = dark ? '#e5e5e5' : '#262626'
@@ -232,18 +232,21 @@ export function extensionDefaultTokens(mode: ResolvedThemeMode, overrides?: Them
   const palette: ThemeTokenOverrides = {
     color: {
       pageBackground: dark ? '#000000' : '#ffffff', surface,
-      surfaceHover: raised, border, textPrimary: text, textSecondary: secondary,
+      surfaceHover: dark ? 'rgba(255,255,255,0.065)' : 'rgba(255,255,255,0.42)',
+      surfaceOverlay: dark ? 'rgba(255,255,255,0.035)' : 'rgba(255,255,255,0.2)',
+      mask: dark ? 'rgba(0,0,0,0.32)' : 'rgba(0,0,0,0.22)',
+      border: dark ? 'rgba(255,255,255,0.13)' : 'rgba(255,255,255,0.58)', textPrimary: text, textSecondary: secondary,
       textMuted: muted, accent, success: dark ? '#86c8a1' : '#26734b',
       warning: dark ? '#d1b27c' : '#92713c', danger: dark ? '#dfa09a' : '#b05248',
     },
     font: { family: 'Aptos,"Segoe UI Variable","PingFang SC","Microsoft YaHei",sans-serif', weightHeading: '600' },
     radius: { small: '8px', medium: '12px', large: '20px' },
-    effect: { shadowLow: '0 2px 8px rgba(25,42,32,0.04)', shadowMedium: shadow, shadowHigh: dark ? '0 24px 80px rgba(0,0,0,0.32)' : '0 24px 80px rgba(30,47,37,0.12)', blur: '16px' },
-    bookmark: { cardBackground: surface, cardBorder: border, cardShadow: shadow, titleColor: text, descriptionColor: muted, iconBackground: surface, iconRadius: '16px' },
+    effect: { shadowLow: '0 2px 8px rgba(25,42,32,0.04)', shadowMedium: shadow, shadowHigh: dark ? '0 20px 64px rgba(0,0,0,0.34), 0 4px 16px rgba(0,0,0,0.16)' : '0 20px 64px rgba(0,0,0,0.15), 0 4px 16px rgba(0,0,0,0.06)', blur: '32px' },
+    bookmark: { cardBackground: surface, cardBorder: border, cardShadow: shadow, titleColor: text, descriptionColor: muted, iconBackground: dark ? '#141414' : '#ffffff', iconRadius: '16px' },
     widget: { background: surface, border, shadow, textColor: text, mutedText: muted, loadingColor: muted, retryBackground: raised, retryBorder: border, chartColors: ['#72977e', '#9aaca0', '#b4a788', '#758c92', '#b3867f'] },
     sidebar: { background: surface, border, hoverBackground: raised, activeBackground: soft, textColor: secondary, activeTextColor: accent },
-    modal: { background: surface, overlay: 'rgba(0,0,0,0.28)', border, titleTextColor: text, contentTextColor: secondary },
-    notification: { background: surface, titleTextColor: text, contentTextColor: secondary, boxShadow: shadow },
+    modal: { background: dark ? 'rgba(18,18,18,0.74)' : surface, overlay: 'rgba(0,0,0,0.28)', border, titleTextColor: text, contentTextColor: secondary },
+    notification: { background: dark ? 'rgba(24,24,24,0.92)' : 'rgba(255,255,255,0.9)', titleTextColor: text, contentTextColor: secondary, boxShadow: shadow },
     icon: { defaultColor: secondary, activeColor: accent },
   }
   const base = completeTokens(dark ? DEFAULT_DARK_TOKENS : DEFAULT_LIGHT_TOKENS, palette)

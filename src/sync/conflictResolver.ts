@@ -255,7 +255,7 @@ export function evaluateConflict(
     const diffs = wallpaperOnly
       ? (JSON.stringify(pickWallpaper(remotePanel)) === JSON.stringify(payload.wallpaper)
           ? []
-          : getObjectDiffFields(payload.wallpaperBase || localPanel, remotePanel, [...WALLPAPER_FIELDS]))
+          : getObjectDiffFields(payload.wallpaperBase || localPanel, pickWallpaper(remotePanel), [...WALLPAPER_FIELDS, ...(payload.wallpaper.themeWallpapers ? ['themeWallpapers'] : [])]))
       : getObjectDiffFields(localPanel, remotePanel, [...PANEL_CONFIG_CONFLICT_FIELDS])
 
     if (diffs.length > 0 && isRemoteAhead(remoteData.revision, mutation.baseRevision!)) {

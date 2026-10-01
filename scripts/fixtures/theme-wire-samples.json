@@ -1,6 +1,10 @@
 {
   "$comment": "Theme selection wire-contract shared samples. Consumed by scripts/validate-theme-registry.mjs (TypeScript side) and service/api/api_v1/panel/themeValidation_test.go (Go side). Rules mirror src/themes/schema.ts#validateThemeWireSelection and service/api/api_v1/panel/themeValidation.go. Byte accounting MUST match Go json.Marshal: <, >, &, U+2028 and U+2029 escape to \\uXXXX (6 bytes). 'expect' is \"valid\" when both implementations accept, \"invalid\" when both reject. Samples with synthesizeBlob get config.blob = String.fromCodePoint(codepoint).repeat(repeat) injected by BOTH harnesses identically.",
   "selections": [
+    { "name": "paired default wallpapers", "expect": "valid", "selection": { "schemaVersion": 1, "themeId": "core.default", "themeVersion": 1, "mode": "auto", "wallpapers": { "core.default": { "light": "/day.jpg", "dark": "https://example.com/night.jpg" } } } },
+    { "name": "explicit plain night wallpaper", "expect": "valid", "selection": { "schemaVersion": 1, "themeId": "core.default", "themeVersion": 1, "mode": "auto", "wallpapers": { "core.default": { "light": "/day.jpg", "dark": "" } } } },
+    { "name": "unsafe wallpaper scheme", "expect": "invalid", "selection": { "schemaVersion": 1, "themeId": "core.default", "themeVersion": 1, "mode": "auto", "wallpapers": { "core.default": { "light": "javascript:alert(1)" } } } },
+    { "name": "unsafe wallpaper protocol relative", "expect": "invalid", "selection": { "schemaVersion": 1, "themeId": "core.default", "themeVersion": 1, "mode": "auto", "wallpapers": { "core.default": { "dark": "//example.com/night.jpg" } } } },
     {
       "name": "valid default-shaped selection",
       "expect": "valid",

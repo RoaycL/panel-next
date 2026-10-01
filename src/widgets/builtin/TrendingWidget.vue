@@ -4,6 +4,9 @@ import { useI18n } from 'vue-i18n'
 import type { TrendingItem, TrendingResponse, TrendingSource } from '@/api/trending'
 import { getTrending } from '@/api/trending'
 import { useWidgetContext } from '@/widgets/context'
+import weiboIcon from '@/assets/brand-icons/weibo.ico'
+import baiduIcon from '@/assets/brand-icons/baidu.ico'
+import zhihuIcon from '@/assets/brand-icons/zhihu.ico'
 
 const props = withDefaults(defineProps<{
   source?: TrendingSource
@@ -22,8 +25,9 @@ const failed = ref(false)
 let requestController: AbortController | null = null
 
 const sourceLabel = computed(() => t(`trending.sources.${activeSource.value}`))
-const showSourceTabs = computed(() => (widgetContext?.size.columns ?? 6) >= 5)
+const showSourceTabs = computed(() => (widgetContext?.size.columns ?? 4) >= 3 && (widgetContext?.size.rows ?? 2) >= 2)
 const sourceTabs: TrendingSource[] = ['weibo', 'baidu', 'zhihu', 'hackernews']
+const sourceIcons: Partial<Record<TrendingSource, string>> = { weibo: weiboIcon, baidu: baiduIcon, zhihu: zhihuIcon }
 
 const displayItems = computed<TrendingItem[]>(() => trending.value?.items.slice(0, props.limit) ?? [])
 
@@ -76,6 +80,8 @@ onUnmounted(() => {
 <template>
   <section class="trending-card" :aria-label="t('trending.title')">
     <header class="trending-header">
+      <img v-if="sourceIcons[activeSource]" class="trending-brand" :src="sourceIcons[activeSource]" alt="">
+      <span v-else class="trending-brand trending-brand-letter" aria-hidden="true">Y</span>
       <h3 class="trending-title">
         {{ sourceLabel }}
       </h3>
@@ -111,6 +117,9 @@ onUnmounted(() => {
   position: relative;
   box-sizing: border-box;
   width: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   padding: 14px 16px 12px;
   border: 1px solid var(--pn-widget-border, rgb(255 255 255 / 16%));
   border-radius: var(--pn-radius-large, 16px);
@@ -126,11 +135,15 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   margin-bottom: 8px;
+  flex: none;
 }
 
-.trending-sources { display: flex; gap: 5px; min-width: 0; overflow-x: auto; margin: -2px 0 7px; }
-.trending-sources button { flex: none; padding: 3px 7px; border: 0; border-radius: 6px; color: var(--pn-widget-muted-text, rgb(255 255 255 / 72%)); background: transparent; cursor: pointer; font: inherit; font-size: 11px; white-space: nowrap; }
-.trending-sources button.active, .trending-sources button:hover { color: var(--pn-widget-text-color, white); background: rgb(255 255 255 / 14%); }
+.trending-brand { flex: none; width: 24px; height: 24px; object-fit: contain; border-radius: 7px; }
+.trending-brand-letter { display: grid; place-items: center; background: #ff6600; color: white; font-size: 14px; font-weight: 600; }
+
+.trending-sources { display: flex; flex: none; gap: 4px; min-width: 0; overflow-x: auto; margin: 0 0 8px; padding: 3px; border-radius: 9px; background: var(--pn-widget-retry-background, rgb(255 255 255 / 6%)); }
+.trending-sources button { flex: 1; padding: 4px 6px; border: 0; border-radius: 6px; color: var(--pn-widget-muted-text, rgb(255 255 255 / 72%)); background: transparent; cursor: pointer; font: inherit; font-size: 11px; white-space: nowrap; }
+.trending-sources button.active, .trending-sources button:hover { color: var(--pn-widget-text-color, white); background: var(--pn-widget-border, rgb(255 255 255 / 14%)); }
 
 .trending-title {
   margin: 0;
@@ -167,8 +180,14 @@ onUnmounted(() => {
   margin: 0;
   padding: 0;
   list-style: none;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 2px 22px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--pn-widget-border) transparent;
+  align-content: start;
 }
 
 .trending-list li {
@@ -184,7 +203,7 @@ onUnmounted(() => {
   width: 17px;
   color: var(--pn-widget-muted-text, rgb(255 255 255 / 55%));
   font-size: 12px;
-  font-style: italic;
+  font-style: normal;
   font-weight: 700;
   text-align: center;
 }
@@ -223,6 +242,7 @@ onUnmounted(() => {
   padding: 12px 0 6px;
   color: var(--pn-widget-error-color, rgb(255 255 255 / 75%));
   font-size: 12px;
+  flex: 1;
 }
 
 .sr-only {
@@ -237,9 +257,12 @@ onUnmounted(() => {
   border: 0;
 }
 
-@media (max-width: 640px) {
+@container (min-width: 660px) {
   .trending-list {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 22px;
   }
 }
+
+.trending-refresh:focus-visible, .trending-sources button:focus-visible, .trending-item:focus-visible { outline: 2px solid var(--pn-widget-text-color); outline-offset: 2px; }
 </style>

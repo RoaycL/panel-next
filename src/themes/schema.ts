@@ -59,6 +59,32 @@ function isSafePositiveInteger(value: unknown): value is number {
 
 const MODES = new Set(['light', 'dark', 'auto'])
 
+export function validateThemeWallpapers(value: unknown): string | null {
+  if (!isPlainObject(value)) return 'wallpapers must be an object'
+  for (const [mode, url] of Object.entries(value)) {
+    if (mode !== 'light' && mode !== 'dark') return 'invalid wallpaper mode'
+    if (typeof url !== 'string' || new TextEncoder().encode(url).length > 4096 || url.includes('\\') || Array.from(url).some(char => char.charCodeAt(0) <= 32)) return 'invalid wallpaper URL'
+    if (!url) continue
+    if (url.startsWith('/') && !url.startsWith('//')) continue
+    try {
+      const parsed = new URL(url)
+      if (!['http:', 'https:'].includes(parsed.protocol) || !parsed.hostname || parsed.username || parsed.password) return 'invalid wallpaper URL'
+    }
+    catch { return 'invalid wallpaper URL' }
+  }
+  return null
+}
+
+export function validateThemeWallpaperMap(value: unknown): string | null {
+  if (!isPlainObject(value) || Object.keys(value).length > 50) return 'invalid theme wallpaper map'
+  for (const [id, pair] of Object.entries(value)) {
+    if (!THEME_ID_PATTERN.test(id)) return 'invalid wallpaper theme id'
+    const error = validateThemeWallpapers(pair)
+    if (error) return error
+  }
+  return null
+}
+
 /**
  * 结构级信封校验。返回违规描述；合法时返回 null。
  * 该校验不判断主题是否已注册——未知主题同样必须满足结构契约才能进入隔离区保留。
@@ -83,6 +109,10 @@ export function validateThemeWireSelection(candidate: unknown): string | null {
       return 'theme config must be an object'
     if (jsonSize(candidate.config) > MAX_THEME_CONFIG_BYTES)
       return 'theme config exceeds 32 KiB'
+  }
+  if (candidate.wallpapers !== undefined) {
+    const error = validateThemeWallpaperMap(candidate.wallpapers)
+    if (error) return error
   }
   if (candidate.overrides !== undefined) {
     if (!isPlainObject(candidate.overrides))
@@ -138,6 +168,7 @@ export function normalizeThemeSelection<TConfig = unknown>(candidate: unknown): 
     themeId: source.themeId as string,
     themeVersion: source.themeVersion as number,
     mode: source.mode as ThemeSelection['mode'],
+    ...(source.wallpapers !== undefined ? { wallpapers: source.wallpapers as ThemeSelection['wallpapers'] } : {}),
     config: source.config as TConfig | undefined,
     overrides: source.overrides as ThemeSelection['overrides'],
     variants: source.variants as ThemeSelection['variants'],

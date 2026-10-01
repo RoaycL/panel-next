@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { NButton, NCard, NInput, NUpload, NUploadDragger, useMessage } from 'naive-ui'
+import { NButton, NCard, NInput, NSwitch, NUpload, NUploadDragger, useMessage } from 'naive-ui'
+import { getAccountSettings, setAccountSettings } from '@/api/system/user'
 import { onMounted, ref } from 'vue'
 import { getRuntime } from '@/runtime'
 import { useAuthStore } from '@/store'
@@ -14,6 +15,27 @@ const ms = useMessage()
 const loading = ref(false)
 const showFaviconInput = ref(false)
 const showBackgroundInput = ref(false)
+const openRegister = ref(false)
+const accountSettingsReady = ref(false)
+const savingAccountSettings = ref(false)
+
+async function loadAccountSettings() {
+  try {
+    const result = await getAccountSettings()
+    if (result.code === 0) { openRegister.value = result.data.openRegister; accountSettingsReady.value = true }
+  }
+  catch { ms.error(t('common.networkError')) }
+}
+async function saveRegistration(value: boolean) {
+  savingAccountSettings.value = true
+  try {
+    const result = await setAccountSettings(value)
+    if (result.code === 0) { openRegister.value = result.data.openRegister; ms.success(t('common.success')) }
+    else ms.error(result.msg || t('common.failed'))
+  }
+  catch { ms.error(t('common.networkError')) }
+  finally { savingAccountSettings.value = false }
+}
 
 // 图床配置
 const imgbedConfig = ref<{ baseUrl: string; token: string }>({ baseUrl: '', token: '' })
@@ -116,6 +138,7 @@ function handleSave() {
 }
 
 onMounted(() => {
+  void loadAccountSettings()
   fetchSiteSetting()
   fetchImgbedConfig()
 })
@@ -123,6 +146,16 @@ onMounted(() => {
 
 <template>
   <div class="pn-app-page site-settings-container flex flex-col gap-3.5">
+    <NCard class="pn-app-card" size="small">
+      <div class="pn-app-heading">
+        {{ t('login.accountSettings') }}
+      </div>
+      <p class="pn-app-muted">
+        {{ t('login.registrationSettingsHint') }}
+      </p>
+      <NSwitch :value="openRegister" :disabled="!accountSettingsReady || savingAccountSettings" :loading="savingAccountSettings" @update:value="saveRegistration" />
+      <span class="ml-2">{{ t('login.openRegistration') }}</span>
+    </NCard>
     <!-- 站点名称 -->
     <NCard class="pn-app-card" size="small">
       <div class="pn-app-heading">

@@ -18,7 +18,8 @@ interface InfoModalState {
   fileInfo: File.Info | null
 }
 
-const props = withDefaults(defineProps<{ mode?: 'all' | 'assets' | 'wallpaper' }>(), { mode: 'all' })
+const props = withDefaults(defineProps<{ mode?: 'all' | 'assets' | 'wallpaper', wallpaperUrl?: string }>(), { mode: 'all' })
+const emit = defineEmits<{ selectWallpaper: [url: string] }>()
 const query = ref('')
 const loadError = ref(false)
 
@@ -121,6 +122,10 @@ function handleInfoClick(fileInfo: File.Info) {
 }
 
 async function handleSetWallpaper(imgSrc: string) {
+  if (props.wallpaperUrl !== undefined) {
+    emit('selectWallpaper', imgSrc)
+    return
+  }
   const previousBg = panelStore.panelConfig.backgroundImageSrc
   panelStore.panelConfig.backgroundImageSrc = imgSrc
   if (getRuntime().kind === 'extension') {
@@ -322,7 +327,7 @@ onMounted(() => {
                       <template #icon>
                         <SvgIcon icon="lucide:wallpaper" />
                       </template>
-                      <span v-if="mode === 'wallpaper'">{{ panelStore.panelConfig.backgroundImageSrc === item.src ? '当前' : '应用' }}</span>
+                      <span v-if="mode === 'wallpaper'">{{ (props.wallpaperUrl ?? panelStore.panelConfig.backgroundImageSrc) === item.src ? '当前' : '应用' }}</span>
                     </NButton>
                     <NButton size="tiny" tertiary type="error" style="cursor: pointer;" :title="$t('common.delete')" @click="handleDelete(item.id as number)">
                       <template #icon>

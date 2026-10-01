@@ -1,6 +1,7 @@
 package initialize
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -25,6 +26,7 @@ import (
 	"log"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 var DB_DRIVER = database.SQLITE
@@ -239,16 +241,27 @@ func CommandRun() {
 			os.Exit(0) // 务必退出
 		}
 
-		newPassword := "12345678"
+		newPassword := cmn.DefaultAdminPassword
+		hash, err := cmn.HashPassword(newPassword)
+		if err != nil {
+			fmt.Println("ERROR", err.Error())
+			os.Exit(1)
+		}
 
 		updateInfo := models.User{
-			Password: cmn.PasswordEncryption(newPassword),
+			Password: hash,
 			Token:    "",
 		}
 		// 重置第一个管理员的密码
-		if err := global.Db.Select("Password", "Token").Where("id=?", userInfo.ID).Updates(&updateInfo).Error; err != nil {
+		if err := global.Db.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Select("Password", "Token").Where("id=?", userInfo.ID).Updates(&updateInfo).Error; err != nil {
+				return err
+			}
+			_, err := sessionlib.NewManager(tx).RevokeAll(context.Background(), userInfo.ID)
+			return err
+		}); err != nil {
 			fmt.Println("ERROR", err.Error())
-			os.Exit(0) // 务必退出
+			os.Exit(1)
 		}
 
 		fmt.Println("The password has been successfully reset. Here is the account information")

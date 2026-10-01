@@ -2,7 +2,6 @@ package panel
 
 import (
 	"errors"
-	"strings"
 	"panel-next/api/api_v1/common/apiReturn"
 	"panel-next/api/api_v1/common/base"
 	"panel-next/global"
@@ -10,6 +9,7 @@ import (
 	"panel-next/lib/cmn/systemSetting"
 	sessionlib "panel-next/lib/session"
 	"panel-next/models"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
@@ -37,14 +37,25 @@ func (a UsersApi) Create(c *gin.Context) {
 	}
 
 	param.Username = strings.TrimSpace(param.Username)
-	if len(param.Username) < 5 {
-		apiReturn.ErrorParamFomat(c, "The account must be no less than 5 characters long")
+	if err := cmn.ValidateAccountUsername(param.Username); err != nil {
+		apiReturn.Error(c, err.Error())
 		return
+	}
+	hash, err := cmn.HashPassword(param.Password)
+	if err != nil {
+		apiReturn.Error(c, err.Error())
+		return
+	}
+	if strings.TrimSpace(param.Name) == "" {
+		param.Name = param.Username
+		if len(param.Name) > 15 {
+			param.Name = param.Name[:15]
+		}
 	}
 
 	mUser := models.User{
 		Username:  strings.TrimSpace(param.Username),
-		Password:  cmn.PasswordEncryption(param.Password),
+		Password:  hash,
 		Name:      param.Name,
 		HeadImage: param.HeadImage,
 		Status:    1,
@@ -54,12 +65,16 @@ func (a UsersApi) Create(c *gin.Context) {
 
 	// 验证账号是否存在
 	if _, err := mUser.CheckUsernameExist(param.Username); err != nil {
-		apiReturn.ErrorByCode(c, 1006)
+		apiReturn.ErrorCode(c, 1701, "该用户名已被使用", nil)
 		// apiReturn.Error(c, global.Lang.Get("register.mail_exist"))
 		return
 	}
 
 	userInfo, err := mUser.CreateOne()
+	if errors.Is(err, models.ErrUsernameExists) {
+		apiReturn.ErrorCode(c, 1701, "该用户名已被使用", nil)
+		return
+	}
 
 	if err != nil {
 		apiReturn.ErrorDatabase(c, err.Error())
@@ -161,6 +176,17 @@ func (a UsersApi) Update(c *gin.Context) {
 	}
 
 	param.Username = strings.Trim(param.Username, " ")
+	var previous models.User
+	if err := global.Db.First(&previous, param.ID).Error; err != nil {
+		apiReturn.ErrorDataNotFound(c)
+		return
+	}
+	if param.Username != previous.Username {
+		if err := cmn.ValidateAccountUsername(param.Username); err != nil {
+			apiReturn.Error(c, err.Error())
+			return
+		}
+	}
 	if len(param.Username) < 3 {
 		// 账号不得少于3个字符
 		apiReturn.ErrorParamFomat(c, "The account must be no less than 3 characters long")
@@ -171,7 +197,12 @@ func (a UsersApi) Update(c *gin.Context) {
 
 	// 密码不为默认“-”空，修改密码
 	if param.Password != "-" {
-		param.Password = cmn.PasswordEncryption(param.Password)
+		hash, err := cmn.HashPassword(param.Password)
+		if err != nil {
+			apiReturn.Error(c, err.Error())
+			return
+		}
+		param.Password = hash
 		allowField = append(allowField, "Password")
 	}
 
@@ -202,6 +233,9 @@ func (a UsersApi) Update(c *gin.Context) {
 	// global.Logger.Debug("修改资料清空token", userInfo.Token)
 	global.UserToken.Delete(userInfo.Token) // 更新用户信息
 	// 返回token等基本信息
+	param.Password = ""
+	param.Token = ""
+	param.ReferralCode = ""
 	apiReturn.SuccessData(c, param)
 }
 

@@ -1,4 +1,5 @@
 import type { ThemeDefinition } from '../types'
+import { extensionDefaultTokens } from '../tokens'
 
 /**
  * core.default：内置默认主题。
@@ -15,6 +16,8 @@ export const defaultTheme: ThemeDefinition<Record<string, never>> = {
     author: 'Panel Next',
   },
   surfaces: ['web', 'extension'],
+  // The current monochrome acrylic UI is the actual, exportable default theme.
+  tokens: { light: extensionDefaultTokens('light'), dark: extensionDefaultTokens('dark') },
   variants: {
     bookmark: 'glass',
     widget: 'glass',

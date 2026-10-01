@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"regexp"
+	"strings"
 )
 
 const (
@@ -76,6 +78,37 @@ func validatePanelTheme(panel map[string]interface{}) error {
 	case "light", "dark", "auto":
 	default:
 		return fmt.Errorf("theme %q has an invalid mode", themeID)
+	}
+	if raw, exists := selection["wallpapers"]; exists {
+		wallpapers, ok := raw.(map[string]interface{})
+		if !ok || len(wallpapers) > 50 {
+			return errors.New("invalid theme wallpaper map")
+		}
+		for id, rawPair := range wallpapers {
+			if !themeIDPattern.MatchString(id) {
+				return errors.New("invalid wallpaper theme id")
+			}
+			pair, ok := rawPair.(map[string]interface{})
+			if !ok {
+				return errors.New("wallpapers must be an object")
+			}
+			for mode, rawURL := range pair {
+				if mode != "light" && mode != "dark" {
+					return errors.New("invalid wallpaper mode")
+				}
+				text, ok := rawURL.(string)
+				if !ok || len(text) > 4096 || strings.Contains(text, "\\") || strings.IndexFunc(text, func(r rune) bool { return r <= 32 }) >= 0 {
+					return errors.New("invalid wallpaper URL")
+				}
+				if text == "" || (strings.HasPrefix(text, "/") && !strings.HasPrefix(text, "//")) {
+					continue
+				}
+				parsed, err := url.Parse(text)
+				if err != nil || (strings.ToLower(parsed.Scheme) != "http" && strings.ToLower(parsed.Scheme) != "https") || parsed.Hostname() == "" || parsed.User != nil {
+					return errors.New("invalid wallpaper URL")
+				}
+			}
+		}
 	}
 	if config, exists := selection["config"]; exists && config != nil {
 		configJSON, err := json.Marshal(config)

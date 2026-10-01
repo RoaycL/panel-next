@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { NButton, NCard, NForm, NFormItem, NInput, NSelect, useMessage } from 'naive-ui'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { login } from '@/api'
+import { login, registerAccount } from '@/api'
 import { getSiteInfo } from '@/api/site'
 import { useAppStore, useAuthStore } from '@/store'
 import { SvgIcon, Captcha } from '@/components/common'
@@ -25,6 +25,11 @@ onUnmounted(() => emit('busy', false))
 const languageValue = ref<Language>(appStore.language)
 const siteTitle = ref('')
 const showCaptcha = ref(false)
+const registerMode = ref(false)
+const registrationOpen = ref(false)
+const accountConfigLoaded = ref(false)
+const nickname = ref('')
+const confirmPassword = ref('')
 const captchaRef = ref<InstanceType<typeof Captcha> | null>(null)
 const captchaId = ref('')
 const siteBranding = ref<{ loginBackground?: string } | null>(null)
@@ -61,7 +66,9 @@ const form = ref<Login.LoginReqest>({
 async function checkLoginConfig() {
   try {
     const { getLoginConfig } = await import('@/api')
-    const res = await getLoginConfig<{ loginCaptcha: boolean }>()
+    const res = await getLoginConfig<{ loginCaptcha: boolean; register?: { openRegister?: boolean } }>()
+    accountConfigLoaded.value = res.code === 0
+    registrationOpen.value = res.code === 0 && res.data?.register?.openRegister === true
     if (res.code === 0 && res.data?.loginCaptcha) {
       showCaptcha.value = true
       captchaId.value = `${Date.now()}`
@@ -116,12 +123,43 @@ async function loginPost() {
   }
 }
 
-// const isShowCaptcha = ref<boolean>(false)
-// const isShowRegister = ref<boolean>(false)
+function changeAuthMode() {
+  if (loading.value) return
+  registerMode.value = !registerMode.value
+  form.value.password = ''
+  confirmPassword.value = ''
+}
+
+async function registerPost() {
+  if (!registrationOpen.value || loading.value) return
+  const username = form.value.username.trim()
+  const password = form.value.password
+  if (!/^[a-z0-9][\w.-]{2,31}$/i.test(username)) { ms.warning(t('login.usernameRule')); return }
+  const bytes = new TextEncoder().encode(password).length
+  if (bytes < 6 || bytes > 50 || !password.trim()) { ms.warning(t('login.passwordRule')); return }
+  if (password !== confirmPassword.value) { ms.warning(t('login.passwordMismatch')); return }
+  loading.value = true
+  try {
+    const result = await registerAccount({ username, password, name: nickname.value.trim() || undefined })
+    if (result.code !== 0) {
+      ms.error(result.msg || t('login.registerFailed'))
+      if (result.code === 1700) { registrationOpen.value = false; registerMode.value = false }
+      return
+    }
+    registerMode.value = false
+    form.value.username = username
+    form.value.password = ''
+    confirmPassword.value = ''
+    ms.success(t('login.registerSuccess'))
+  }
+  catch { ms.error(t('common.networkError')) }
+  finally { loading.value = false }
+}
 
 function handleSubmit() {
   if (loading.value)
     return
+  if (registerMode.value) { void registerPost(); return }
   if (!form.value.username.trim() || !form.value.password) {
     ms.warning(t('login.credentialsRequired'))
     return
@@ -166,7 +204,7 @@ function handleChangeLanuage(value: Language) {
       </button>
       <div class="login-toolbar">
         <div class="login-brand-mark">
-          <img src="/logo.png" alt="">
+          <span class="login-brand-icon" aria-hidden="true">PN</span>
           <span>Panel Next</span>
         </div>
         <div class="login-language">
@@ -185,9 +223,9 @@ function handleChangeLanuage(value: Language) {
         <p class="login-eyebrow">
           {{ $t('login.eyebrow') }}
         </p>
-        <h1>{{ loginTitle }}</h1>
+        <h1>{{ registerMode ? $t('login.registerButton') : loginTitle }}</h1>
         <p class="login-subtitle">
-          {{ $t('login.subtitle') }}
+          {{ $t(registerMode ? 'login.registerSubtitle' : 'login.subtitle') }}
         </p>
       </header>
 
@@ -197,7 +235,7 @@ function handleChangeLanuage(value: Language) {
             v-model:value="form.username"
             size="large"
             autocomplete="username"
-            :placeholder="$t('login.usernamePlaceholder')"
+            :placeholder="$t(registerMode ? 'login.usernameRule' : 'login.usernamePlaceholder')"
           >
             <template #prefix>
               <SvgIcon icon="ph:user-bold" />
@@ -211,8 +249,8 @@ function handleChangeLanuage(value: Language) {
             size="large"
             type="password"
             show-password-on="click"
-            autocomplete="current-password"
-            :placeholder="$t('login.passwordPlaceholder')"
+            :autocomplete="registerMode ? 'new-password' : 'current-password'"
+            :placeholder="$t(registerMode ? 'login.passwordRule' : 'login.passwordPlaceholder')"
           >
             <template #prefix>
               <SvgIcon icon="mdi:password-outline" />
@@ -220,7 +258,13 @@ function handleChangeLanuage(value: Language) {
           </NInput>
         </NFormItem>
 
-        <NFormItem v-if="showCaptcha" :label="$t('login.captchaPlaceholder')">
+        <NFormItem v-if="registerMode" :label="$t('login.confirmPassword')">
+          <NInput v-model:value="confirmPassword" size="large" type="password" show-password-on="click" autocomplete="new-password" :placeholder="$t('login.confirmPassword')" />
+        </NFormItem>
+        <NFormItem v-if="registerMode" :label="$t('login.optionalNickname')">
+          <NInput v-model:value="nickname" size="large" :maxlength="15" autocomplete="nickname" :placeholder="$t('login.nicknamePlaceholder')" />
+        </NFormItem>
+        <NFormItem v-if="showCaptcha && !registerMode" :label="$t('login.captchaPlaceholder')">
           <div class="captcha-row">
             <button class="captcha-image" type="button" :title="$t('login.captchaPlaceholder')" @click="captchaRef?.refresh()">
               <Captcha ref="captchaRef" :src="`/api/captcha/getImage?captchaId=${captchaId}`" />
@@ -230,18 +274,16 @@ function handleChangeLanuage(value: Language) {
         </NFormItem>
         <NFormItem class="login-submit-item">
           <NButton type="primary" attr-type="submit" size="large" block :loading="loading" :disabled="loading">
-            {{ $t('login.loginButton') }}
+            {{ $t(registerMode ? 'login.registerButton' : 'login.loginButton') }}
           </NButton>
         </NFormItem>
 
-        <!-- <div class="flex justify-end">
-          <NButton v-if="isShowRegister" quaternary type="info" class="flex" @click="$router.push({ path: '/register' })">
-            注册
-          </NButton>
-          <NButton quaternary type="info" class="flex" @click="$router.push({ path: '/resetPassword' })">
-            忘记密码?
-          </NButton>
-        </div> -->
+        <NButton class="login-register-link" quaternary block :disabled="loading || (!registerMode && !registrationOpen)" @click="changeAuthMode">
+          {{ $t(registerMode ? 'login.backToLogin' : 'login.registerLink') }}
+        </NButton>
+        <p v-if="!registrationOpen && !registerMode" class="login-security-note">
+          {{ $t(accountConfigLoaded ? 'login.registrationClosed' : 'login.registrationUnavailable') }}
+        </p>
 
         <p class="login-security-note">
           <span class="login-security-dot" aria-hidden="true" />
@@ -337,7 +379,12 @@ function handleChangeLanuage(value: Language) {
   letter-spacing: -.01em;
 }
 
-.login-brand-mark img {
+.login-brand-icon {
+  display: grid;
+  place-items: center;
+  background: var(--pn-color-text-primary, #111);
+  color: var(--pn-color-page-background, #fff);
+  font-size: 11px;
   width: 30px;
   height: 30px;
   border-radius: var(--pn-radius-small, 8px);
@@ -477,7 +524,7 @@ function handleChangeLanuage(value: Language) {
     margin: 30px 0 24px;
   }
 
-  .login-brand-mark span {
+  .login-brand-mark > span:not(.login-brand-icon) {
     display: none;
   }
 }

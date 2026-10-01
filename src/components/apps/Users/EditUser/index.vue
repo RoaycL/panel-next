@@ -48,7 +48,8 @@ const rules: FormRules = {
       required: true,
       trigger: 'blur',
       message: t('adminSettingUsers.formRules.usernameRequired'),
-      min: 5,
+      min: 3,
+      max: 32,
     },
   ],
   role: {
@@ -66,7 +67,7 @@ const rules: FormRules = {
   password: {
     trigger: 'blur',
     min: 6,
-    max: 20,
+    max: 50,
     message: t('adminSettingUsers.formRules.passwordLimit'),
   },
 }
@@ -126,7 +127,7 @@ const handleValidateButtonClick = (e: MouseEvent) => {
       </NFormItem>
 
       <NFormItem path="password" :label="$t('common.password')">
-        <NInput v-model:value="model.password" :maxlength="20" type="password" :placeholder="`${userInfo?.id ? $t('adminSettingUsers.EditpasswordPlaceholder') : $t('adminSettingUsers.passwordPlaceholder')}`" />
+        <NInput v-model:value="model.password" :maxlength="50" type="password" :placeholder="`${userInfo?.id ? $t('adminSettingUsers.EditpasswordPlaceholder') : $t('adminSettingUsers.passwordPlaceholder')}`" />
       </NFormItem>
     </NForm>
 

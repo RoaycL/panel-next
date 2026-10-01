@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { NButton, NModal, NSlider, useMessage } from 'naive-ui'
+import { NButton, NInput, NModal, NRadioButton, NRadioGroup, NSlider, NSwitch, useMessage } from 'naive-ui'
+import { useTheme } from '@/themes/context'
+import { themeRegistry } from '@/themes/registry'
+import { resolveThemeWallpaper, withThemeWallpaper } from '@/themes/wallpaper'
+import { validateThemeWallpapers } from '@/themes/schema'
+import type { ResolvedThemeMode } from '@/themes/types'
 import UploadFileManager from '@/components/apps/UploadFileManager/index.vue'
 import { usePanelState } from '@/store'
 import { getRuntime } from '@/runtime'
@@ -9,22 +14,42 @@ import { enqueueAppearanceSave } from '@/themes/appearanceSaveQueue'
 import { set as setUserConfig } from '@/api/panel/userConfig'
 import GallerySelector from '@/components/common/GallerySelector/index.vue'
 
-const emit = defineEmits<{ (event: 'browse'): void }>()
+defineEmits<{ (event: 'browse'): void }>()
 const showGallery = ref(false)
 const panel = usePanelState()
-function browse() {
-  if (getRuntime().kind === 'web') showGallery.value = true
-  else emit('browse')
+const theme = useTheme()
+const editingMode = ref<ResolvedThemeMode>(theme.resolvedMode)
+const selection = computed(() => panel.panelConfig.theme ?? themeRegistry.createSelection('core.default', 'auto'))
+const selectedUrl = computed(() => resolveThemeWallpaper(selection.value, themeRegistry.get(selection.value.themeId), editingMode.value, panel.panelConfig.backgroundImageSrc))
+const urlDraft = ref(selectedUrl.value)
+watch(selectedUrl, value => { urlDraft.value = value })
+const shared = computed(() => resolveThemeWallpaper(selection.value, themeRegistry.get(selection.value.themeId), 'light', panel.panelConfig.backgroundImageSrc) === resolveThemeWallpaper(selection.value, themeRegistry.get(selection.value.themeId), 'dark', panel.panelConfig.backgroundImageSrc))
+const separate = ref(!shared.value)
+const message = useMessage()
+function setShared(value: boolean) {
+  if (value) selectWallpaper(selectedUrl.value, true)
+  else {
+    const light = resolveThemeWallpaper(selection.value, themeRegistry.get(selection.value.themeId), 'light', panel.panelConfig.backgroundImageSrc)
+    const dark = resolveThemeWallpaper(selection.value, themeRegistry.get(selection.value.themeId), 'dark', panel.panelConfig.backgroundImageSrc)
+    panel.panelConfig.theme = withThemeWallpaper(withThemeWallpaper(selection.value, 'light', light), 'dark', dark)
+    separate.value = true
+    void save()
+  }
 }
-function selectWallpaper(url: string) {
-  panel.panelConfig.backgroundImageSrc = url
+function browse() {
+  showGallery.value = true
+}
+function selectWallpaper(url: string, forceShared = false) {
+  const error = validateThemeWallpapers({ light: url })
+  if (error) { message.error('请输入有效的图片地址（HTTP/HTTPS 或站内路径）'); return }
+  if (forceShared) separate.value = false
+  panel.panelConfig.theme = withThemeWallpaper(selection.value, editingMode.value, url, !separate.value)
   showGallery.value = false
   void save()
 }
-const message = useMessage()
 const saving = ref(false)
 const imageFailed = ref(false)
-const wallpaperUrl = computed(() => panel.panelConfig.backgroundImageSrc ? getRuntime().resolveUrl(panel.panelConfig.backgroundImageSrc) : '')
+const wallpaperUrl = computed(() => selectedUrl.value ? getRuntime().resolveUrl(selectedUrl.value) : '')
 watch(wallpaperUrl, () => { imageFailed.value = false })
 const imageStyle = computed(() => ({ filter: `blur(${panel.panelConfig.backgroundBlur || 0}px)` }))
 const maskStyle = computed(() => ({ opacity: panel.panelConfig.backgroundMaskNumber ?? 0 }))
@@ -57,9 +82,7 @@ function scheduleSave() {
   timer = setTimeout(() => { void save() }, 500)
 }
 function clearWallpaper() {
-  panel.panelConfig.backgroundImageSrc = ''
-  imageFailed.value = false
-  void save()
+  selectWallpaper('')
 }
 onBeforeUnmount(() => { if (timer) void save() })
 </script>
@@ -78,7 +101,20 @@ onBeforeUnmount(() => { if (timer) void save() })
         </div>
       </div>
       <div class="wallpaper-adjustments">
-        <h3>桌面壁纸</h3><p>预览即时更新，登录后同步壁纸与显示效果。</p>
+        <h3>主题壁纸</h3><p>当前主题独立保存日/夜壁纸。跟随系统时自动切换，登录后同步。</p>
+        <div class="wallpaper-buttons">
+          <NRadioGroup v-model:value="editingMode" size="small">
+            <NRadioButton value="light">
+              日间壁纸
+            </NRadioButton><NRadioButton value="dark">
+              夜间壁纸
+            </NRadioButton>
+          </NRadioGroup>
+        </div>
+        <div class="wallpaper-buttons">
+          <NSwitch :value="!separate" @update:value="setShared" /><span>日间与夜间共用壁纸</span>
+        </div>
+        <NInput v-model:value="urlDraft" placeholder="图片地址，留空为纯色" @change="value => selectWallpaper(value)" />
         <div class="wallpaper-buttons">
           <NButton type="primary" @click="browse">
             浏览壁纸库
@@ -95,7 +131,7 @@ onBeforeUnmount(() => { if (timer) void save() })
       <div class="wallpaper-section-heading">
         <h3>我的壁纸</h3><p>上传的壁纸单独管理，不再混在图标素材中。</p>
       </div>
-      <UploadFileManager mode="wallpaper" />
+      <UploadFileManager mode="wallpaper" :wallpaper-url="selectedUrl" @select-wallpaper="selectWallpaper" />
     </section>
   </section>
   <NModal v-if="showGallery" v-model:show="showGallery" to=".pn-theme-root" preset="card" title="选择壁纸" style="width: min(960px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow: auto;">

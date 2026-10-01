@@ -2,14 +2,14 @@ package system
 
 import (
 	"errors"
-	"strconv"
-	"strings"
 	"panel-next/api/api_v1/common/apiReturn"
 	"panel-next/api/api_v1/common/base"
 	"panel-next/global"
 	"panel-next/lib/cmn"
 	sessionlib "panel-next/lib/session"
 	"panel-next/models"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -25,7 +25,6 @@ type LoginLoginVerify struct {
 	Username string `json:"username" validate:"required"`
 	Password string `json:"password" validate:"required,max=50"`
 	VCode    string `json:"vcode" validate:"max=6"`
-	Email    string `json:"email"`
 }
 
 // @Summary 登录账号
@@ -88,7 +87,7 @@ func (l LoginApi) Login(c *gin.Context) {
 
 func authenticateCredentials(c *gin.Context, param LoginLoginVerify) (models.User, bool) {
 	mUser := models.User{}
-	info, err := mUser.GetUserInfoByUsernameAndPassword(strings.TrimSpace(param.Username), cmn.PasswordEncryption(param.Password))
+	info, err := mUser.Authenticate(strings.TrimSpace(param.Username), param.Password)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		apiReturn.ErrorByCode(c, 1003)
 		return models.User{}, false

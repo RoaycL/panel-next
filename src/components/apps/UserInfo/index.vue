@@ -141,21 +141,21 @@ const updatePasswordModalFormRules: FormRules = {
     required: true,
     trigger: 'blur',
     min: 6,
-    max: 20,
+    max: 50,
     message: t('adminSettingUsers.formRules.passwordLimit'),
   },
   password: {
     required: true,
     trigger: 'blur',
     min: 6,
-    max: 20,
+    max: 50,
     message: t('adminSettingUsers.formRules.passwordLimit'),
   },
   confirmPassword: {
     required: true,
     trigger: 'blur',
     min: 6,
-    max: 20,
+    max: 50,
     message: t('adminSettingUsers.formRules.passwordLimit'),
   },
 }
@@ -176,8 +176,8 @@ async function handleSaveInfo() {
   const name = nickName.value.trim()
   const mail = profileMail.value.trim()
   const headImage = profileHeadImage.value.trim()
-  if (name.length < 3 || name.length > 15) {
-    ms.warning('昵称长度需为 3～15 个字符')
+  if (name.length < 1 || name.length > 15) {
+    ms.warning('昵称长度需为 1～15 个字符')
     return
   }
   if (mail && !isValidEmail(mail)) {
@@ -408,7 +408,7 @@ async function handleChangeTheme(value: Theme) {
         <div class="profile-fields">
           <div class="profile-field-grid">
             <label for="profile-nickname">昵称</label>
-            <NInput v-model:value="nickName" :input-props="{ id: 'profile-nickname' }" maxlength="15" show-count type="text" placeholder="昵称（3～15 个字符）" />
+            <NInput v-model:value="nickName" :input-props="{ id: 'profile-nickname' }" maxlength="15" show-count type="text" placeholder="昵称（1～15 个字符）" />
           </div>
           <div class="profile-field-grid">
             <label for="profile-email">邮箱</label>
@@ -507,15 +507,15 @@ async function handleChangeTheme(value: Theme) {
     <RoundCardModal v-model:show="updatePasswordModalState.show" :to="embedded ? '.pn-theme-root' : undefined" size="small" preset="card" style="width: min(400px, calc(100vw - 24px))" :title="$t('settingUserInfo.updatePassword')">
       <NForm ref="formRef" :model="updatePasswordModalState.form" :rules="updatePasswordModalFormRules">
         <NFormItem path="oldPassword" :label="$t('settingUserInfo.oldPassword')">
-          <NInput v-model:value="updatePasswordModalState.form.oldPassword" show-password-on="click" :maxlength="20" type="password" :placeholder="$t('settingUserInfo.oldPassword')" />
+          <NInput v-model:value="updatePasswordModalState.form.oldPassword" show-password-on="click" :maxlength="50" type="password" :placeholder="$t('settingUserInfo.oldPassword')" />
         </NFormItem>
 
         <NFormItem path="password" :label="$t('settingUserInfo.newPassword')">
-          <NInput v-model:value="updatePasswordModalState.form.password" show-password-on="click" :maxlength="20" type="password" :placeholder="$t('settingUserInfo.newPassword')" />
+          <NInput v-model:value="updatePasswordModalState.form.password" show-password-on="click" :maxlength="50" type="password" :placeholder="$t('settingUserInfo.newPassword')" />
         </NFormItem>
 
         <NFormItem path="confirmPassword" :label="$t('settingUserInfo.confirmPassword')">
-          <NInput v-model:value="updatePasswordModalState.form.confirmPassword" show-password-on="click" :maxlength="20" type="password" :placeholder="$t('settingUserInfo.confirmPassword')" />
+          <NInput v-model:value="updatePasswordModalState.form.confirmPassword" show-password-on="click" :maxlength="50" type="password" :placeholder="$t('settingUserInfo.confirmPassword')" />
         </NFormItem>
       </NForm>
 

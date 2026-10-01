@@ -11,6 +11,7 @@ import {
 } from './runtime'
 import { themeRegistry } from './registry'
 import { createThemeContextValue } from './context'
+import { packageRevision } from '@/packages/manager'
 
 /**
  * 主题根容器：CSS 变量只应用到该容器内部，避免污染宿主页面。
@@ -28,6 +29,7 @@ const props = defineProps<{
 
 // 显式依赖系统明暗 ref：系统切换 → getPreferredDark 变化 → 视图重算。
 const view = computed(() => {
+  void packageRevision.value
   void getPreferredDark()
   return buildProviderResult(getThemePreview() ?? props.selection ?? null, props.surface, themeRegistry)
 })

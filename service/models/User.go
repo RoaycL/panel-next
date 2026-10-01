@@ -2,23 +2,29 @@ package models
 
 import (
 	"errors"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+	"panel-next/lib/cmn"
+	"strings"
 )
 
 // 用户表
 type User struct {
 	BaseModel
-	Username     string `gorm:"index:;index:idx_username_password,priority:1;type:varchar(50)" json:"username" validate:"required"` // 账号
-	Password     string `gorm:"index:idx_username_password;type:varchar(32)" json:"password" validate:"required"`                   // 密码
-	Name         string `gorm:"type:varchar(20)" json:"name"`                                                                       // 名称
-	HeadImage    string `gorm:"type:varchar(200)" json:"headImage"`                                                                 // 头像地址
-	Status       int    `gorm:"type:smallint" json:"status"`                                                                        // 状态 1.启用 2.停用 3.未激活
-	Role         int    `json:"role"`                                                                                               // 角色 1.管理员 2.普通用户
-	Mail         string `gorm:"type:varchar(50)" json:"mail"`                                                                       // 邮箱
-	ReferralCode string `gorm:"type:varchar(10)" json:"referralCode"`                                                               // 推荐码
+	Username     string `gorm:"index;type:varchar(50)" json:"username" validate:"required"` // 账号
+	Password     string `gorm:"type:varchar(255)" json:"password" validate:"required"`      // 密码哈希（兼容旧 MD5）
+	Name         string `gorm:"type:varchar(20)" json:"name"`                               // 名称
+	HeadImage    string `gorm:"type:varchar(200)" json:"headImage"`                         // 头像地址
+	Status       int    `gorm:"type:smallint" json:"status"`                                // 状态 1.启用 2.停用 3.未激活
+	Role         int    `json:"role"`                                                       // 角色 1.管理员 2.普通用户
+	Mail         string `gorm:"type:varchar(50)" json:"mail"`                               // 邮箱
+	ReferralCode string `gorm:"type:varchar(10)" json:"referralCode"`                       // 推荐码
 	Token        string `gorm:"type:varchar(32)" json:"token"`
 
 	UserId uint `gorm:"-"  json:"userId"`
 }
+
+var ErrUsernameExists = errors.New("该用户名已被注册")
 
 // 获取用户信息
 func (m *User) GetUserInfoByUid(uid uint) (User, error) {
@@ -27,18 +33,34 @@ func (m *User) GetUserInfoByUid(uid uint) (User, error) {
 	return mUser, err
 }
 
-// 根据用户名和密码查询用户
-func (m *User) GetUserInfoByUsernameAndPassword(username, password string) (User, error) {
-	userInfo := User{}
-	err := Db.Where("username=?", username).Where("password=?", password).First(&userInfo).Error
-	return userInfo, err
-}
-
 // 根据用户名查询用户
 func (m *User) GetUserInfoByUsername(username string) (User, error) {
 	mUser := User{}
 	err := Db.Where("username=?", username).First(&mUser).Error
 	return mUser, err
+}
+
+func (m *User) Authenticate(username, password string) (User, error) {
+	user, err := m.GetUserInfoByUsername(username)
+	if err != nil {
+		return user, err
+	}
+	if !cmn.VerifyPassword(user.Password, password) {
+		return User{}, gorm.ErrRecordNotFound
+	}
+	if user.Status == 1 && !strings.HasPrefix(user.Password, "$2") {
+		if hash, err := cmn.UpgradeLegacyPassword(password); err == nil {
+			result := Db.Model(&User{}).Where("id = ? AND password = ?", user.ID, user.Password).Update("password", hash)
+			if result.Error != nil {
+				return User{}, result.Error
+			}
+			if result.RowsAffected == 0 {
+				return User{}, gorm.ErrRecordNotFound
+			}
+			user.Password = hash
+		}
+	}
+	return user, nil
 }
 
 // 根据邮箱查询用户
@@ -78,7 +100,10 @@ func (m *User) UpdateUserInfoByUserId(user_id uint, updateInfo map[string]interf
 
 	if v, ok := updateInfo["mail"]; ok {
 		hasUser := User{}
-		count := Db.Where("mail=?", updateInfo["mail"]).First(&hasUser).RowsAffected
+		count := int64(0)
+		if v != "" {
+			count = Db.Where("mail=?", updateInfo["mail"]).First(&hasUser).RowsAffected
+		}
 		if count != 0 && hasUser.ID != user_id {
 			return errors.New("the mail already exists")
 		}
@@ -106,14 +131,35 @@ func (m *User) UpdateUserInfoByUserId(user_id uint, updateInfo map[string]interf
 
 // 添加一个
 func (m *User) CreateOne() (User, error) {
-	err := Db.Create(m).Error
+	// Serialize account creation across SQLite, MySQL and PostgreSQL processes.
+	// Existing user tables need no destructive username/index migration.
+	err := Db.Transaction(func(tx *gorm.DB) error {
+		lock := InstanceMetadata{Name: "account_write_lock", Value: "1"}
+		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&lock).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&InstanceMetadata{}).Where("name = ?", lock.Name).UpdateColumn("value", gorm.Expr("value")).Error; err != nil {
+			return err
+		}
+		var count int64
+		if err := tx.Model(&User{}).Where("username = ?", m.Username).Count(&count).Error; err != nil {
+			return err
+		}
+		if count > 0 {
+			return ErrUsernameExists
+		}
+		return tx.Create(m).Error
+	})
 	return *m, err
 }
 
 // 验证是否有重复的用户名或者邮箱
 func (m *User) CheckMailAndUsername(mail, username string) error {
 	hasUser := User{}
-	count := Db.Where("mail=?", mail).First(&hasUser).RowsAffected
+	count := int64(0)
+	if mail != "" {
+		count = Db.Where("mail=?", mail).First(&hasUser).RowsAffected
+	}
 	if count != 0 {
 		return errors.New("该邮箱已被注册")
 	}

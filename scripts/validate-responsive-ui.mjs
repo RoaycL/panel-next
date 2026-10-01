@@ -212,7 +212,10 @@ assert.match(extensionEntry, /data-panel-runtime="extension"/, 'acrylic styles m
 assert.match(managementStyles, /@import '\.\/extensionGlass.less'/)
 for (const surface of ['n-modal.n-card', 'n-dialog', 'n-dropdown-menu', 'n-base-select-menu', 'n-popover', 'n-message', 'n-notification', 'pn-app-card.n-card', 'pn-app-panel', 'login-card', 'status-card'])
   assert.ok(glassStyles.includes(`.${surface}`), `missing acrylic surface: ${surface}`)
-assert.match(glassStyles, /--pn-glass-modal:\s*color-mix/)
+assert.match(glassStyles, /--pn-glass-modal:\s*var\(--pn-modal-background/)
+assert.match(glassStyles, /--pn-glass-filter:\s*blur\(var\(--pn-effect-blur/)
+assert.match(glassStyles, /--pn-glass-shadow:\s*var\(--pn-effect-shadow-high/)
+assert.doesNotMatch(glassStyles, /--pn-effect-blur:\s*22px/, 'widget material must not override theme blur')
 assert.match(glassStyles, /-webkit-backdrop-filter:\s*var\(--pn-glass-filter\)/)
 assert.match(glassStyles, /prefers-reduced-transparency: reduce/)
 assert.match(glassStyles, /@supports not/)
@@ -230,3 +233,21 @@ for (const locale of ['zh-CN', 'en-US']) {
 }
 
 console.log('Validated grouped extension rail, constrained context menus, profile rendering, guest-first routing, effective settings, and iOS bookmark icons')
+
+// Widget surfaces are shared, while the extension canvas retains icon/label alignment.
+assert.match(extension, /height: calc\(100% - var\(--dashboard-caption-space\)\)/, 'widget card edges must align to the last row of bookmark icons')
+assert.match(extension, /\.dashboard-widget-caption \{ display: block;[^}]*padding-top: 10px;[^}]*line-height: 16px;/, 'widget captions must remain visible and align with bookmark labels')
+assert.match(extension, /\.extension-dashboard-grid \.speed-card \{ justify-content: flex-start; \}/, 'bookmark icons must start at the same grid edge as widgets')
+assert.doesNotMatch(extension, /\.extension-widget-cell :deep\(\.weather-card\)/, 'extension must not override the shared weather surface')
+const weatherWidget = fs.readFileSync(new URL('../src/widgets/builtin/WeatherWidget.vue', import.meta.url), 'utf8')
+const trendingWidget = fs.readFileSync(new URL('../src/widgets/builtin/TrendingWidget.vue', import.meta.url), 'utf8')
+assert.match(weatherWidget, /<WeatherGlyph class="forecast-icon"/, 'weather icons must be local theme-aware vectors')
+assert.match(weatherWidget, /@container \(max-width: 240px\)/, 'compact weather layout must respond to the card, not the viewport')
+assert.match(trendingWidget, /overflow-y: auto/, 'long trending lists must scroll without moving the card header')
+assert.match(trendingWidget, /@container \(min-width: 660px\)/, 'trending columns must respond to the actual card width')
+const workdayWidget = fs.readFileSync(new URL('../src/widgets/builtin/WorkdayWidget.vue', import.meta.url), 'utf8')
+const countdownWidget = fs.readFileSync(new URL('../src/widgets/builtin/CountdownWidget.vue', import.meta.url), 'utf8')
+assert.match(workdayWidget, /\.workday-main \{[^}]*flex: 1;[^}]*align-items: center;[^}]*justify-content: center;/, 'two-row workday cards must use the available content area')
+assert.match(workdayWidget, /font-size: clamp\(22px, 13cqw, 46px\)/, 'workday numbers must scale with card width instead of staying at the minimum size')
+assert.match(countdownWidget, /--countdown-number-scale/, 'countdown typography must account for digit length')
+assert.match(countdownWidget, /\.countdown-body \{[^}]*flex: 1;[^}]*align-items: center;/, 'countdown content must fill and center within the card')

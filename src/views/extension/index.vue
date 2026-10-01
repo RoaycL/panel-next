@@ -29,6 +29,10 @@ import { getRuntime } from '@/runtime'
 import { extensionLoginVisible, openExtensionLogin } from '@/runtime/extensionLogin'
 import type { StorageChangeEvent } from '@/runtime/types'
 import { EXTENSION_APPEARANCE_KEY, EXTENSION_WIDGETS_KEY, processPendingWidgetCleanups, readExtensionAppearance, readExtensionWidgets, removeExtensionWidgetFlow, saveExtensionWidgets } from '@/runtime/extensionAppearance'
+import { packageRevision } from '@/packages/manager'
+import { useTheme } from '@/themes/context'
+import { themeRegistry } from '@/themes/registry'
+import { resolveThemeWallpaper } from '@/themes/wallpaper'
 import type { ExtensionBookmarkLayout, ExtensionPageLayout, ExtensionSearchEngineId } from '@/runtime/extensionAppearance'
 import { enqueueAppearanceSave } from '@/themes/appearanceSaveQueue'
 import { resolveSyncedWallpaper, saveAndSyncExtensionWallpaper } from '@/runtime/extensionWallpaper'
@@ -64,6 +68,12 @@ const ms = useMessage()
 const dialog = useDialog()
 const appStore = useAppStore()
 const panelState = usePanelState()
+const wallpaperTheme = useTheme()
+const activeWallpaper = computed(() => {
+  void packageRevision.value
+  const url = resolveThemeWallpaper(wallpaperTheme.selection, themeRegistry.get(wallpaperTheme.themeId), wallpaperTheme.resolvedMode, panelState.panelConfig.backgroundImageSrc)
+  return url ? getRuntime().resolveUrl(url) : ''
+})
 const authStore = useAuthStore()
 const userStore = useUserStore()
 const runtime = getRuntime()
@@ -1196,6 +1206,14 @@ watch(readyPageLayoutKey, (pageKey) => {
     scheduleSaveExtensionWidgets(0)
 }, { immediate: true })
 
+watch(packageRevision, () => {
+  if (isWidgetLayoutDirty.value)
+    return
+  const pageKey = readyPageLayoutKey.value
+  if (pageKey)
+    loadExtensionWidgetLayout(widgetPreferences.value.pageLayouts[pageKey]?.contentLayout ?? emptyPageLayout().contentLayout, pageKey)
+})
+
 function selectGroup(id: number) {
   activeTabId.value = id
 }
@@ -1732,16 +1750,16 @@ onUnmounted(() => {
       'sidebar-auto-hide': sidebarAutoHide,
       'sidebar-compact': sidebarDensity === 'compact',
       'sidebar-suppressed': sideRailSuppressed,
-      'has-wallpaper': Boolean(panelState.panelConfig.backgroundImageSrc),
+      'has-wallpaper': Boolean(activeWallpaper),
     }"
   >
     <!-- 用户自定义壁纸层 -->
     <div
-      v-if="panelState.panelConfig.backgroundImageSrc"
+      v-if="activeWallpaper"
       class="bg-cover"
       :style="{
         filter: `blur(${panelState.panelConfig.backgroundBlur ?? 0}px)`,
-        backgroundImage: `url(${panelState.panelConfig.backgroundImageSrc})`,
+        backgroundImage: `url(${JSON.stringify(activeWallpaper)})`,
       }"
     />
 
@@ -1807,7 +1825,7 @@ onUnmounted(() => {
       </button>
     </div>
     <div
-      v-if="panelState.panelConfig.backgroundImageSrc"
+      v-if="activeWallpaper"
       class="bg-overlay"
       :style="{ backgroundColor: `rgba(0,0,0,${panelState.panelConfig.backgroundMaskNumber ?? 0.35})` }"
     />
@@ -3131,15 +3149,6 @@ onUnmounted(() => {
 .active-group-meta small { margin-top: 5px; color: var(--ext-text-soft); font-size: 11px; }
 .extension-widget-grid { --widget-grid-row-height: 76px; gap: 12px; padding: 0 0 8px; }
 .extension-widget-cell { border-radius: 20px; }
-.extension-widget-cell :deep(.trending-card),
-.extension-widget-cell :deep(.weather-card),
-.extension-widget-cell :deep(.countdown-card),
-.extension-widget-cell :deep(.search-card) {
-  border-color: var(--pn-widget-border, var(--ext-border));
-  border-radius: var(--pn-radius-large, 20px);
-  background: var(--pn-widget-background, var(--ext-surface));
-  box-shadow: var(--pn-widget-shadow, 0 12px 32px var(--ext-shadow));
-}
 .extension-widget-toolbar {
   position: sticky;
   top: 0;
@@ -3333,8 +3342,11 @@ onUnmounted(() => {
 .dashboard-add-icon-symbol svg { box-sizing: border-box; width: 36px; height: 36px; padding: 7px; border-radius: 50%; color: var(--pn-color-surface); background: var(--ext-accent); }
 .extension-dashboard-grid .extension-widget-cell { height: 100%; padding-inline: var(--dashboard-icon-inset); border-radius: 20px; }
 .extension-dashboard-grid .extension-widget-cell :deep(.widget-stack-host) { height: calc(100% - var(--dashboard-caption-space)); }
-.dashboard-widget-caption { display: block; height: var(--dashboard-caption-space); padding-top: 10px; overflow: hidden; color: var(--ext-text); font-size: 12px; font-weight: 500; line-height: 16px; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+/* A multi-row card ends at the last row's icon edge, with the same label baseline. */
+.dashboard-widget-caption { display: block; box-sizing: border-box; height: var(--dashboard-caption-space); padding-top: 10px; overflow: hidden; color: var(--ext-text); font-size: 12px; font-weight: 550; line-height: 16px; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
 .extension-dashboard-grid .speed-card, .extension-dashboard-grid .dashboard-add-icon { padding: 0; gap: 10px; }
+.extension-dashboard-grid .speed-card { justify-content: flex-start; }
+.extension-dashboard-grid .card-title { line-height: 16px; }
 .extension-dashboard-grid .card-icon-box, .extension-dashboard-grid .dashboard-add-icon-symbol { flex: none; width: var(--dashboard-icon-size); height: var(--dashboard-icon-size); }
 .extension-dashboard-grid .card-icon-box { overflow: hidden; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18); }
 .extension-dashboard-grid.is-editing .extension-widget-cell {

@@ -1,4 +1,12 @@
-import { post } from '@/utils/request'
+import { get, post } from '@/utils/request'
+
+export function getAccountSettings() {
+  return get<{ openRegister: boolean }>({ url: '/v1/accounts/settings' })
+}
+
+export function setAccountSettings(openRegister: boolean) {
+  return post<{ openRegister: boolean }>({ url: '/v1/accounts/settings', data: { openRegister } })
+}
 
 export function getAuthInfo<T>() {
   return post<T>({

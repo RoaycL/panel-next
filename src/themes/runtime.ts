@@ -10,7 +10,7 @@ import type {
 import type { ThemeContextValue } from './context'
 import { reactive, ref } from 'vue'
 import { DEFAULT_THEME_ID, THEME_ROOT_CLASS } from './constants'
-import { DEFAULT_DARK_TOKENS, DEFAULT_LIGHT_TOKENS, deepFreezeTokens, extensionDefaultTokens } from './tokens'
+import { DEFAULT_DARK_TOKENS, DEFAULT_LIGHT_TOKENS, deepFreezeTokens } from './tokens'
 import { DEFAULT_ICON_SET } from './icons'
 import { DEFAULT_VARIANTS, resolveVariantCssVariables } from './variants'
 import { tokensToCssVariables } from './cssVariables'
@@ -238,17 +238,9 @@ export function buildProviderResult(
     console.error('[ThemeProvider] Theme resolution failed, using core.default.', error)
     loadResult = registry.loadSelection(null, 'auto', resolvedMode, surface)
   }
-  // Both surfaces use the same default palette; custom themes keep their tokens.
-  if (loadResult.resolved.id === DEFAULT_THEME_ID) {
-    loadResult = {
-      ...loadResult,
-      resolved: {
-        ...loadResult.resolved,
-        tokens: extensionDefaultTokens(resolvedMode, loadResult.quarantined ? undefined : loadResult.selection?.overrides),
-      },
-    }
-  }
   const cssVariables = tokensToCssVariables(loadResult.resolved.tokens)
+  if (cssVariables['--pn-effect-blur'] === 'none')
+    cssVariables['--pn-effect-blur'] = '0px'
   const variants = loadResult.resolved.variants
   // Variant 是真实表现：把解析出的 Variant 映射为根容器上的 --pn-* 覆盖，
   // 与 token 变量合并后一次原子应用，保证 Bookmark/Widget/Sidebar/Search 形态实时变化。

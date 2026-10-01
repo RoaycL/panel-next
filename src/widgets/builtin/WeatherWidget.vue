@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import type { WeatherResponse } from '@/api/weather'
 import { getWeather } from '@/api/weather'
 import { useWidgetContext } from '@/widgets/context'
+import WeatherGlyph from './WeatherGlyph.vue'
 
 const props = withDefaults(defineProps<{
   city?: string
@@ -44,24 +45,8 @@ function kindFromCode(code?: number) {
 
 const weatherKind = computed(() => kindFromCode(weather.value?.current.weatherCode))
 
-function iconForKind(kind: string, isDay = true) {
-  const icons: Record<string, string> = {
-    clear: isDay ? '☀️' : '🌙',
-    partlyCloudy: '🌤️',
-    cloudy: '☁️',
-    fog: '🌫️',
-    drizzle: '🌦️',
-    rain: '🌧️',
-    snow: '🌨️',
-    thunderstorm: '⛈️',
-    unknown: '🌡️',
-  }
-  return icons[kind]
-}
-
-const weatherIcon = computed(() => iconForKind(weatherKind.value, weather.value?.current.isDay !== false))
-const forecast = computed(() => weather.value?.daily?.slice(0, 6) ?? [])
-const showForecast = computed(() => (widgetContext?.size.columns ?? 5) >= 4 && (widgetContext?.size.rows ?? 2) >= 2 && forecast.value.length > 0)
+const forecast = computed(() => weather.value?.daily?.slice(0, (widgetContext?.size.columns ?? 4) < 4 ? 3 : 6) ?? [])
+const showForecast = computed(() => (widgetContext?.size.rows ?? 2) >= 2 && forecast.value.length > 0)
 
 function forecastDay(date: string, index: number) {
   if (index === 0)
@@ -85,22 +70,26 @@ const locationLabel = computed(() => {
 
 async function refresh() {
   requestController?.abort()
-  requestController = new AbortController()
+  const controller = new AbortController()
+  requestController = controller
   loading.value = true
   failed.value = false
   try {
-    const response = await getWeather(props.city, props.units, requestController.signal)
+    const response = await getWeather(props.city, props.units, controller.signal)
+    if (requestController !== controller)
+      return
     if (response.code === 0)
       weather.value = response.data
     else
       failed.value = true
   }
   catch (error) {
-    if (!(error instanceof DOMException && error.name === 'AbortError'))
+    if (requestController === controller && !(error instanceof DOMException && error.name === 'AbortError'))
       failed.value = true
   }
   finally {
-    loading.value = false
+    if (requestController === controller)
+      loading.value = false
   }
 }
 
@@ -116,7 +105,7 @@ onUnmounted(() => {
 <template>
   <section class="weather-card" :class="{ 'is-expanded': showForecast }" :aria-label="t('weather.title')">
     <div v-if="weather" class="weather-current">
-      <span class="weather-icon" aria-hidden="true">{{ weatherIcon }}</span>
+      <WeatherGlyph class="weather-icon" :kind="weatherKind" :is-day="weather.current.isDay" />
       <div class="weather-reading">
         <strong>{{ Math.round(weather.current.temperature) }}{{ weather.current.temperatureUnit }}</strong>
         <span>{{ condition }}</span>
@@ -128,13 +117,13 @@ onUnmounted(() => {
       </div>
     </div>
     <div v-else class="weather-placeholder">
-      <span aria-hidden="true">{{ failed ? '⚠️' : '🌤️' }}</span>
+      <WeatherGlyph class="weather-icon" :kind="failed ? 'unknown' : 'partlyCloudy'" />
       <span>{{ failed ? t('weather.unavailable') : t('weather.loading') }}</span>
     </div>
-    <ol v-if="showForecast" class="weather-forecast" :aria-label="t('weather.forecast')">
+    <ol v-if="showForecast" class="weather-forecast" :style="{ gridTemplateColumns: `repeat(${forecast.length}, minmax(0, 1fr))` }" :aria-label="t('weather.forecast')">
       <li v-for="(day, index) in forecast" :key="day.date">
         <span class="forecast-day">{{ forecastDay(day.date, index) }}</span>
-        <span class="forecast-icon" aria-hidden="true">{{ iconForKind(kindFromCode(day.weatherCode)) }}</span>
+        <WeatherGlyph class="forecast-icon" :kind="kindFromCode(day.weatherCode)" />
         <span class="forecast-temperatures">{{ Math.round(day.temperatureMax) }}°<small>{{ Math.round(day.temperatureMin) }}°</small></span>
         <span class="forecast-date">{{ forecastDate(day.date) }}</span>
       </li>
@@ -166,14 +155,15 @@ onUnmounted(() => {
   text-shadow: none;
 }
 
-.weather-card.is-expanded { justify-content: flex-start; padding: 14px 14px 18px; }
-.weather-card.is-expanded .weather-icon { font-size: 34px; }
+.weather-card.is-expanded { justify-content: space-between; gap: 8px; padding: 14px 14px 16px; }
+.weather-card.is-expanded .weather-icon { width: 40px; height: 40px; }
 .weather-forecast { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; min-width: 0; margin: auto 0 0; padding: 10px 0 0; border-top: 1px solid var(--pn-widget-border, rgb(255 255 255 / 16%)); list-style: none; }
 .weather-forecast li { display: flex; align-items: center; flex-direction: column; gap: 3px; min-width: 0; white-space: nowrap; }
-.forecast-day { overflow: hidden; max-width: 100%; color: var(--pn-widget-muted-text, rgb(255 255 255 / 75%)); font-size: 10px; text-overflow: ellipsis; }
-.forecast-icon { font-size: 18px; line-height: 1.2; }
-.forecast-temperatures { display: flex; gap: 3px; font-size: 11px; font-weight: 700; }
+.forecast-day { overflow: hidden; max-width: 100%; color: var(--pn-widget-muted-text, rgb(255 255 255 / 75%)); font-size: 10px; line-height: 14px; text-overflow: ellipsis; }
+.forecast-icon { width: 24px; height: 24px; }
+.forecast-temperatures { display: flex; gap: 3px; font-size: 11px; line-height: 14px; font-weight: 700; }
 .forecast-temperatures small, .forecast-date { color: var(--pn-widget-muted-text, rgb(255 255 255 / 60%)); font-size: 10px; font-weight: 400; }
+.forecast-date { line-height: 12px; }
 
 .weather-current,
 .weather-placeholder {
@@ -184,8 +174,10 @@ onUnmounted(() => {
 
 .weather-icon,
 .weather-placeholder > :first-child {
-  font-size: 28px;
-  line-height: 1;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  color: var(--pn-widget-text-color);
 }
 
 .weather-reading,
@@ -196,7 +188,9 @@ onUnmounted(() => {
 }
 
 .weather-reading strong {
-  font-size: 19px;
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -.045em;
   line-height: 1.15;
 }
 
@@ -204,12 +198,14 @@ onUnmounted(() => {
 .weather-details span,
 .weather-placeholder {
   font-size: 11px;
+  line-height: 16px;
   white-space: nowrap;
 }
 
 .weather-details {
-  margin-left: 3px;
-  color: var(--pn-widget-text-color, rgb(255 255 255 / 78%));
+  margin-left: auto;
+  gap: 4px;
+  color: var(--pn-widget-muted-text, rgb(255 255 255 / 78%));
 }
 
 .weather-details span:first-child {
@@ -253,7 +249,7 @@ onUnmounted(() => {
   text-decoration: underline;
 }
 
-@media (max-width: 640px) {
+@container (max-width: 240px) {
   .weather-card {
     min-width: 0;
   }
@@ -261,5 +257,15 @@ onUnmounted(() => {
   .weather-details {
     display: none;
   }
+  .weather-forecast { display: none; }
+  .weather-card.is-expanded { justify-content: center; }
+}
+
+@container (max-width: 330px) {
+  .weather-card.is-expanded { padding: 12px 12px 18px; }
+  .weather-card.is-expanded .weather-icon { width: 34px; height: 34px; }
+  .weather-reading strong { font-size: 23px; }
+  .weather-forecast { gap: 2px; padding-top: 8px; }
+  .forecast-icon { width: 20px; height: 20px; }
 }
 </style>

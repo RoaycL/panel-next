@@ -6,9 +6,9 @@
     "currentUseUsername": "Current username",
     "deletePromptContent": "Are you sure you want to delete {name} ({username})?",
     "formRules": {
-      "passwordLimit": "6-20 characters",
+      "passwordLimit": "6–50 bytes",
       "roleRequired": "Please select a role",
-      "usernameRequired": "Enter username with at least 5 characters"
+      "usernameRequired": "Enter a 3–32 character username"
     },
     "passwordPlaceholder": "Enter password",
     "captchaPlaceholder": "Enter captcha code",
@@ -391,6 +391,23 @@
     "url": "URL"
   },
   "login": {
+    "registerButton": "Create account",
+    "registerLink": "New here? Create an account",
+    "backToLogin": "Already registered? Sign in",
+    "registerSubtitle": "Create your own username-based account. No email or email verification required.",
+    "usernameRule": "3–32 letters, digits, underscores, dots or hyphens",
+    "passwordRule": "6–50 bytes; spaces and symbols are preserved",
+    "passwordMismatch": "Passwords do not match",
+    "confirmPassword": "Confirm password",
+    "optionalNickname": "Nickname (optional)",
+    "nicknamePlaceholder": "Up to 15 characters; defaults to username",
+    "registerFailed": "Registration failed. Try again.",
+    "registerSuccess": "Account created. Sign in with your new account.",
+    "registrationClosed": "Registration is closed. Contact the administrator for an account.",
+    "registrationUnavailable": "Registration settings are unavailable. Try again later.",
+    "accountSettings": "Accounts and registration",
+    "openRegistration": "Allow account registration",
+    "registrationSettingsHint": "Users register on the login page without email and receive regular-user permissions only. Closing registration does not affect existing accounts.",
     "captchaPlaceholder": "Enter captcha",
     "captchaRequired": "Enter the captcha before signing in",
     "credentialsRequired": "Enter your username and password",

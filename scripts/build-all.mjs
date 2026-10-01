@@ -38,6 +38,8 @@ runStep('test:profile-avatar-upload', node, [path.resolve('scripts/test-profile-
 runStep('test:brand-icons', node, [path.resolve('scripts/test-brand-icons.mjs')])
 runStep('test:group-appearance', node, [path.resolve('scripts/test-group-appearance.mjs')])
 runStep('validate:widget-registry', node, [path.resolve('scripts/validate-widget-registry.mjs')])
+runStep('validate:theme-registry', node, [path.resolve('scripts/validate-theme-registry.mjs')])
+runStep('test:installable-packages', node, [path.resolve('scripts/test-installable-packages.mjs')])
 runStep('validate:offline-sync', node, [path.resolve('scripts/validate-offline-sync.mjs')])
 runStep('test:wallpaper-sync', node, [path.resolve('scripts/test-wallpaper-sync.mjs')])
 

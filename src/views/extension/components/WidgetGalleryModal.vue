@@ -4,6 +4,8 @@ import { useI18n } from 'vue-i18n'
 import { NModal } from 'naive-ui'
 import SvgIcon from '@/components/common/SvgIcon/index.vue'
 import { widgetRegistry } from '@/widgets/registry'
+import { packageRevision } from '@/packages/manager'
+import PackageCenterPanel from '@/packages/PackageCenterPanel.vue'
 
 type Category = 'all' | 'information' | 'productivity' | 'time' | 'other'
 type Filter = 'all' | 'local' | 'network'
@@ -70,7 +72,7 @@ function featuredRank(type: string) {
   return index < 0 ? Number.MAX_SAFE_INTEGER : index
 }
 
-const catalog = computed(() => widgetRegistry.list()
+const catalog = computed(() => { void packageRevision.value; return widgetRegistry.list()
   .filter(definition => (!definition.surfaces || definition.surfaces.includes('extension')) && !['core.clock', 'core.search'].includes(definition.type))
   .map(definition => ({
     type: definition.type,
@@ -81,7 +83,7 @@ const catalog = computed(() => widgetRegistry.list()
     size: `${definition.size.default.columns}×${definition.size.default.rows}`,
     network: definition.capabilities?.includes('network') ?? false,
   }))
-  .sort((a, b) => featuredRank(a.type) - featuredRank(b.type)))
+  .sort((a, b) => featuredRank(a.type) - featuredRank(b.type)) })
 
 const categories = computed(() => [
   { id: 'all', label: t('widgetGallery.categories.all'), icon: 'majesticons-applications', count: catalog.value.length },
@@ -144,6 +146,7 @@ function add(type: string) {
       </aside>
 
       <div class="gallery-main">
+        <PackageCenterPanel kind="plugin" />
         <div class="gallery-tools">
           <label class="gallery-search">
             <SvgIcon icon="material-symbols:search-rounded" />

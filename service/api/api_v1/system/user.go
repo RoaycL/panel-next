@@ -50,7 +50,7 @@ func (a *UserApi) UpdateInfo(c *gin.Context) {
 	userInfo, _ := base.GetCurrentUserInfo(c)
 	type UpdateUserInfoStruct struct {
 		HeadImage string `json:"headImage"`
-		Name      string `json:"name" validate:"max=15,min=3,required"`
+		Name      string `json:"name" validate:"max=15,min=1,required"`
 		Mail      string `json:"mail" validate:"omitempty,email,max=50"`
 	}
 	params := UpdateUserInfoStruct{}
@@ -97,22 +97,33 @@ func (a *UserApi) UpdatePasssword(c *gin.Context) {
 	}
 	userInfo, _ := base.GetCurrentUserInfo(c)
 	mUser := models.User{}
+	previousHash := ""
 	if v, err := mUser.GetUserInfoByUid(userInfo.ID); err != nil {
 		apiReturn.ErrorParamFomat(c, err.Error())
 		return
 	} else {
-		if v.Password != cmn.PasswordEncryption(params.OldPassword) {
+		previousHash = v.Password
+		if !cmn.VerifyPassword(v.Password, params.OldPassword) {
 			// 旧密码不正确
 			apiReturn.ErrorByCode(c, 1007)
 			return
 		}
 	}
+	hash, err := cmn.HashPassword(params.NewPassword)
+	if err != nil {
+		apiReturn.Error(c, err.Error())
+		return
+	}
 	err = global.Db.WithContext(c.Request.Context()).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&models.User{}).Where("id = ?", userInfo.ID).Updates(map[string]interface{}{
-			"password": cmn.PasswordEncryption(params.NewPassword),
+		result := tx.Model(&models.User{}).Where("id = ? AND password = ?", userInfo.ID, previousHash).Updates(map[string]interface{}{
+			"password": hash,
 			"token":    "",
-		}).Error; err != nil {
-			return err
+		})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return gorm.ErrRecordNotFound
 		}
 		_, err := sessionlib.NewManager(tx).RevokeAll(c.Request.Context(), userInfo.ID)
 		return err

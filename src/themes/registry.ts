@@ -18,7 +18,7 @@ import {
   freezeTokens,
 } from './tokens'
 import { completeIconSet, validateIconSet, DEFAULT_ICON_SET } from './icons'
-import { normalizeThemeSelection, validateThemeWireSelection, validateVariantOverrides, jsonSize } from './schema'
+import { normalizeThemeSelection, validateThemeWireSelection, validateVariantOverrides, validateThemeWallpapers, jsonSize } from './schema'
 import { BOOKMARK_VARIANTS, SEARCH_VARIANTS, SIDEBAR_VARIANTS, THEME_ID_PATTERN, WIDGET_VARIANTS } from './constants'
 import { MAX_THEME_CONFIG_BYTES, RESERVED_THEME_ID_PREFIX, THEME_SELECTION_SCHEMA_VERSION } from './types'
 import { tokensToCssVariables } from './cssVariables'
@@ -131,6 +131,18 @@ export class ThemeRegistry {
 
   get(id: string): ThemeDefinition<any> | undefined {
     return this.definitions.get(id)
+  }
+
+  /** Package manager only: validate fully before replacing a non-core definition. */
+  replacePackage(definition: ThemeDefinition): void {
+    new ThemeRegistry().register(definition)
+    this.definitions.set(definition.id, definition)
+  }
+
+  removePackage(id: string): void {
+    if (id.startsWith(RESERVED_THEME_ID_PREFIX))
+      throw new Error('不能删除内置主题')
+    this.definitions.delete(id)
   }
 
   /** 按 surface 过滤的主题列表（surfaces 缺省表示双端可用）。 */
@@ -299,7 +311,8 @@ export class ThemeRegistry {
     if (!definition)
       throw new Error(`Unknown theme "${selection.themeId}".`)
     const config = definition.configSchema.parse(selection.config ?? {})
-    const base = resolvedMode === 'dark' ? DEFAULT_DARK_TOKENS : DEFAULT_LIGHT_TOKENS
+    const base = completeTokens(resolvedMode === 'dark' ? DEFAULT_DARK_TOKENS : DEFAULT_LIGHT_TOKENS,
+      resolvedMode === 'dark' ? defaultTheme.tokens?.dark : defaultTheme.tokens?.light)
     const declared = resolvedMode === 'dark'
       ? definition.tokens?.dark ?? definition.tokens?.light
       : definition.tokens?.light
@@ -403,6 +416,10 @@ export class ThemeRegistry {
   }
 
   private validateDefinition(definition: ThemeDefinition<any>, builtin: boolean): string | null {
+    if (definition.wallpapers !== undefined) {
+      const error = validateThemeWallpapers(definition.wallpapers)
+      if (error) return error
+    }
     if (typeof definition.id !== 'string' || !THEME_ID_PATTERN.test(definition.id))
       return 'invalid theme id'
     if (definition.id.startsWith(RESERVED_THEME_ID_PREFIX) && !builtin)

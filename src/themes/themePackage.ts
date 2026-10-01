@@ -7,7 +7,7 @@ import type {
 } from './types'
 import { SHA256 } from 'crypto-js'
 import { THEME_ICON_NAMES, MAX_THEME_CONFIG_BYTES } from './types'
-import { validateThemeWireSelection, validateVariantOverrides, jsonSize } from './schema'
+import { validateThemeWireSelection, validateVariantOverrides, validateThemeWallpapers, jsonSize } from './schema'
 import { DEFAULT_THEME_ID, THEME_ID_PATTERN } from './constants'
 import { completeTokens, freezeTokens, DEFAULT_DARK_TOKENS, DEFAULT_LIGHT_TOKENS } from './tokens'
 import { tokensToCssVariables } from './cssVariables'
@@ -42,6 +42,7 @@ export interface ThemePackageManifestV1 {
       dark?: ThemeTokenOverrides
     }
     configDefaults?: Record<string, unknown>
+    wallpapers?: ThemeDefinition['wallpapers']
   }
   assets?: Record<string, { mimeType: string, dataBase64: string }>
 }
@@ -217,6 +218,10 @@ export function validateThemePackage(manifest: unknown): string[] {
   }
 
   // ---- Variant 声明 ----
+  if (theme.wallpapers !== undefined) {
+    const error = validateThemeWallpapers(theme.wallpapers)
+    if (error) errors.push(error)
+  }
   if (theme.variants !== undefined) {
     if (!isRecord(theme.variants)) {
       errors.push('package variants must be an object')
@@ -392,6 +397,7 @@ export function themePackageToDefinition(manifest: ThemePackageManifestV1): Them
     id: manifest.theme.id,
     version: manifest.theme.version,
     meta: manifest.theme.meta as ThemeDefinition['meta'],
+    wallpapers: cloneJson(manifest.theme.wallpapers),
     surfaces: manifest.theme.surfaces as ThemeDefinition['surfaces'],
     variants: manifest.theme.variants,
     icons,

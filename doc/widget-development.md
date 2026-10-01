@@ -1,6 +1,6 @@
 # Panel Next 小组件开发指南
 
-本文档面向贡献者，说明如何基于 Panel Next 的标准化组件接口（Widget SDK）开发并随项目源码构建桌面小组件。当前 SDK 不支持运行时安装远程第三方代码或独立组件包分发。
+本文档面向贡献者，说明如何基于 Panel Next 的标准化组件接口（Widget SDK）开发并随项目源码构建桌面小组件。当前 SDK 不支持运行时安装远程第三方代码。另有可远程安装／更新的声明式数据小组件包（文字、数值、快捷链接），参见 [可安装包指南](./installable-packages.md)；它不执行第三方 JS／Vue。
 
 内置实现参考：`src/widgets/builtins.ts` 与 `src/widgets/builtin/*.vue`。
 

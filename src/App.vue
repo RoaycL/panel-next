@@ -14,6 +14,7 @@ import { buildProviderResult, getThemePreview } from '@/themes/runtime'
 import { createDefaultSelection } from '@/themes/legacyAdapter'
 import { themeRegistry } from '@/themes/registry'
 import { extensionLoginVisible } from '@/runtime/extensionLogin'
+import { packageRevision } from '@/packages/manager'
 
 const LoginForm = defineAsyncComponent(() => import('@/views/login/index.vue'))
 const extensionDashboardRevision = ref(0)
@@ -35,11 +36,10 @@ const panelStore = usePanelState()
 registerThemeStoreAccessor(() => panelStore)
 const themeSelection = computed(() => panelStore.panelConfig.theme ?? null)
 const effectiveThemeSelection = computed(() => themeSelection.value ?? createDefaultSelection(legacyIsDark.value ? 'dark' : 'light'))
-const providerView = computed(() => buildProviderResult(
-  getThemePreview() ?? effectiveThemeSelection.value,
-  runtime.kind,
-  themeRegistry,
-))
+const providerView = computed(() => {
+  void packageRevision.value
+  return buildProviderResult(getThemePreview() ?? effectiveThemeSelection.value, runtime.kind, themeRegistry)
+})
 const isDark = computed(() => providerView.value.resolvedMode === 'dark')
 const theme = computed(() => isDark.value ? darkTheme : undefined)
 // Web and extension now consume one component-token bridge. This keeps form
@@ -48,6 +48,12 @@ const themeOverrides = computed(() => createThemeOverrides(providerView.value.lo
 
 watch(isDark, (dark) => {
   document.documentElement.classList.toggle('dark', dark)
+}, { immediate: true })
+
+// Menus teleported to body must follow the same tokens as the page and modals.
+watch(() => providerView.value.cssVariables, (variables) => {
+  for (const [key, value] of Object.entries(variables))
+    document.body.style.setProperty(key, key === '--pn-effect-blur' && value === 'none' ? '0px' : value)
 }, { immediate: true })
 </script>
 

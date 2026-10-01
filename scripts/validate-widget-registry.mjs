@@ -100,17 +100,17 @@ const discreteDefinition = {
   ...definition,
   type: 'test.discrete-size',
   size: {
-    default: { columns: 4, rows: 2 },
+    default: { columns: 2, rows: 1 },
     min: { columns: 2, rows: 1 },
-    max: { columns: 8, rows: 4 },
-    supportedSizes: [{ columns: 2, rows: 1 }, { columns: 4, rows: 2 }, { columns: 8, rows: 4 }],
+    max: { columns: 4, rows: 2 },
+    supportedSizes: [{ columns: 2, rows: 1 }, { columns: 4, rows: 2 }],
   },
 }
 widgetRegistry.register(discreteDefinition)
 assert.deepEqual(resolveWidgetSize('test.discrete-size', { columns: 3, rows: 2 }), { columns: 4, rows: 2 })
 const discrete = widgetRegistry.create('test.discrete-size', 'discrete.main', { column: 0, row: 0 })
 assert.equal(resizeInstanceToWithinBounds(discrete, { columns: 7, rows: 4 }), true)
-assert.deepEqual(discrete.size, { columns: 8, rows: 4 })
+assert.deepEqual(discrete.size, { columns: 4, rows: 2 })
 assert.equal(resizeInstanceWithinBounds(discrete, 'columns', 1), false)
 const stackMembers = [
   widgetRegistry.create('test.discrete-size', 'stack.a', { column: 0, row: 0 }),
@@ -149,7 +149,7 @@ widgetRegistry.register({
   size: {
     default: { columns: 1, rows: 1 },
     min: { columns: 1, rows: 1 },
-    max: { columns: 7, rows: 2 },
+    max: { columns: 4, rows: 2 },
     step: { columns: 3, rows: 1 },
   },
 })
@@ -163,6 +163,16 @@ assert.throws(() => new WidgetRegistry().register({
 }), /default size is not supported/)
 
 const builtins = fs.readFileSync(new URL('../src/widgets/builtins.ts', import.meta.url), 'utf8')
+for (const match of builtins.matchAll(/size: \{ default: \{ columns: (\d+), rows: (\d+) \}, min: \{ columns: (\d+), rows: (\d+) \}, max: \{ columns: (\d+), rows: (\d+) \} \}/g)) {
+  const [, dc, dr, mc, mr, xc, xr] = match.map(Number)
+  assert.ok(xc <= 4 && xr <= 2, 'every built-in must fit within 4×2')
+  assert.ok(mc <= dc && dc <= xc && mr <= dr && dr <= xr)
+}
+assert.equal([...builtins.matchAll(/size: \{ default:/g)].length, 10)
+assert.throws(() => new WidgetRegistry().register({ ...definition, type: 'test.oversize', size: { ...definition.size, max: { columns: 5, rows: 2 } } }), /host grid limits/)
+const largeLegacy = registry.loadLayout({ schemaVersion: 1, widgets: [{ ...created, size: { columns: 12, rows: 24 } }] })
+assert.deepEqual(largeLegacy.layout.widgets[0].size, { columns: 4, rows: 2 })
+assert.deepEqual(largeLegacy.layout.widgets[0].config, created.config)
 const defineSource = fs.readFileSync(new URL('../src/widgets/define.ts', import.meta.url), 'utf8')
 const contextSource = fs.readFileSync(new URL('../src/widgets/context.ts', import.meta.url), 'utf8')
 const host = fs.readFileSync(new URL('../src/widgets/WidgetHost.vue', import.meta.url), 'utf8')

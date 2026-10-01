@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ThemeFieldDescriptor, ThemeMode, ThemeSelection } from './types'
+import type { ThemeFieldDescriptor, ThemeMode, ThemeSelection, ThemeTokenOverrides } from './types'
 import { computed, reactive, ref, watch } from 'vue'
 import { NAlert, NButton, NColorPicker, NDatePicker, NInput, NInputNumber, NModal, NRadioButton, NRadioGroup, NSelect, NSwitch, useMessage } from 'naive-ui'
 import { t } from '@/locales'
@@ -9,6 +9,12 @@ import { persistThemeSelection, saveLastKnownGood } from './storage'
 import { setThemePreview, getThemePreview, getThemeRuntimeState, buildProviderResult } from './runtime'
 import { coerceVariant, DEFAULT_VARIANTS, VARIANT_LABEL_KEYS } from './variants'
 import { cloneJson } from './clone'
+import PackageCenterPanel from '@/packages/PackageCenterPanel.vue'
+import { packageRevision } from '@/packages/manager'
+import type { InstalledPackage } from '@/packages/manager'
+import { resolveThemeWallpaper } from './wallpaper'
+import { usePanelState } from '@/store'
+
 
 /**
  * 主题中心：
@@ -30,6 +36,7 @@ const emit = defineEmits<{
 }>()
 
 const ms = useMessage()
+const panel = usePanelState()
 const saving = ref(false)
 
 const draft = reactive<{
@@ -38,18 +45,23 @@ const draft = reactive<{
   config: Record<string, unknown>
   variants: Record<string, string>
   iconPackId: string
+  overrides: ThemeTokenOverrides
+  wallpapers: NonNullable<ThemeSelection['wallpapers']>
 }>({
   themeId: DEFAULT_THEME_ID,
   mode: 'auto',
   config: {},
   variants: {},
   iconPackId: DEFAULT_ICON_PACK_ID,
+  overrides: {},
+  wallpapers: {},
 })
 
 watch(() => props.show, (show) => {
   if (!show)
     return
   const source = props.currentSelection
+  draft.wallpapers = cloneJson(source?.wallpapers ?? {})
   // 主题中心不能出现当前 surface 不支持的当前值：若当前选择对应的主题
   // 在本 surface 不可用（web-only 在 extension / 反之），则回退默认主题并清空其配置，
   // 避免出现空白选择或误导性的“当前值”。
@@ -62,6 +74,7 @@ watch(() => props.show, (show) => {
     draft.config = {}
     draft.variants = {}
     draft.iconPackId = DEFAULT_ICON_PACK_ID
+    draft.overrides = {}
     return
   }
   draft.themeId = source!.themeId
@@ -69,6 +82,7 @@ watch(() => props.show, (show) => {
   draft.config = cloneJson((source?.config as Record<string, unknown>) ?? {})
   draft.variants = cloneJson((source?.variants as Record<string, string>) ?? {})
   draft.iconPackId = source?.iconPackId ?? DEFAULT_ICON_PACK_ID
+  draft.overrides = cloneJson(source?.overrides ?? {})
 }, { immediate: true })
 
 /** i18n key 与字面回退：形如命名空间的键先走翻译，未命中时显示原文。 */
@@ -83,12 +97,54 @@ function resolveText(value: unknown): string {
   return value
 }
 
-const themes = computed(() => themeRegistry.list(props.surface).map(definition => ({
-  value: definition.id,
-  label: resolveText(definition.meta.name),
-})))
+const themes = computed(() => {
+  void packageRevision.value
+  return themeRegistry.list(props.surface).map(definition => ({
+    value: definition.id,
+    label: resolveText(definition.meta.name),
+  }))
+})
 
-const activeDefinition = computed(() => themeRegistry.get(draft.themeId))
+const activeDefinition = computed(() => {
+  void packageRevision.value
+  return themeRegistry.get(draft.themeId)
+})
+
+const exportManifest = computed(() => {
+  const definition = activeDefinition.value
+  if (!definition)
+    return null
+  const light = buildProviderResult({ ...buildDraftSelection(), mode: 'light' }, props.surface, themeRegistry).loadResult.resolved
+  const dark = buildProviderResult({ ...buildDraftSelection(), mode: 'dark' }, props.surface, themeRegistry).loadResult.resolved
+  return { format: 'panel-next-theme-package', formatVersion: 1, theme: {
+    id: definition.id.startsWith('core.') ? 'local.current-theme' : definition.id,
+    version: definition.version, meta: { name: `${resolveText(definition.meta.name)} · 导出`, author: definition.meta.author },
+    tokens: { light: light.tokens, dark: dark.tokens }, variants: light.variants,
+    wallpapers: {
+      light: resolveThemeWallpaper(buildDraftSelection(), definition, 'light', panel.panelConfig.backgroundImageSrc),
+      dark: resolveThemeWallpaper(buildDraftSelection(), definition, 'dark', panel.panelConfig.backgroundImageSrc),
+    },
+  } }
+})
+
+async function beforeRemovePackage(item: InstalledPackage) {
+  if (props.currentSelection?.themeId === item.id) {
+    const selection = themeRegistry.createSelection(DEFAULT_THEME_ID, draft.mode)
+    selection.wallpapers = cloneJson(draft.wallpapers)
+    const result = await persistThemeSelection({ surface: props.surface, serialized: themeRegistry.serialize(selection) })
+    if (!result.ok || result.conflict || result.error)
+      throw new Error('恢复默认主题失败，未删除主题包')
+    saveLastKnownGood(selection)
+    emit('saved', selection)
+  }
+  if (draft.themeId === item.id)
+    switchTheme(DEFAULT_THEME_ID)
+}
+
+function onPackageInstalled(item: InstalledPackage) {
+  if (themeRegistry.list(props.surface).some(definition => definition.id === item.id))
+    switchTheme(item.id)
+}
 
 const visualPreview = computed(() => {
   try {
@@ -142,8 +198,9 @@ function buildDraftSelection(): ThemeSelection {
     themeId: draft.themeId,
     themeVersion: definition?.version ?? 1,
     mode: draft.mode,
+    wallpapers: cloneJson(draft.wallpapers),
     config: draft.config,
-    overrides: {},
+    overrides: cloneJson(draft.overrides),
     variants: { ...draft.variants },
     iconPackId: draft.iconPackId || undefined,
   }
@@ -196,6 +253,7 @@ function switchTheme(themeId: string) {
   draft.config = cloneJson(definition?.defaultConfig() ?? {})
   draft.variants = {}
   draft.iconPackId = DEFAULT_ICON_PACK_ID
+  draft.overrides = {}
   pushPreview()
 }
 
@@ -234,6 +292,7 @@ async function confirmSave(forceDefault = false): Promise<void> {
         themeId: DEFAULT_THEME_ID,
         themeVersion: themeRegistry.get(DEFAULT_THEME_ID)?.version ?? 1,
         mode: draft.mode,
+        wallpapers: cloneJson(draft.wallpapers),
         config: {},
         overrides: {},
         variants: {},
@@ -271,6 +330,8 @@ async function confirmSave(forceDefault = false): Promise<void> {
       saveLastKnownGood(selection)
       emit('saved', selection)
     }
+    // Persistence has completed; unlock the shared close path before calling it.
+    saving.value = false
     requestClose(false)
     ms.success(t('theme.saved'))
   }
@@ -319,7 +380,7 @@ function formatDateInput(timestamp: number | null): string {
 <template>
   <NModal
     :show="props.show"
-    :to="props.surface === 'extension' ? '.pn-theme-root' : undefined"
+    to=".pn-theme-root"
     preset="card"
     class="theme-settings-modal"
     :title="t('theme.center.title')"
@@ -362,6 +423,7 @@ function formatDateInput(timestamp: number | null): string {
 
       <section class="theme-section">
         <h4>{{ t('theme.mode.title') }}</h4>
+        <p>日间与夜间可以使用不同壁纸，也可共用。请在「主题与壁纸」中设置；导出主题包会包含壁纸配置。</p>
         <NRadioGroup v-model:value="draft.mode" name="theme-mode">
           <NRadioButton value="light">
             {{ t('theme.mode.light') }}
@@ -374,6 +436,9 @@ function formatDateInput(timestamp: number | null): string {
           </NRadioButton>
         </NRadioGroup>
       </section>
+
+      <PackageCenterPanel kind="theme" :export-manifest="exportManifest" :before-remove="beforeRemovePackage" @installed="onPackageInstalled" />
+      <PackageCenterPanel kind="plugin" />
 
       <section v-if="configFields.length" class="theme-section">
         <h4>{{ t('theme.center.config') }}</h4>

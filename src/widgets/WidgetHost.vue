@@ -7,6 +7,7 @@ import { WIDGET_CONTEXT_KEY } from './context'
 import { getRuntime } from '@/runtime'
 import { t } from '@/locales'
 import { useTheme } from '@/themes/context'
+import { packageRevision } from '@/packages/manager'
 
 defineOptions({ inheritAttrs: false })
 const props = defineProps<{ instance: WidgetInstance; editMode?: boolean }>()
@@ -62,7 +63,7 @@ onErrorCaptured((error) => {
 
 let loadGeneration = 0
 
-watch(() => ({ type: props.instance.type, id: props.instance.id, retry: retryGeneration.value }), async (next) => {
+watch(() => ({ type: props.instance.type, id: props.instance.id, retry: retryGeneration.value, packages: packageRevision.value }), async (next) => {
   const generation = ++loadGeneration
   component.value = null
   renderError.value = null
@@ -103,6 +104,10 @@ function retryLoad() {
     class="pn-widget-shell widget-shell-frame"
     :data-widget="theme.variants.widget"
     :data-instance-id="instance.id"
+    :data-widget-type="instance.type"
+    :data-widget-columns="instance.size.columns"
+    :data-widget-rows="instance.size.rows"
+    :data-widget-placement="instance.id.startsWith('header.') ? 'header' : 'content'"
   >
     <div v-if="renderError" class="widget-error-boundary" role="alert">
       <span class="widget-error-icon" aria-hidden="true">⚠️</span>
@@ -201,4 +206,73 @@ function retryLoad() {
   color: var(--pn-widget-loading-color, rgb(255 255 255 / 58%));
   font-size: 12px;
 }
+</style>
+
+<style scoped>
+/* Adapt to grid dimensions as well as pixel width. Header widgets retain their hero layout. */
+.pn-widget-shell[data-widget-placement='content'] :deep(.clock) {
+  display: flex; flex-direction: column; justify-content: center; gap: 4px;
+  padding: 6px; border: 1px solid var(--pn-widget-border); border-radius: var(--pn-radius-large, 16px);
+  background: var(--pn-widget-background); color: var(--pn-widget-text-color);
+}
+.pn-widget-shell[data-widget-placement='content'] :deep(.clock-time) { font-size: clamp(12px, 12cqw, 38px); line-height: 1.1; font-weight: 500; font-variant-numeric: tabular-nums; }
+.pn-widget-shell[data-widget-placement='content'][data-widget-rows='1'] :deep(.clock-time) { font-size: clamp(12px, 10cqw, 28px); }
+.pn-widget-shell[data-widget-placement='content'][data-widget-columns='1'] :deep(.clock) { padding: 4px; gap: 2px; }
+.pn-widget-shell[data-widget-placement='content'][data-widget-columns='1'] :deep(.clock-time) { font-size: clamp(9px, 14cqw, 14px); }
+.pn-widget-shell[data-widget-placement='content'] :deep(.clock > div) { display: block; font-size: 10px; line-height: 14px; }
+.pn-widget-shell[data-widget-placement='content'][data-widget-columns='1'] :deep(.clock-week) { display: block; }
+.pn-widget-shell[data-widget-placement='content'] :deep(.search-box) { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+.pn-widget-shell[data-widget-placement='content'] :deep(.search-container) { flex: none; min-height: 38px; }
+.pn-widget-shell[data-widget-placement='content'] :deep(.search-box input) { min-width: 0; font-size: 12px; }
+.pn-widget-shell[data-widget-columns='2'] :deep(.notes-card),
+.pn-widget-shell[data-widget-columns='2'] :deep(.todo-card),
+.pn-widget-shell[data-widget-columns='2'] :deep(.calendar-card) { padding: 10px; }
+.pn-widget-shell[data-widget-columns='2'] :deep(.calendar-header) { gap: 2px; }
+.pn-widget-shell[data-widget-columns='2'] :deep(.calendar-header h3) { font-size: 11px; }
+.pn-widget-shell[data-widget-columns='2'] :deep(.calendar-actions .today-action) { display: none; }
+.pn-widget-shell[data-widget-columns='2'] :deep(.calendar-day) { height: 15px; }
+.pn-widget-shell :deep(.notes-header), .pn-widget-shell :deep(.todo-header), .pn-widget-shell :deep(.todo-form) { flex: none; }
+.pn-widget-shell :deep(.notes-header h3), .pn-widget-shell :deep(.todo-header h3) { min-width: 0; line-height: 18px; }
+.pn-widget-shell :deep(.notes-card textarea), .pn-widget-shell :deep(.todo-list) { min-height: 0; scrollbar-width: thin; }
+.pn-widget-shell :deep(.todo-card) { gap: 6px; padding: 10px 12px; }
+.pn-widget-shell :deep(.todo-header > div) { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.pn-widget-shell :deep(.todo-form input) { padding: 4px 6px; }
+.pn-widget-shell[data-widget-columns='2'] :deep(.notes-header),
+.pn-widget-shell[data-widget-columns='2'] :deep(.todo-header) { gap: 4px; }
+.pn-widget-shell[data-widget-columns='2'] :deep(.notes-header h3),
+.pn-widget-shell[data-widget-columns='2'] :deep(.todo-header h3) { font-size: 12px; }
+.pn-widget-shell[data-widget-columns='2'] :deep(.todo-header > div > small) { display: none; }
+.pn-widget-shell[data-widget-columns='2'] :deep(.notes-header small),
+.pn-widget-shell[data-widget-columns='2'] :deep(.todo-header > small) { font-size: 9px; }
+.pn-widget-shell[data-widget-columns='2'] :deep(.workday-card) { padding: 10px; gap: 8px; }
+.pn-widget-shell[data-widget-columns='2'] :deep(.workday-main strong) { font-size: clamp(20px, 14cqw, 30px); }
+.pn-widget-shell[data-widget-columns='2'] :deep(.countdown-card) { padding: 10px; }
+.pn-widget-shell[data-widget-rows='1'] :deep(.countdown-card) { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; }
+.pn-widget-shell[data-widget-rows='1'] :deep(.countdown-header) { flex: 1; overflow: hidden; }
+.pn-widget-shell[data-widget-rows='1'] :deep(.countdown-icon),
+.pn-widget-shell[data-widget-rows='1'] :deep(.countdown-date) { display: none; }
+.pn-widget-shell[data-widget-rows='1'] :deep(.countdown-body) { flex: none; flex-direction: column; flex-wrap: nowrap; gap: 0; }
+.pn-widget-shell[data-widget-rows='1'] :deep(.countdown-remaining) { flex-direction: column; align-items: center; gap: 2px; }
+.pn-widget-shell[data-widget-rows='1'] :deep(.countdown-remaining strong) { font-size: 24px; }
+.pn-widget-shell[data-widget-rows='1'] :deep(.countdown-unit) { font-size: 9px; line-height: 12px; white-space: nowrap; }
+.pn-widget-shell[data-widget-rows='1'] :deep(.workday-card) { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; }
+.pn-widget-shell[data-widget-rows='1'] :deep(.workday-card header) { min-width: 0; }
+.pn-widget-shell[data-widget-rows='1'] :deep(.workday-icon),
+.pn-widget-shell[data-widget-rows='1'] :deep(.workday-main span) { display: none; }
+.pn-widget-shell[data-widget-rows='1'] :deep(.workday-main strong) { font-size: clamp(14px, 8cqw, 24px); white-space: nowrap; }
+.pn-widget-shell[data-widget-rows='1'] :deep(.workday-main) { flex: none; }
+.pn-widget-shell[data-widget-rows='1'] :deep(.trending-card) { padding: 5px 10px; }
+.pn-widget-shell[data-widget-rows='1'] :deep(.trending-header) { margin-bottom: 2px; }
+.pn-widget-shell[data-widget-rows='1'] :deep(.trending-brand) { width: 18px; height: 18px; }
+.pn-widget-shell[data-widget-rows='1'] :deep(.trending-title) { font-size: 11px; }
+.pn-widget-shell[data-widget-rows='1'] :deep(.trending-list li) { padding: 1px 0; }
+.pn-widget-shell[data-widget-rows='1'] :deep(.trending-item) { font-size: 11px; line-height: 16px; }
+.pn-widget-shell[data-widget-columns='2'] :deep(.weather-card) { min-width: 0; padding: 8px 10px 14px; }
+.pn-widget-shell[data-widget-columns='2'] :deep(.weather-icon) { width: 24px; height: 24px; }
+.pn-widget-shell[data-widget-columns='2'] :deep(.weather-reading strong) { font-size: 22px; }
+.pn-widget-shell[data-widget-columns='2'] :deep(.weather-details) { display: none; }
+.pn-widget-shell[data-widget-rows='2'][data-widget-columns='2'] :deep(.weather-forecast) { display: grid; }
+.pn-widget-shell[data-widget-rows='1'] :deep(.weather-card) { padding: 6px 26px 12px 10px; }
+.pn-widget-shell[data-widget-rows='1'] :deep(.weather-icon) { width: 24px; height: 24px; }
+.pn-widget-shell[data-widget-rows='1'] :deep(.weather-reading strong) { font-size: 20px; }
 </style>

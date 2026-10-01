@@ -1,7 +1,7 @@
 # build frontend
-FROM node AS web_image
+FROM node:22 AS web_image
 
-RUN npm install pnpm -g
+RUN npm install pnpm@11.20.0 -g
 
 WORKDIR /build
 
@@ -13,7 +13,7 @@ RUN pnpm install
 
 COPY . /build
 
-RUN pnpm run build
+RUN pnpm run type-check && pnpm run build:web
 
 # build backend
 FROM golang:1.21-alpine3.18 as server_image

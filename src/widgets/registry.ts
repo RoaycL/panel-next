@@ -14,6 +14,9 @@ import { normalizeWidgetPositions, normalizeWidgetStacks } from './stack'
 const MAX_GRID_VALUE = 10000
 export const MAX_WIDGET_GRID_COLUMNS = 12
 export const MAX_WIDGET_GRID_ROWS = 24
+// Canvas coordinates remain 12×24; individual cards may occupy at most 4×2.
+export const MAX_WIDGET_SIZE_COLUMNS = 4
+export const MAX_WIDGET_SIZE_ROWS = 2
 const VALID_CAPABILITIES = new Set(['network', 'storage', 'clipboard', 'geolocation'])
 const VALID_SURFACES = new Set(['web', 'extension'])
 
@@ -141,7 +144,7 @@ function validateDefinition(definition: WidgetDefinition) {
       || minimum > initial || initial > maximum) {
       throw new Error(`Invalid widget ${axis} constraints.`)
     }
-    if ((axis === 'columns' && maximum > MAX_WIDGET_GRID_COLUMNS) || (axis === 'rows' && maximum > MAX_WIDGET_GRID_ROWS))
+    if ((axis === 'columns' && maximum > MAX_WIDGET_SIZE_COLUMNS) || (axis === 'rows' && maximum > MAX_WIDGET_SIZE_ROWS))
       throw new Error(`Widget ${definition.type} exceeds the host grid limits.`)
   }
   const step = definition.size.step ?? { columns: 1, rows: 1 }
@@ -241,6 +244,19 @@ export class WidgetRegistry {
 
   get(type: string) {
     return this.definitions.get(type) ?? null
+  }
+
+  replacePackage(definition: WidgetDefinition) {
+    if (definition.type.startsWith('core.'))
+      throw new Error('不能替换内置小组件')
+    validateDefinition(definition)
+    this.definitions.set(definition.type, definition)
+  }
+
+  removePackage(type: string) {
+    if (type.startsWith('core.'))
+      throw new Error('不能删除内置小组件')
+    this.definitions.delete(type)
   }
 
   list() {

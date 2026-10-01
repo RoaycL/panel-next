@@ -9,6 +9,10 @@ import { deletes, getListByGroupId, saveSort } from '@/api/panel/itemIcon'
 import { getList as getGroupList } from '@/api/panel/itemIconGroup'
 import { set as setUserConfig } from '@/api/panel/userConfig'
 import { enqueueAppearanceSave } from '@/themes/appearanceSaveQueue'
+import { packageRevision } from '@/packages/manager'
+import { useTheme as useThemeContext } from '@/themes/context'
+import { themeRegistry } from '@/themes/registry'
+import { resolveThemeWallpaper } from '@/themes/wallpaper'
 
 import { setTitle, updateLocalUserInfo } from '@/utils/cmn'
 import { sanitizeUserHtml } from '@/utils/sanitizeHtml'
@@ -44,6 +48,12 @@ const ms = useMessage()
 const dialog = useDialog()
 const appStore = useAppStore()
 const panelState = usePanelState()
+const wallpaperTheme = useThemeContext()
+const activeWallpaper = computed(() => {
+  void packageRevision.value
+  const url = resolveThemeWallpaper(wallpaperTheme.selection, themeRegistry.get(wallpaperTheme.themeId), wallpaperTheme.resolvedMode, panelState.panelConfig.backgroundImageSrc)
+  return url ? getRuntime().resolveUrl(url) : ''
+})
 const authStore = useAuthStore()
 const userStore = useUserStore()
 const runtime = getRuntime()
@@ -169,7 +179,7 @@ const sessionTitle = computed(() => authStore.accessExpiresAt
   ? t('panelHome.sessionExpiresAt', { time: new Date(authStore.accessExpiresAt).toLocaleString() })
   : sessionLabel.value)
 const headerClockWidget = computed(() => createHeaderClockWidget(!panelState.panelConfig.clockShowSecond))
-const homeIconTextColor = computed(() => !panelState.panelConfig.backgroundImageSrc && panelState.panelConfig.iconTextColor?.toLowerCase() === '#ffffff'
+const homeIconTextColor = computed(() => !activeWallpaper.value && panelState.panelConfig.iconTextColor?.toLowerCase() === '#ffffff'
   ? 'var(--pn-color-text-primary)'
   : panelState.panelConfig.iconTextColor)
 // Header search follows the active palette; widget instances keep their own overrides.
@@ -220,6 +230,11 @@ watch(() => panelState.panelConfig.widgets, (stored) => {
   widgetInstances.value = buildWidgetInstances(stored)
 }, { immediate: true })
 
+watch(packageRevision, () => {
+  if (!widgetEditMode.value || !widgetLayoutDirty.value)
+    widgetInstances.value = buildWidgetInstances(panelState.panelConfig.widgets)
+})
+
 const visibleWidgetGroups = computed<WidgetDisplayGroup[]>({
   get: () => buildWidgetDisplayGroups(widgetInstances.value),
   set: (groups) => {
@@ -228,12 +243,12 @@ const visibleWidgetGroups = computed<WidgetDisplayGroup[]>({
   },
 })
 
-const widgetAddOptions = computed(() => widgetRegistry.list()
+const widgetAddOptions = computed(() => { void packageRevision.value; return widgetRegistry.list()
   .filter(definition => !definition.surfaces || definition.surfaces.includes(runtime.kind))
   .map(definition => ({
   label: widgetDefinitionTitle(definition),
   key: definition.type,
-})))
+})) })
 
 // 标准化接口：优先读取组件自描述 meta.title（i18n key 或字面文案），回退到内置语言包
 function widgetDefinitionTitle(definition: { type: string, meta?: { title?: string } }) {
@@ -1015,11 +1030,11 @@ function addCatalogWidget(type: string) {
 </script>
 
 <template>
-  <div class="w-full h-full sun-main" :class="{ 'extension-home': layout === 'extension', 'web-home': layout === 'web', 'has-wallpaper': Boolean(panelState.panelConfig.backgroundImageSrc) }">
+  <div class="w-full h-full sun-main" :class="{ 'extension-home': layout === 'extension', 'web-home': layout === 'web', 'has-wallpaper': Boolean(activeWallpaper) }">
     <div
       class="cover wallpaper" :style="{
         filter: `blur(${panelState.panelConfig.backgroundBlur}px)`,
-        background: `url(${panelState.panelConfig.backgroundImageSrc}) no-repeat`,
+        background: activeWallpaper ? `url(${JSON.stringify(activeWallpaper)}) no-repeat` : 'none',
         backgroundSize: 'cover',
         backgroundPosition: 'center',
       }"

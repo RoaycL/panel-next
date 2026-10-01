@@ -6,10 +6,12 @@ import { setupStore, useAuthStore } from './store'
 import { setupRouter } from './router'
 import { getRuntime } from './runtime'
 import 'virtual:svg-icons-register' // svg图标注册
+import { initializePackages } from '@/packages/manager'
 
 async function bootstrap() {
   const runtime = getRuntime()
   await runtime.ready()
+  initializePackages()
   // Shared material rules also cover overlays teleported outside the theme root.
   document.body.dataset.panelRuntime = runtime.kind
   const app = createApp(App)

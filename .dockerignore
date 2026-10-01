@@ -18,6 +18,8 @@ dist
 artifacts
 release
 coverage
+.playwright-cli
+output
 
 doc
 docker-conf

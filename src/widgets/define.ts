@@ -11,7 +11,7 @@ import { WIDGET_TYPE_PATTERN } from './constants'
  *   currentVersion: 1,
  *   configSchema: defineConfigSchema({ symbol: field.string({ default: 'AAPL' }) }),
  *   defaultConfig: () => ({ symbol: 'AAPL' }),
- *   size: { default: { columns: 3, rows: 2 }, min: { columns: 2, rows: 1 }, max: { columns: 6, rows: 4 } },
+ *   size: { default: { columns: 3, rows: 2 }, min: { columns: 2, rows: 1 }, max: { columns: 4, rows: 2 } },
  *   meta: { title: '股票行情' },
  *   load: () => import('./StockWidget.vue').then(m => m.default),
  * })

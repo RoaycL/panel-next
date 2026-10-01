@@ -102,7 +102,7 @@ function clampToMonthEnd(year: number, month: number, day: number) {
     <div v-if="status" class="countdown-body">
       <span v-if="status.kind === 'today'" class="countdown-today">{{ t('countdown.today') }}</span>
       <span v-else class="countdown-remaining">
-        <strong>{{ status.days }}</strong>
+        <strong :style="{ '--countdown-number-scale': `${Math.min(20, 72 / (String(status.days).length + .8))}cqw` }">{{ status.days }}</strong>
         <span class="countdown-unit">{{ status.kind === 'remaining' ? t('countdown.daysRemaining') : t('countdown.daysPassed') }}</span>
       </span>
       <span class="countdown-date">{{ formattedDate }}</span>
@@ -119,10 +119,10 @@ function clampToMonthEnd(year: number, month: number, day: number) {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: 4px;
+  justify-content: space-between;
+  gap: 8px;
   width: 100%;
-  min-height: 92px;
+  min-height: 0;
   padding: 12px 16px;
   border: 1px solid var(--pn-widget-border, rgb(255 255 255 / 16%));
   border-radius: 16px;
@@ -138,6 +138,7 @@ function clampToMonthEnd(year: number, month: number, day: number) {
   align-items: center;
   gap: 7px;
   min-width: 0;
+  flex: none;
 }
 
 .countdown-icon {
@@ -157,21 +158,27 @@ function clampToMonthEnd(year: number, month: number, day: number) {
 
 .countdown-body {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   min-width: 0;
-  flex-wrap: wrap;
+  min-height: 0;
 }
 
 .countdown-remaining {
   display: inline-flex;
-  align-items: baseline;
+  flex-direction: column;
+  align-items: center;
   gap: 5px;
 }
 
 .countdown-remaining strong {
-  font-size: 30px;
-  font-weight: 800;
+  font-size: clamp(20px, var(--countdown-number-scale, 20cqw), 64px);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.04em;
   line-height: 1;
 }
 
@@ -182,7 +189,7 @@ function clampToMonthEnd(year: number, month: number, day: number) {
 
 .countdown-today {
   color: var(--pn-notification-warning-color, #fde68a);
-  font-size: 18px;
+  font-size: clamp(22px, 12cqw, 38px);
   font-weight: 700;
   line-height: 1.2;
 }
@@ -193,11 +200,15 @@ function clampToMonthEnd(year: number, month: number, day: number) {
   font-size: 11px;
   line-height: 1.2;
   white-space: nowrap;
+  text-align: center;
 }
 
 .countdown-invalid {
   color: var(--pn-widget-error-color, rgb(255 255 255 / 75%));
   font-size: 12px;
+  flex: 1;
+  display: grid;
+  place-items: center;
 }
 
 @media (max-width: 640px) {

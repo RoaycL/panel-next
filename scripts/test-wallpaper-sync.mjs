@@ -27,7 +27,7 @@ globalThis.wallpaperTest = {
   HttpRequestError,
 }
 const names = Object.keys(globalThis.wallpaperTest).join(', ')
-const source = ['src/sync/wallpaper.ts', 'src/sync/offlineQueue.ts', 'src/sync/conflictResolver.ts', 'src/sync/offlineReplay.ts', 'src/runtime/extensionWallpaper.ts']
+const source = ['src/themes/types.ts', 'src/themes/constants.ts', 'src/themes/schema.ts', 'src/sync/wallpaper.ts', 'src/sync/offlineQueue.ts', 'src/sync/conflictResolver.ts', 'src/sync/offlineReplay.ts', 'src/runtime/extensionWallpaper.ts']
   .map(file => fs.readFileSync(file, 'utf8').replace(/^import[\s\S]*?from ['"][^'"]+['"]\n/gm, '')).join('\n')
 const js = ts.transpileModule(`const { ${names} } = globalThis.wallpaperTest;\n${source}`, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText
 const api = await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`)
@@ -70,5 +70,16 @@ else delete globalThis.navigator
 auth.token = ''
 assert.equal((await api.saveAndSyncExtensionWallpaper(config)).status, 'local', 'Guest saves never require login')
 assert.equal(api.isWallpaperMutation({ wallpaper: { ...api.pickWallpaper(config), backgroundBlur: NaN } }), false)
+auth.token = 'test'
+const pairConfig = { ...config, theme: { schemaVersion: 1, themeId: 'local.theme', themeVersion: 1, mode: 'light', wallpapers: { 'core.default': { light: '/day.jpg', dark: '/night.jpg' } } } }
+assert.equal((await api.saveAndSyncExtensionWallpaper(pairConfig)).status, 'synced')
+assert.equal(received.panel.theme.mode, 'dark', 'Wallpaper synchronization preserves the remote theme mode')
+assert.deepEqual(received.panel.theme.wallpapers, pairConfig.theme.wallpapers)
+assert.deepEqual(api.pickWallpaper(api.pickWallpaper(pairConfig)).themeWallpapers, pairConfig.theme.wallpapers, 'Queue payload keeps paired wallpapers')
+assert.deepEqual(api.mergeWallpaper(pairConfig, api.pickWallpaper(config)).theme.wallpapers, pairConfig.theme.wallpapers, 'Older single-wallpaper clients do not clear pairs')
+assert.equal(api.isWallpaperMutation({ wallpaper: { ...api.pickWallpaper(pairConfig), themeWallpapers: { 'core.default': { dark: 'javascript:alert(1)' } } } }), false)
+const changedPair = { ...pairConfig, theme: { ...pairConfig.theme, wallpapers: { 'core.default': { light: '/other-day.jpg', dark: '/night.jpg' } } } }
+const conflict = api.evaluateConflict({ action: 'panel.set', baseRevision: '1', createdAt: new Date().toISOString(), idempotencyKey: 'pair-conflict', payload: { wallpaper: api.pickWallpaper(pairConfig), wallpaperBase: api.pickWallpaper(config) } }, { ...snapshot(), panel: { config: changedPair } })
+assert.ok(conflict?.diffFields.includes('themeWallpapers'), 'Concurrent paired wallpaper changes require conflict resolution')
 delete globalThis.wallpaperTest
 console.log('Wallpaper sync regression tests passed.')

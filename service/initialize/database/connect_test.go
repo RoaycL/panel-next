@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"panel-next/lib/cmn"
 	"panel-next/models"
 
 	"gorm.io/driver/sqlite"
@@ -35,8 +36,58 @@ func TestEnsureDefaultSystemSettingsIsIdempotent(t *testing.T) {
 	if err := json.Unmarshal([]byte(settings[1].ConfigValue), &application); err != nil {
 		t.Fatalf("invalid application setting JSON: %v", err)
 	}
-	if application["loginCaptcha"] != false || application["openRegister"] != false {
+	if application["loginCaptcha"] != false || application["openRegister"] != true {
 		t.Fatalf("unexpected application defaults: %#v", application)
+	}
+	if err := db.Model(&models.SystemSetting{}).Where("config_name = ?", "system_application").Update("config_value", `{"openRegister":false,"custom":"preserve"}`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureDefaultSystemSettings(db); err != nil {
+		t.Fatal(err)
+	}
+	var existing models.SystemSetting
+	if err := db.First(&existing, "config_name = ?", "system_application").Error; err != nil {
+		t.Fatal(err)
+	}
+	if existing.ConfigValue != `{"openRegister":false,"custom":"preserve"}` {
+		t.Fatal("upgrade changed existing registration policy")
+	}
+}
+
+func TestInitialAdminAndExistingUserPreservation(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&models.User{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := NotFoundAndCreateUser(db); err != nil {
+		t.Fatal(err)
+	}
+	var user models.User
+	if err := db.First(&user).Error; err != nil {
+		t.Fatal(err)
+	}
+	if user.Username != "admin" || user.Mail != "" || user.Role != 1 || !cmn.VerifyPassword(user.Password, "admin123") {
+		t.Fatalf("unexpected default admin: %+v", user)
+	}
+	if err := db.Model(&user).Updates(map[string]interface{}{"username": "existing-admin", "password": "unchanged-hash"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := NotFoundAndCreateUser(db); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.First(&user).Error; err != nil {
+		t.Fatal(err)
+	}
+	if user.Username != "existing-admin" || user.Password != "unchanged-hash" {
+		t.Fatal("initialization overwrote an existing account")
+	}
+	var count int64
+	db.Model(&models.User{}).Count(&count)
+	if count != 1 {
+		t.Fatal("initialization created a second administrator")
 	}
 }
 
