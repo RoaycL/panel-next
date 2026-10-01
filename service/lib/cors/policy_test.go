@@ -93,6 +93,15 @@ func TestPolicyHandlesPreflight(t *testing.T) {
 	if response.Code != http.StatusForbidden {
 		t.Fatalf("unexpected preflight header was allowed: %d", response.Code)
 	}
+	for _, headers := range []string{"x-wallhaven-api-key", "X-Wallhaven-Api-Key, token", "x-requested-with"} {
+		response = corsRequest(router, http.MethodOptions, origin, http.MethodGet, headers)
+		if response.Code != http.StatusNoContent {
+			t.Fatalf("supported preflight headers %q rejected: status=%d body=%s", headers, response.Code, response.Body.String())
+		}
+		if !policy.headersAllowed(response.Header().Get("Access-Control-Allow-Headers")) {
+			t.Fatal("advertised headers and validation must use the same allowlist")
+		}
+	}
 	response = corsRequest(router, http.MethodOptions, origin, http.MethodPut, "content-type")
 	if response.Code != http.StatusForbidden {
 		t.Fatalf("unexpected preflight method was allowed: %d", response.Code)

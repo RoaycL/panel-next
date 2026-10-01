@@ -13,7 +13,7 @@ import (
 
 const (
 	allowMethods  = "GET, POST, DELETE, OPTIONS"
-	allowHeaders  = "Accept, Accept-Language, Authorization, Content-Type, Lang, Token, X-Panel-API-Version, X-Wallhaven-Api-Key"
+	allowHeaders  = "Accept, Accept-Language, Authorization, Content-Type, Lang, Token, X-Panel-API-Version, X-Requested-With, X-Wallhaven-Api-Key"
 	exposeHeaders = "Content-Disposition, X-Panel-API-Min-Version, X-Panel-API-Version"
 )
 
@@ -37,10 +37,8 @@ func isExtensionOrigin(origin string) bool {
 
 func NewPolicy(webOrigins, extensionIDs string) (*Policy, error) {
 	policy := &Policy{
-		origins: make(map[string]struct{}),
-		allowedHeaders: headerSet(
-			"accept", "accept-language", "authorization", "content-type", "lang", "token", "x-panel-api-version", "x-requested-with",
-		),
+		origins:        make(map[string]struct{}),
+		allowedHeaders: headerSet(strings.Split(strings.ToLower(allowHeaders), ",")...),
 	}
 	for _, configured := range splitList(webOrigins) {
 		origin, err := normalizeWebOrigin(configured)
@@ -181,7 +179,7 @@ func splitList(raw string) []string {
 func headerSet(headers ...string) map[string]struct{} {
 	set := make(map[string]struct{}, len(headers))
 	for _, header := range headers {
-		set[header] = struct{}{}
+		set[strings.TrimSpace(header)] = struct{}{}
 	}
 	return set
 }
