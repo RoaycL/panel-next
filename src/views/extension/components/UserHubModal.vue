@@ -415,7 +415,7 @@ async function handleLogout() {
     :bordered="false"
     :mask-closable="true"
     :closable="false"
-    :auto-focus="false"
+    :auto-focus="true"
     class="user-hub-modal"
     content-style="padding: 0; height: 100%; display: flex;"
   >

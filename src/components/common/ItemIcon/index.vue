@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import SvgIcon from '@/components/common/SvgIcon/index.vue'
 import SvgIconOnline from '@/components/common/SvgIconOnline/index.vue'
-import { getLocalIconImage } from '@/icons/localImageCache'
+import { getCachedIconImage, getLocalIconImage } from '@/icons/localImageCache'
 import { findIconPresetForUrl, resolveBundledPresetId } from '@/icons/presets'
 import { getBundledBrandIcon } from '@/icons/brandAssets'
 import { getRuntime } from '@/runtime'
@@ -88,9 +88,17 @@ watch(imageSrc, (source, _previous, onCleanup) => {
     return
   }
   const load = () => {
-    void getLocalIconImage(source).then((local) => {
-      if (!cancelled)
-        displayImageSrc.value = local?.url || (navigator.onLine ? source : '')
+    void getCachedIconImage(source).then((cached) => {
+      if (cancelled) return
+      if (cached) {
+        displayImageSrc.value = cached.url
+        return
+      }
+      // Cache misses paint natively immediately; downloads never block tiles.
+      displayImageSrc.value = navigator.onLine ? source : ''
+      void getLocalIconImage(source).then((local) => {
+        if (!cancelled && local) displayImageSrc.value = local.url
+      })
     })
   }
   if (props.cacheDelay)

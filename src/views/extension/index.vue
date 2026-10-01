@@ -872,6 +872,18 @@ async function refreshBootstrap() {
   isRefreshing = true
   extensionSyncStatus.value = 'syncing'
   try {
+    // Authentication is background work: cached content has already painted.
+    await authStore.upgradeLegacyExtensionSession()
+    const expiry = Date.parse(authStore.accessExpiresAt ?? '')
+    const needsUpgrade = new Date(authStore.refreshExpiresAt ?? '').getUTCFullYear() < 9999
+    if (authStore.authMode === 'device' && authStore.token && (!Number.isFinite(expiry) || expiry - Date.now() < 60_000 || needsUpgrade))
+      await authStore.refreshSession()
+    if (!authStore.token) {
+      groups.value = defaultPresetGroups.map(group => ({ ...group, items: [...(group.items ?? [])] }))
+      groupsReady.value = true
+      extensionSyncStatus.value = 'idle'
+      return
+    }
     const accountId = authStore.userInfo?.id
     if (accountId) {
       const result = await refreshBootstrapSnapshot(accountId)
@@ -1751,6 +1763,9 @@ onMounted(async () => {
   window.addEventListener('beforeunload', flushPendingLayoutIfDirty)
 
   void processPendingWidgetCleanups()
+  if (authStore.token) await loadCachedSnapshot()
+  // Give the restored dashboard a paint opportunity before cloud work.
+  await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
   await refreshBootstrap()
   if (isDisposed) return
   await triggerOfflineReplay()

@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { NTag } from 'naive-ui'
+import { NButton, NTag } from 'naive-ui'
 import { onMounted, ref } from 'vue'
 import { get } from '@/api/system/about'
 import srcSvglogo from '@/assets/logo.svg'
+import { getRuntime } from '@/runtime'
+import { checkExtensionUpdate, extensionUpdateState, extensionUpdateChecking } from '@/runtime/extensionUpdates'
 
 interface Version {
   versionName: string
@@ -11,6 +13,7 @@ interface Version {
 
 const versionName = ref('')
 const frontVersion = import.meta.env.VITE_APP_VERSION || 'unknown'
+const isExtension = getRuntime().kind === 'extension'
 
 onMounted(() => {
   get<Version>().then((res) => {
@@ -30,11 +33,19 @@ onMounted(() => {
       <h2 class="about-title">
         {{ $t('common.appName') }}
       </h2>
-      <a class="pn-app-link about-version" href="https://github.com/RoaycL/panel-next/releases" :title="$t('apps.about.viewUpdateLog')" target="_blank" rel="noopener noreferrer">v{{ versionName || frontVersion }}</a>
+      <a class="pn-app-link about-version" href="https://github.com/RoaycL/panel-next/releases" :title="$t('apps.about.viewUpdateLog')" target="_blank" rel="noopener noreferrer">v{{ isExtension ? (extensionUpdateState.currentVersion || frontVersion) : (versionName || frontVersion) }}</a>
       <p class="pn-app-muted about-description">
         {{ $t('apps.about.description') }}
       </p>
-      <a class="pn-app-link" href="https://github.com/RoaycL/panel-next/releases" target="_blank" rel="noopener noreferrer">{{ $t('apps.about.checkUpdate') }}</a>
+      <template v-if="isExtension">
+        <NButton :loading="extensionUpdateChecking" @click="checkExtensionUpdate">检查更新</NButton>
+        <p class="pn-app-muted">启动时自动检查，之后每 10 分钟检查一次。</p>
+        <p v-if="extensionUpdateState.error" role="status">{{ extensionUpdateState.error }}</p>
+        <a v-if="extensionUpdateState.latest" class="pn-app-link" :href="extensionUpdateState.latest.downloadUrl" target="_blank" rel="noopener noreferrer">下载新版 v{{ extensionUpdateState.latest.version }}</a>
+        <p v-else-if="extensionUpdateState.checkedAt && !extensionUpdateState.error" class="pn-app-muted">当前已是最新版本</p>
+        <small v-if="extensionUpdateState.checkedAt" class="pn-app-muted">上次检查：{{ new Date(extensionUpdateState.checkedAt).toLocaleString() }}</small>
+      </template>
+      <a v-else class="pn-app-link" href="https://github.com/RoaycL/panel-next/releases" target="_blank" rel="noopener noreferrer">{{ $t('apps.about.checkUpdate') }}</a>
     </section>
 
     <section class="pn-app-panel about-links">

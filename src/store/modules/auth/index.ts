@@ -112,7 +112,7 @@ export const useAuthStore = defineStore('auth-store', {
           const response = await axios.post(
             `${getRuntime().getApiBaseUrl()}/v1/sessions/refresh`,
             { refreshToken, ...deviceIdentity },
-            { headers: { lang: useAppStore().language } },
+            { headers: { lang: useAppStore().language }, timeout: 8000 },
           )
           const data = response.data
           if (data.code !== 0 || !data.data) {
@@ -161,6 +161,7 @@ export const useAuthStore = defineStore('auth-store', {
           `${runtime.getApiBaseUrl()}/v1/sessions/upgrade`,
           getDeviceIdentity(),
           {
+            timeout: 8000,
             headers: {
               'Authorization': `Bearer ${legacyToken}`,
               'token': legacyToken,

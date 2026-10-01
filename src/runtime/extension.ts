@@ -5,6 +5,39 @@ const SERVER_ORIGIN_KEY = 'panelNext.runtime.serverOrigin'
 const DATA_PREFIX = 'panelNext.data.'
 const CONNECTION_TIMEOUT_MS = 8000
 
+export async function canReadExtensionImage(source: string): Promise<boolean> {
+  const api = (globalThis as typeof globalThis & { chrome?: ChromeRuntimeApi }).chrome
+  if (!api?.permissions) return true // Web uses ordinary CORS.
+  try {
+    const url = new URL(source)
+    return await api.permissions.contains({ origins: [`${url.origin}/*`] })
+  }
+  catch { return false }
+}
+
+// Update state is extension-wide, not scoped to a user or server.
+export function getExtensionUpdateBridge() {
+  const api = (globalThis as typeof globalThis & { chrome?: {
+    runtime: { lastError?: { message?: string }; sendMessage: (message: unknown, callback: (state: unknown) => void) => void }
+    storage: { local: ChromeStorageArea; onChanged: { addListener: (callback: (changes: Record<string, ChromeStorageChange>, area: string) => void) => void } }
+  } }).chrome
+  if (!api?.runtime?.sendMessage || !api.storage?.onChanged) return null
+  const key = 'panel-next-extension-update'
+  return {
+    read: async () => (await api.storage.local.get(key))[key],
+    write: (state: unknown) => api.storage.local.set({ [key]: state }),
+    subscribe: (listener: (state: unknown) => void) => api.storage.onChanged.addListener((changes, area) => {
+      if (area === 'local' && changes[key]) listener(changes[key].newValue)
+    }),
+    check: () => new Promise<unknown>((resolve, reject) => {
+      api.runtime.sendMessage({ type: 'panel-next-check-update' }, (state) => {
+        if (api.runtime.lastError) reject(new Error('更新检查暂不可用，请重新加载扩展后重试'))
+        else resolve(state)
+      })
+    }),
+  }
+}
+
 interface ChromeStorageArea {
   get: (keys?: null | string | string[]) => Promise<Record<string, unknown>>
   set: (items: Record<string, unknown>) => Promise<void>

@@ -48,5 +48,10 @@ online = true
 assert.equal(await nextPage.getLocalIconImage('https://panel.example.com/not-image'), null)
 assert.equal(await nextPage.getLocalIconImage('https://panel.example.com/too-large'), null)
 assert.equal(stored.size, 1, 'non-images and oversized responses must not persist')
+nextPage.configureIconCachePermission(async () => false)
+const beforeDenied = fetchCount
+assert.equal(await nextPage.getLocalIconImage('https://third-party.example/favicon.ico'), null)
+assert.equal(fetchCount, beforeDenied, 'unauthorized image reads must not generate cross-origin network requests')
+assert.equal((await nextPage.getCachedIconImage(iconUrl))?.persisted, true, 'cached icons remain available without network permission')
 
 console.log('Icon cache checks passed: one-time download, offline reuse, and invalid response rejection.')

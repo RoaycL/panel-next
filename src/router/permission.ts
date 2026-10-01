@@ -29,7 +29,8 @@ export function setupPageGuard(router: Router) {
     const accessExpiry = Date.parse(authStore.accessExpiresAt ?? '')
     const needsExtensionUpgrade = __PANEL_RUNTIME__ === 'extension'
       && new Date(authStore.refreshExpiresAt ?? '').getUTCFullYear() < 9999
-    if (authStore.authMode === 'device' && authStore.token && (!Number.isFinite(accessExpiry) || accessExpiry - Date.now() < 60_000 || needsExtensionUpgrade)) {
+    const cachedExtensionHome = __PANEL_RUNTIME__ === 'extension' && to.name === 'Home'
+    if (!cachedExtensionHome && authStore.authMode === 'device' && authStore.token && (!Number.isFinite(accessExpiry) || accessExpiry - Date.now() < 60_000 || needsExtensionUpgrade)) {
       const refreshed = await authStore.refreshSession()
       if (!refreshed && !authStore.token) {
         // Extension 新标签页必须始终可作为访客主页打开；登录仅由用户点击头像触发。

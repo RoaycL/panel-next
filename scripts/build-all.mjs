@@ -45,6 +45,9 @@ runStep('test:wallpaper-sync', node, [path.resolve('scripts/test-wallpaper-sync.
 runStep('test:wallpaper-loading', node, [path.resolve('scripts/test-wallpaper-loading.mjs')])
 runStep('test:wallpaper-favorites', node, [path.resolve('scripts/test-wallpaper-favorites.mjs')])
 runStep('test:search-history', node, [path.resolve('scripts/test-search-history.mjs')])
+runStep('test:extension-updates', node, [path.resolve('scripts/test-extension-updates.mjs')])
+runStep('test:extension-startup', node, [path.resolve('scripts/test-extension-startup.mjs')])
+runStep('test:icon-cache', node, [path.resolve('scripts/test-icon-cache.mjs')])
 
 // 2. Type check (local binary, offline safe)
 runStep('type-check', node, [vueTscBin, '--noEmit'])

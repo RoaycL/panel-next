@@ -15,6 +15,7 @@ import { createDefaultSelection } from '@/themes/legacyAdapter'
 import { themeRegistry } from '@/themes/registry'
 import { extensionLoginVisible } from '@/runtime/extensionLogin'
 import { packageRevision } from '@/packages/manager'
+import ExtensionUpdateNotice from '@/components/common/ExtensionUpdateNotice.vue'
 
 const LoginForm = defineAsyncComponent(() => import('@/views/login/index.vue'))
 const extensionDashboardRevision = ref(0)
@@ -67,6 +68,7 @@ watch(() => providerView.value.cssVariables, (variables) => {
       <div class="h-full" @click.capture="handleRuntimeLink" @auxclick.capture="handleRuntimeLink">
         <NaiveProvider>
           <RouterView :key="extensionDashboardRevision" />
+          <ExtensionUpdateNotice v-if="runtime.kind === 'extension'" />
           <NModal
             v-if="runtime.kind === 'extension' && overlaysReady"
             v-model:show="extensionLoginVisible"

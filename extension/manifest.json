@@ -1,12 +1,20 @@
 {
   "manifest_version": 3,
   "name": "Panel Next",
-  "version": "0.0.42",
-  "version_name": "0.0.42 测试版",
+  "version": "0.0.43",
+  "version_name": "0.0.43 测试版",
   "description": "A self-hosted new-tab dashboard backed by your Panel Next server.",
   "permissions": [
-    "storage"
+    "storage",
+    "alarms"
   ],
+  "host_permissions": [
+    "https://api.github.com/*"
+  ],
+  "background": {
+    "service_worker": "service-worker.js",
+    "type": "module"
+  },
   "optional_host_permissions": [
     "http://*/*",
     "https://*/*"

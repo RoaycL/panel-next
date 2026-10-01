@@ -30,6 +30,7 @@ export interface HttpOption {
   beforeRequest?: () => void
   afterRequest?: () => void
   silentNetworkError?: boolean
+  timeout?: number
 }
 
 export interface Response<T = any> {
@@ -77,7 +78,7 @@ function isBusinessResponse(data: unknown): data is { code: number; msg?: string
 }
 
 function http<T = any>(options: HttpOption, sessionRetry = false): Promise<Response<T>> {
-  const { url, data, headers: providedHeaders, onDownloadProgress, signal, beforeRequest, afterRequest, silentNetworkError } = options
+  const { url, data, headers: providedHeaders, onDownloadProgress, signal, beforeRequest, afterRequest, silentNetworkError, timeout = 15000 } = options
   assertInternalApiPath(url)
 
   let { method } = options
@@ -193,16 +194,17 @@ function http<T = any>(options: HttpOption, sessionRetry = false): Promise<Respo
     lang: appStore.language,
   }
   return method === 'GET'
-    ? request.get(url, { params, headers, signal, onDownloadProgress }).then(successHandler, failHandler)
-    : request.post(url, params, { headers, signal, onDownloadProgress }).then(successHandler, failHandler)
+    ? request.get(url, { params, headers, signal, timeout, onDownloadProgress }).then(successHandler, failHandler)
+    : request.post(url, params, { headers, signal, timeout, onDownloadProgress }).then(successHandler, failHandler)
 }
 
 export function get<T = any>(
-  { url, data, method = 'GET', headers, onDownloadProgress, signal, beforeRequest, afterRequest, silentNetworkError }: HttpOption,
+  { url, data, method = 'GET', headers, onDownloadProgress, signal, beforeRequest, afterRequest, silentNetworkError, timeout }: HttpOption,
 ): Promise<Response<T>> {
   return http<T>({
     url,
     method,
+    timeout,
     data,
     headers,
     onDownloadProgress,
@@ -214,11 +216,12 @@ export function get<T = any>(
 }
 
 export function post<T = any>(
-  { url, data, method = 'POST', headers, onDownloadProgress, signal, beforeRequest, afterRequest, silentNetworkError }: HttpOption,
+  { url, data, method = 'POST', headers, onDownloadProgress, signal, beforeRequest, afterRequest, silentNetworkError, timeout }: HttpOption,
 ): Promise<Response<T>> {
   return http<T>({
     url,
     method,
+    timeout,
     data,
     headers,
     onDownloadProgress,

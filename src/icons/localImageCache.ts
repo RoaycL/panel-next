@@ -9,6 +9,10 @@ export interface LocalIconImage {
 
 const ready = new Map<string, LocalIconImage>()
 const pending = new Map<string, Promise<LocalIconImage | null>>()
+let readPermission: (source: string) => Promise<boolean> = async () => true
+export function configureIconCachePermission(check: (source: string) => Promise<boolean>) {
+  readPermission = check
+}
 
 function isHttpImageSource(source: string): boolean {
   try {
@@ -61,6 +65,21 @@ function remember(source: string, blob: Blob, persisted: boolean): LocalIconImag
   return result
 }
 
+export async function getCachedIconImage(source: string): Promise<LocalIconImage | null> {
+  if (ready.has(source)) return ready.get(source)!
+  if (!isHttpImageSource(source) || typeof caches === 'undefined') return null
+  try {
+    const cache = await caches.open(CACHE_NAME)
+    const stored = await cache.match(source)
+    if (!stored) return null
+    const blob = await stored.blob()
+    if (usableImage(blob)) return remember(source, blob, true)
+    await cache.delete(source)
+  }
+  catch { /* Storage unavailable: keep native image display. */ }
+  return null
+}
+
 async function loadImage(source: string, refresh: boolean): Promise<LocalIconImage | null> {
   if (!isHttpImageSource(source) || typeof caches === 'undefined' || typeof URL.createObjectURL !== 'function')
     return null
@@ -84,6 +103,8 @@ async function loadImage(source: string, refresh: boolean): Promise<LocalIconIma
 
   if (typeof navigator !== 'undefined' && navigator.onLine === false)
     return null
+  // Read existing blobs without permission; skip known-forbidden cache misses.
+  if (!await readPermission(source)) return null
 
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), DOWNLOAD_TIMEOUT_MS)

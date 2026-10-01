@@ -20,6 +20,7 @@ export function getChanges(since: Sync.Revision, limit = 200) {
 export function waitForSyncChange(since: Sync.Revision, signal: AbortSignal) {
   return get<{ revision: Sync.Revision, changed: boolean }>({
     url: '/v1/sync/wait',
+    timeout: 35000, // The server holds a successful long poll for up to 25 seconds.
     data: { since },
     headers: { 'X-Panel-API-Version': '1' },
     signal,
