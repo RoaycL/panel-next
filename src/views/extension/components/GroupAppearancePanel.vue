@@ -6,12 +6,16 @@ import GroupIcon from '@/components/common/GroupIcon/index.vue'
 import SvgIcon from '@/components/common/SvgIcon/index.vue'
 import { GROUP_ICON_CATEGORIES, GROUP_ICON_PRESETS, decodeGroupAppearance, encodeGroupAppearance, filterGroupIcons, isGroupImageSource } from '@/icons/groupAppearance'
 import type { GroupAppearance } from '@/icons/groupAppearance'
+import GroupOrderPanel from './GroupOrderPanel.vue'
 import { edit } from '@/api/panel/itemIconGroup'
 import { useAuthStore } from '@/store'
 import { getRuntime } from '@/runtime'
 
 const props = defineProps<{ groups: Panel.ItemIconGroup[] }>()
-const emit = defineEmits<{ (event: 'saved', group: Panel.ItemIconGroup, meta: { queued: boolean }): void }>()
+const emit = defineEmits<{
+  (event: 'saved', group: Panel.ItemIconGroup, meta: { queued: boolean }): void
+  (event: 'orderSaved', ids: number[], meta: { queued: boolean }): void
+}>()
 const GallerySelector = defineAsyncComponent(() => import('@/components/common/GallerySelector/index.vue'))
 const auth = useAuthStore()
 const runtime = getRuntime()
@@ -94,6 +98,7 @@ async function save() {
 
 <template>
   <section class="group-appearance-panel">
+    <GroupOrderPanel :groups="groups" @saved="(ids, meta) => emit('orderSaved', ids, meta)" />
     <div class="group-appearance-heading">
       <h3>分组外观</h3><p>为每个分组选择标志，保存后同步到同账号的其他设备。</p>
     </div>
@@ -174,15 +179,15 @@ async function save() {
 .group-icon-modes { display: flex; padding: 4px; gap: 4px; border-radius: 12px; background: var(--pn-glass-control); border: 1px solid var(--pn-glass-border); }
 .group-icon-modes button { flex: 1; padding: 8px 4px; border: 0; border-radius: 8px; color: var(--pn-color-text-secondary); background: transparent; font: inherit; font-size: 12px; cursor: pointer; }
 .group-icon-modes button.active { background: var(--pn-color-accent); color: var(--pn-color-surface); }
-.group-icon-library { display: grid; gap: 12px; }
+.group-icon-library { display: grid; gap: 12px; min-width: 0; }
 .group-icon-categories { display: flex; flex-wrap: wrap; gap: 6px; }
 .group-icon-categories button { padding: 6px 9px; border: 1px solid var(--pn-glass-border); border-radius: 8px; background: var(--pn-glass-control); color: var(--pn-color-text-secondary); font-size: 11px; cursor: pointer; }
 .group-icon-categories button.active { background: var(--pn-color-accent); color: var(--pn-color-surface); }
 .group-icon-count { font-size: 11px; color: var(--pn-color-text-muted); }
-.group-icon-presets { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; max-height: 280px; overflow-y: auto; padding: 3px; }
+.group-icon-presets { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); grid-auto-rows: 64px; align-content: start; gap: 8px; max-height: 280px; min-width: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-gutter: stable; padding: 3px; }
 .group-icon-presets button { gap: 6px; }
 .group-icon-presets span { font-size: 10px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.group-icon-presets button { display: grid; place-items: center; padding: 8px; min-height: 38px; border: 1px solid var(--pn-glass-border); border-radius: 10px; background: var(--pn-glass-control); color: var(--pn-color-text-secondary); cursor: pointer; }
+.group-icon-presets button { display: grid; grid-template-rows: 22px 14px; align-content: center; place-items: center; box-sizing: border-box; min-width: 0; height: 64px; padding: 8px 4px; overflow: hidden; border: 1px solid var(--pn-glass-border); border-radius: 10px; background: var(--pn-glass-control); color: var(--pn-color-text-secondary); cursor: pointer; }
 .group-icon-presets button.active { border-color: var(--pn-color-accent); color: var(--pn-color-accent); }
 .group-icon-presets svg { width: 22px; height: 22px; }
 .group-icon-preview { display: grid; justify-items: center; gap: 14px; padding: 18px 10px; border-radius: 14px; background: var(--pn-glass-control); color: var(--pn-color-text-primary); }

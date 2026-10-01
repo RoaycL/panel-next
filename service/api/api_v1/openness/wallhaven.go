@@ -15,6 +15,7 @@ import (
 func (a *Openness) Wallhaven(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	params := wallhaven.SearchParams{
+		APIKey:     c.GetHeader("X-Wallhaven-Api-Key"),
 		Query:      c.Query("q"),
 		Categories: c.DefaultQuery("categories", "110"),
 		Purity:     c.DefaultQuery("purity", "100"),

@@ -1,11 +1,7 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   NButton,
-  NGrid,
-  NGridItem,
-  NImage,
-  NImageGroup,
   NInput,
   NInputGroup,
   NPagination,
@@ -19,6 +15,11 @@ import { getWallhavenWallpapers   } from '@/api/wallhaven'
 import type {WallhavenItem, WallhavenSearchParams} from '@/api/wallhaven';
 import { SvgIcon } from '@/components/common'
 import { t } from '@/locales'
+import { getRuntime } from '@/runtime'
+import { useAuthStore } from '@/store'
+import { preloadWallpaper } from '@/runtime/wallpaperLoader'
+import { MAX_WALLPAPER_FAVORITES, readWallpaperFavorites, wallpaperFavoritesKey, wallpaperIdentity, writeWallpaperFavorites } from '@/runtime/wallpaperFavorites'
+import type { FavoriteWallpaper } from '@/runtime/wallpaperFavorites'
 
 const props = withDefaults(defineProps<{
   type?: string // icon/wallpaper/other/all
@@ -30,15 +31,85 @@ const emit = defineEmits<{
   (e: 'select', url: string): void
 }>()
 
-void props
-
 const ms = useMessage()
+const runtime = getRuntime()
+const auth = useAuthStore()
+const isWallpaperPicker = computed(() => props.type === 'wallpaper')
+const favoritesKey = computed(() => wallpaperFavoritesKey(runtime.getServerOrigin(), auth.userInfo?.id))
+const favoriteWallpapers = ref<FavoriteWallpaper[]>([])
+const savingFavorite = ref(false)
+watch(favoritesKey, key => { favoriteWallpapers.value = readWallpaperFavorites(runtime.storage, key, runtime.getServerOrigin()) }, { immediate: true })
+const stopFavoritesSubscription = runtime.storage.subscribe?.(change => {
+  if (change.scope === 'data' && change.key === favoritesKey.value && !savingFavorite.value)
+    favoriteWallpapers.value = readWallpaperFavorites(runtime.storage, favoritesKey.value, runtime.getServerOrigin())
+})
+onBeforeUnmount(() => stopFavoritesSubscription?.())
+
+function isFavorite(url: string) {
+  const id = wallpaperIdentity(url, runtime.getServerOrigin())
+  return favoriteWallpapers.value.some(item => wallpaperIdentity(item.url, runtime.getServerOrigin()) === id)
+}
+async function toggleFavorite(item: Omit<FavoriteWallpaper, 'savedAt'>) {
+  if (savingFavorite.value) return
+  const key = favoritesKey.value
+  const origin = runtime.getServerOrigin()
+  const current = readWallpaperFavorites(runtime.storage, key, origin)
+  const id = wallpaperIdentity(item.url, origin)
+  const exists = current.some(saved => wallpaperIdentity(saved.url, origin) === id)
+  if (!exists && current.length >= MAX_WALLPAPER_FAVORITES) { ms.warning(`最多喜欢 ${MAX_WALLPAPER_FAVORITES} 张壁纸，请先取消一些收藏`); return }
+  const next = exists ? current.filter(saved => wallpaperIdentity(saved.url, origin) !== id)
+    : [{ ...item, title: item.title.slice(0, 160), savedAt: new Date().toISOString() }, ...current]
+  savingFavorite.value = true
+  try {
+    await writeWallpaperFavorites(runtime.storage, key, next)
+    if (key !== favoritesKey.value) return
+    favoriteWallpapers.value = next
+    ms.success(exists ? '已取消喜欢' : '已加入我的喜欢')
+  }
+  catch { ms.error('喜欢列表保存失败，请重试') }
+  finally { savingFavorite.value = false }
+}
+const apiKeyStorageKey = computed(() => `WALLHAVEN_API_KEY_V1:${auth.userInfo?.id ?? 'guest'}`)
+const apiKeyDraft = ref('')
+const wallhavenApiKey = ref('')
+const wallhavenPurity = ref('100')
+watch(apiKeyStorageKey, key => {
+  wallhavenApiKey.value = runtime.storage.getItem(key) || ''
+  apiKeyDraft.value = wallhavenApiKey.value
+  wallhavenPurity.value = '100'
+}, { immediate: true })
+const purityOptions = computed(() => [
+  { label: '安全内容（SFW）', value: '100' },
+  { label: '安全 + Sketchy', value: '110' },
+  { label: '全部内容（含 NSFW）', value: '111', disabled: !wallhavenApiKey.value },
+])
+async function saveApiKey() {
+  const key = apiKeyDraft.value.trim()
+  const storageKey = apiKeyStorageKey.value
+  if (key && !/^[a-z0-9]{16,128}$/i.test(key)) { ms.error('API Key 格式无效，请从 Wallhaven 账号设置复制'); return }
+  try {
+    if (key) runtime.storage.setItem(storageKey, key)
+    else runtime.storage.removeItem(storageKey)
+    await runtime.storage.flush?.()
+  }
+  catch { ms.error('API Key 本机保存失败，请重试'); return }
+  if (storageKey !== apiKeyStorageKey.value) return
+  wallhavenApiKey.value = key
+  if (!key) wallhavenPurity.value = '100'
+  ms.success(key ? 'API Key 已保存在本机' : 'API Key 已清除')
+  handleWallhavenSearch()
+}
+let requestGeneration = 0
+let selectionGeneration = 0
+const selectingUrl = ref('')
+const failedImages = ref(new Set<string>())
+onBeforeUnmount(() => { requestGeneration++; selectionGeneration++ })
 const loading = ref(false)
-const source = ref<'private' | 'public' | 'wallhaven'>('private')
+const source = ref<'private' | 'public' | 'wallhaven' | 'favorites'>('private')
 
 // 1. 本地/公共图库
 const imageList = ref<File.Info[]>([])
-const activeType = ref<string>('all')
+const activeType = ref<string>(props.type)
 
 const sourceOptions = [
   { label: t('apps.uploadsFileManager.typeAll'), value: 'all' },
@@ -75,42 +146,45 @@ const quickTags = [
 ]
 
 async function fetchImages() {
+  if (source.value === 'favorites') { requestGeneration++; loading.value = false; return }
+  if (source.value === 'wallhaven') { await fetchWallhaven(); return }
+  const generation = ++requestGeneration
+  const selectedSource = source.value
   loading.value = true
+  imageList.value = []
+  failedImages.value = new Set()
   try {
-    if (source.value === 'wallhaven') {
-      await fetchWallhaven()
-      return
-    }
-
     const type = activeType.value === 'all' ? undefined : activeType.value
-    if (source.value === 'private') {
-      const { data } = await getPrivateList<Common.ListResponse<File.Info[]>>(type)
-      imageList.value = data.list || []
-    }
-    else {
-      const { data } = await getPublicList<Common.ListResponse<File.Info[]>>(type)
-      imageList.value = data.list || []
-    }
+    const result = selectedSource === 'private'
+      ? await getPrivateList<Common.ListResponse<File.Info[]>>(type)
+      : await getPublicList<Common.ListResponse<File.Info[]>>(type)
+    if (generation !== requestGeneration) return
+    if (result.code !== 0) throw new Error(result.msg || '图库加载失败')
+    imageList.value = result.data?.list || []
   }
+  catch { if (generation === requestGeneration) ms.error('图库加载失败，请重试') }
   finally {
-    loading.value = false
+    if (generation === requestGeneration) loading.value = false
   }
 }
 
 async function fetchWallhaven() {
+  const generation = ++requestGeneration
   loading.value = true
+  wallhavenList.value = []
   try {
     const params: WallhavenSearchParams = {
       q: wallhavenQuery.value.trim() || undefined,
       categories: wallhavenCategories.value,
-      purity: '100', // SFW 安全内容
+      purity: wallhavenPurity.value,
       sorting: wallhavenSorting.value,
       topRange: '1M',
       atleast: '1920x1080',
       ratios: '16x9,16x10',
       page: wallhavenPage.value,
     }
-    const res = await getWallhavenWallpapers(params)
+    const res = await getWallhavenWallpapers(params, wallhavenApiKey.value)
+    if (generation !== requestGeneration) return
     if (res.code === 0 && res.data) {
       wallhavenList.value = res.data.items || []
       wallhavenTotalPages.value = res.data.meta.lastPage || 1
@@ -121,10 +195,10 @@ async function fetchWallhaven() {
     }
   }
   catch {
-    ms.error('请求 Wallhaven 服务失败')
+    if (generation === requestGeneration) ms.error('请求 Wallhaven 服务失败，请检查 API Key 或网络后重试')
   }
   finally {
-    loading.value = false
+    if (generation === requestGeneration) loading.value = false
   }
 }
 
@@ -145,18 +219,35 @@ function handlePageChange(page: number) {
   void fetchWallhaven()
 }
 
-function handleSelect(url: string) {
-  emit('select', url)
-  ms.success('已选择壁纸')
+async function handleSelect(url: string) {
+  const generation = ++selectionGeneration
+  selectingUrl.value = url
+  try {
+    await preloadWallpaper(runtime.resolveUrl(url))
+    if (generation !== selectionGeneration) return
+    emit('select', url)
+    ms.success(props.type === 'wallpaper' ? '壁纸已加载并选择' : '已选择图片')
+  }
+  catch (error) { if (generation === selectionGeneration) ms.error(error instanceof Error ? error.message : '图片加载失败') }
+  finally { if (generation === selectionGeneration) selectingUrl.value = '' }
 }
 
 watch(source, () => {
-  if (source.value === 'wallhaven' && wallhavenList.value.length === 0) {
+  selectionGeneration++
+  selectingUrl.value = ''
+  if (source.value === 'wallhaven') {
     void fetchWallhaven()
   }
-  else if (source.value !== 'wallhaven') {
+  else {
     void fetchImages()
   }
+})
+watch(apiKeyStorageKey, () => {
+  requestGeneration++
+  selectionGeneration++
+  selectingUrl.value = ''
+  wallhavenList.value = []
+  void fetchImages()
 })
 
 onMounted(() => {
@@ -172,6 +263,10 @@ onMounted(() => {
     <!-- 顶部来源切换导航 -->
     <div class="flex items-center justify-between mb-3 gap-2 flex-wrap pb-2 border-b border-slate-200 dark:border-zinc-800">
       <div class="flex gap-2 items-center flex-wrap">
+        <button v-if="isWallpaperPicker" type="button" class="source-tab-btn" :class="{ active: source === 'favorites' }" @click="source = 'favorites'">
+          <SvgIcon icon="material-symbols:favorite" class="text-sm" />
+          <span>我的喜欢 <small>{{ favoriteWallpapers.length }}</small></span>
+        </button>
         <button
           type="button"
           class="source-tab-btn"
@@ -179,7 +274,7 @@ onMounted(() => {
           @click="source = 'private'"
         >
           <SvgIcon icon="material-symbols:folder-shared-outline" class="text-sm" />
-          <span>{{ $t('apps.uploadsFileManager.alertText').includes('文件') ? '个人图库' : 'Private Gallery' }}</span>
+          <span>个人图库</span>
         </button>
 
         <button
@@ -205,17 +300,34 @@ onMounted(() => {
 
       <!-- 本地/公共筛选 -->
       <NSelect
-        v-if="source !== 'wallhaven'"
+        v-if="source === 'private' || source === 'public'"
         v-model:value="activeType"
         :options="sourceOptions"
         size="small"
         style="width: 140px"
         @update-value="fetchImages"
       />
+      <NButton v-if="source === 'private' || source === 'public'" size="small" secondary @click="fetchImages">
+        刷新图库
+      </NButton>
     </div>
 
     <!-- Wallhaven 专属快捷工具栏 -->
     <div v-if="source === 'wallhaven'" class="wallhaven-toolbar mb-3 flex flex-col gap-2">
+      <details class="wallhaven-account-settings">
+        <summary>Wallhaven 账号 API Key · {{ wallhavenApiKey ? '已配置' : '未配置' }}</summary>
+        <div class="wallhaven-key-controls">
+          <NInput v-model:value="apiKeyDraft" type="password" show-password-on="click" placeholder="从 Wallhaven 账号设置复制 API Key" autocomplete="off" :maxlength="128" aria-label="Wallhaven API Key" />
+          <NButton size="small" @click="saveApiKey">
+            保存到本机
+          </NButton>
+          <NButton size="small" @click="apiKeyDraft = ''; saveApiKey()">
+            清除
+          </NButton>
+        </div>
+        <small>仅保存在当前浏览器和当前账号下，不随布局同步。搜索时交由你连接的 Panel Next 服务转发至 Wallhaven，不放入 URL。请使用可信的 HTTPS 服务。</small>
+        <a href="https://wallhaven.cc/settings/account" target="_blank" rel="noopener noreferrer">打开 Wallhaven 账号设置</a>
+      </details>
       <!-- 搜索与排序 -->
       <div class="flex items-center gap-2 flex-wrap">
         <NInputGroup style="max-width: 320px;">
@@ -241,6 +353,8 @@ onMounted(() => {
           style="width: 170px"
           @update-value="handleWallhavenSearch"
         />
+        <NSelect v-model:value="wallhavenPurity" :options="purityOptions" size="small" style="width: 190px" aria-label="Wallhaven 内容范围" @update-value="handleWallhavenSearch" />
+        <NSelect v-model:value="wallhavenCategories" :options="[{ label: '全部分类', value: '111' }, { label: '综合 + 动漫', value: '110' }, { label: '综合', value: '100' }, { label: '动漫', value: '010' }, { label: '人物', value: '001' }]" size="small" style="width: 150px" aria-label="Wallhaven 分类" @update-value="handleWallhavenSearch" />
 
         <span v-if="wallhavenTotal > 0" class="text-xs text-slate-500 dark:text-zinc-400 ml-auto">
           找到约 {{ wallhavenTotal }} 张壁纸
@@ -261,6 +375,9 @@ onMounted(() => {
         </button>
       </div>
     </div>
+    <p v-if="selectingUrl" role="status" class="gallery-selection-status">
+      正在加载原图，成功后应用；期间保留当前壁纸…
+    </p>
 
     <!-- 主体内容加载 -->
     <div v-if="loading" class="flex-1 flex items-center justify-center py-16">
@@ -268,33 +385,58 @@ onMounted(() => {
     </div>
 
     <!-- 1. 本地/公共图库网格 -->
+    <div v-else-if="source === 'favorites'" class="flex-1">
+      <p class="favorites-description">
+        喜欢的壁纸集中在这里，点击图片即可应用。保存在当前浏览器，按账号隔离。
+      </p>
+      <div v-if="!favoriteWallpapers.length" class="favorites-empty">
+        <SvgIcon icon="mdi:heart-outline" />
+        <strong>还没有喜欢的壁纸</strong>
+        <span>去图库点击壁纸右上角的爱心，即可收藏到这里。</span>
+        <NButton secondary @click="source = 'wallhaven'">
+          浏览壁纸库
+        </NButton>
+      </div>
+      <div v-else class="gallery-local-grid">
+        <div v-for="item in favoriteWallpapers" :key="item.url" class="gallery-item-card favorite-card">
+          <button type="button" class="gallery-image-action" :aria-label="`应用壁纸：${item.title}`" @click="handleSelect(item.url)">
+            <img v-if="!failedImages.has(item.thumbnail)" :src="runtime.resolveUrl(item.thumbnail)" :alt="item.title" loading="lazy" class="gallery-thumbnail" @error="failedImages.add(item.thumbnail)">
+            <span v-else class="gallery-image-failure">预览加载失败，点击尝试原图</span>
+          </button>
+          <button type="button" class="favorite-button is-favorite" :aria-label="`取消喜欢：${item.title}`" title="取消喜欢" :aria-pressed="true" :disabled="savingFavorite" @click.stop="toggleFavorite(item)">
+            <SvgIcon icon="material-symbols:favorite" />
+          </button>
+          <div class="favorite-card-caption">
+            <span>{{ item.title }}</span><small>{{ item.source === 'wallhaven' ? 'Wallhaven' : item.source === 'public' ? '公共图库' : '个人图库' }}</small>
+          </div>
+        </div>
+      </div>
+    </div>
     <div v-else-if="source !== 'wallhaven'" class="flex-1">
       <div v-if="imageList.length === 0" class="text-center text-slate-400 py-12">
         {{ t('apps.uploadsFileManager.nothingText') }}
       </div>
 
-      <NImageGroup v-else>
-        <NGrid cols="2 300:2 600:4 900:6 1100:8" :x-gap="8" :y-gap="8">
-          <NGridItem v-for="item in imageList" :key="item.id">
-            <div
-              class="gallery-item-card group cursor-pointer rounded-xl overflow-hidden border border-slate-200 dark:border-zinc-800 hover:border-emerald-500 transition-all hover:shadow-md"
-              @click="handleSelect(item.src)"
-            >
-              <NImage
-                :src="item.src"
-                :lazy="true"
-                object-fit="cover"
-                height="90"
-                class="w-full"
-                preview-disabled
-              />
-              <div class="p-1.5 text-xs truncate text-center bg-slate-50 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300">
-                {{ item.fileName }}
-              </div>
-            </div>
-          </NGridItem>
-        </NGrid>
-      </NImageGroup>
+      <div v-else class="gallery-local-grid">
+        <div
+          v-for="item in imageList" :key="item.id"
+          class="gallery-item-card group cursor-pointer rounded-xl overflow-hidden border border-slate-200 dark:border-zinc-800 hover:border-emerald-500 transition-all hover:shadow-md"
+          @click="handleSelect(item.src)"
+        >
+          <button v-if="isWallpaperPicker && (item.type === 'wallpaper' || activeType === 'wallpaper')" type="button" class="favorite-button" :class="{ 'is-favorite': isFavorite(item.src) }" :aria-pressed="isFavorite(item.src)" :aria-label="`${isFavorite(item.src) ? '取消喜欢' : '喜欢'}：${item.fileName}`" :title="isFavorite(item.src) ? '取消喜欢' : '加入我的喜欢'" :disabled="savingFavorite" @click.stop="toggleFavorite({ url: item.src, thumbnail: item.src, title: item.fileName, source: source === 'public' ? 'public' : 'private' })">
+            <SvgIcon :icon="isFavorite(item.src) ? 'material-symbols:favorite' : 'mdi:heart-outline'" />
+          </button>
+          <img v-if="!failedImages.has(item.src)" :src="runtime.resolveUrl(item.src)" :alt="item.fileName" loading="lazy" class="gallery-thumbnail" @error="failedImages.add(item.src)">
+          <div v-else class="gallery-image-failure">
+            <span>图片加载失败</span><button type="button" @click.stop="fetchImages">
+              重试
+            </button>
+          </div>
+          <div class="p-1.5 text-xs truncate text-center bg-slate-50 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300">
+            {{ item.fileName }}
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- 2. Wallhaven 壁纸网格 -->
@@ -319,6 +461,9 @@ onMounted(() => {
           >
 
           <!-- 分辨率与分类浮层徽标 -->
+          <button v-if="isWallpaperPicker" type="button" class="favorite-button" :class="{ 'is-favorite': isFavorite(item.rawUrl) }" :aria-pressed="isFavorite(item.rawUrl)" :aria-label="`${isFavorite(item.rawUrl) ? '取消喜欢' : '喜欢'}：Wallhaven ${item.id}`" :title="isFavorite(item.rawUrl) ? '取消喜欢' : '加入我的喜欢'" :disabled="savingFavorite" @click.stop="toggleFavorite({ url: item.rawUrl, thumbnail: item.thumbUrl || item.rawUrl, title: `Wallhaven ${item.id}`, source: 'wallhaven' })">
+            <SvgIcon :icon="isFavorite(item.rawUrl) ? 'material-symbols:favorite' : 'mdi:heart-outline'" />
+          </button>
           <div class="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-md bg-black/65 backdrop-blur-md text-[10px] font-semibold text-emerald-400 shadow">
             {{ item.resolution }}
           </div>
@@ -358,13 +503,39 @@ onMounted(() => {
 
 <style scoped>
 .gallery-selector {
-  background: white;
+  background: var(--pn-glass-panel, white);
   min-height: 480px;
 }
 
 .dark .gallery-selector {
-  background: #18181c;
+  background: var(--pn-glass-panel, #18181c);
 }
+.gallery-local-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; align-content: start; }
+.gallery-item-card { position: relative; }
+.favorite-button { position: absolute; z-index: 2; top: 8px; right: 8px; display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid rgb(255 255 255 / 35%); border-radius: 50%; background: rgb(0 0 0 / 50%); color: white; cursor: pointer; backdrop-filter: blur(12px); }
+.favorite-button :deep(svg) { width: 19px; height: 19px; }
+.favorite-button.is-favorite { color: #fb7185; }
+.favorite-button:focus-visible, .gallery-image-action:focus-visible { outline: 2px solid var(--pn-color-accent); outline-offset: -2px; }
+.favorite-button:disabled { cursor: wait; opacity: .6; }
+.favorite-card { overflow: hidden; border: 1px solid var(--pn-glass-border); border-radius: 14px; background: var(--pn-glass-control); }
+.gallery-image-action { display: block; width: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; }
+.favorite-card-caption { display: flex; flex-direction: column; gap: 4px; padding: 10px; color: var(--pn-color-text-primary); }
+.favorite-card-caption span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.favorite-card-caption small, .favorites-description { color: var(--pn-color-text-secondary); font-size: 11px; }
+.favorites-description { margin: 0 0 14px; line-height: 1.7; }
+.favorites-empty { display: flex; min-height: 260px; align-items: center; justify-content: center; flex-direction: column; gap: 12px; text-align: center; color: var(--pn-color-text-secondary); }
+.favorites-empty :deep(svg) { width: 38px; height: 38px; opacity: .5; }
+.favorites-empty strong { color: var(--pn-color-text-primary); }
+.favorites-empty span { font-size: 12px; }
+.gallery-thumbnail, .gallery-image-failure { display: block; width: 100%; height: 118px; object-fit: cover; background: var(--pn-glass-control); }
+.gallery-image-failure { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 10px; color: var(--pn-color-text-muted); font-size: 12px; }
+.gallery-image-failure button { border: 1px solid var(--pn-glass-border); border-radius: 8px; padding: 4px 10px; color: var(--pn-color-text-primary); }
+.wallhaven-account-settings { border: 1px solid var(--pn-glass-border); padding: 12px; border-radius: 12px; }
+.wallhaven-account-settings summary { cursor: pointer; font-size: 12px; }
+.wallhaven-account-settings small, .wallhaven-account-settings a { display: block; font-size: 11px; line-height: 1.6; margin-top: 8px; }
+.wallhaven-key-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+.wallhaven-key-controls :deep(.n-input) { flex: 1 1 220px; }
+.gallery-selection-status { font-size: 12px; color: var(--pn-color-text-secondary); }
 
 .source-tab-btn {
   display: inline-flex;

@@ -21,7 +21,7 @@ assert.match(uploadManager, /props\.mode !== 'wallpaper' \|\| item\.type === 'wa
 assert.match(uploadManager, /:key="item\.id \|\| item\.src"/)
 assert.match(uploadManager, /v-if="loadError"/)
 assert.match(wallpaperSettings, /saveAndSyncExtensionWallpaper\(config\)/)
-assert.match(wallpaperSettings, /onBeforeUnmount\(\(\) => \{ if \(timer\) void save\(\) \}\)/)
+assert.match(wallpaperSettings, /onBeforeUnmount\(\(\) => \{ selectionGeneration\+\+; if \(timer\) void save\(\) \}\)/)
 const userSessions = fs.readFileSync(new URL('../src/components/apps/UserSessions/index.vue', import.meta.url), 'utf8')
 const extensionPreferences = fs.readFileSync(new URL('../src/runtime/extensionAppearance.ts', import.meta.url), 'utf8')
 const widgetGallery = fs.readFileSync(new URL('../src/views/extension/components/WidgetGalleryModal.vue', import.meta.url), 'utf8')

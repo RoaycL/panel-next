@@ -74,6 +74,7 @@ function isIcon(value: unknown): value is Panel.ItemIcon {
   return (value.src === undefined || isBoundedString(value.src))
     && (value.text === undefined || isBoundedString(value.text))
     && (value.backgroundColor === undefined || isBoundedString(value.backgroundColor, 128))
+    && (value.scale === undefined || (typeof value.scale === 'number' && Number.isFinite(value.scale) && value.scale >= 0.5 && value.scale <= 2))
 }
 
 export function isBootstrapItem(value: unknown): value is Sync.BootstrapItem {

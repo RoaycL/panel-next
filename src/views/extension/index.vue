@@ -33,6 +33,7 @@ import { packageRevision } from '@/packages/manager'
 import { useTheme } from '@/themes/context'
 import { themeRegistry } from '@/themes/registry'
 import { resolveThemeWallpaper } from '@/themes/wallpaper'
+import { useLoadedWallpaper } from '@/runtime/wallpaperLoader'
 import type { ExtensionBookmarkLayout, ExtensionPageLayout, ExtensionSearchEngineId } from '@/runtime/extensionAppearance'
 import { enqueueAppearanceSave } from '@/themes/appearanceSaveQueue'
 import { resolveSyncedWallpaper, saveAndSyncExtensionWallpaper } from '@/runtime/extensionWallpaper'
@@ -47,7 +48,9 @@ import { getBootstrap, waitForSyncChange } from '@/api/sync'
 import { getList as getGroupList } from '@/api/panel/itemIconGroup'
 import { deletes as deleteItems, getListByGroupId, saveSort as saveItemSort } from '@/api/panel/itemIcon'
 import type { DashboardGroup } from '@/dashboard/core'
-import { createDashboardState, createItemSortRequest, selectItemUrl } from '@/dashboard/core'
+import { createDashboardState, createItemSortRequest, isDesktopGroup, selectItemUrl } from '@/dashboard/core'
+import SearchHistoryPanel from '@/components/common/SearchHistoryPanel.vue'
+import { addSearchHistory } from '@/runtime/searchHistory'
 import { VueDraggable } from 'vue-draggable-plus'
 import { ICON_PRESETS, createPresetIcon } from '@/icons/presets'
 
@@ -69,11 +72,13 @@ const dialog = useDialog()
 const appStore = useAppStore()
 const panelState = usePanelState()
 const wallpaperTheme = useTheme()
-const activeWallpaper = computed(() => {
+const requestedWallpaper = computed(() => {
   void packageRevision.value
   const url = resolveThemeWallpaper(wallpaperTheme.selection, themeRegistry.get(wallpaperTheme.themeId), wallpaperTheme.resolvedMode, panelState.panelConfig.backgroundImageSrc)
   return url ? getRuntime().resolveUrl(url) : ''
 })
+const { displayed: activeWallpaper, error: wallpaperLoadError } = useLoadedWallpaper(requestedWallpaper)
+watch(wallpaperLoadError, error => { if (error) ms.warning(error) })
 const authStore = useAuthStore()
 const userStore = useUserStore()
 const runtime = getRuntime()
@@ -180,7 +185,10 @@ const extensionSearchOpenMode = computed({
 })
 const extensionSearchHistoryEnabled = computed({
   get: () => widgetPreferences.value.searchHistoryEnabled,
-  set: (value: boolean) => { widgetPreferences.value.searchHistoryEnabled = value },
+  set: (value: boolean) => {
+    widgetPreferences.value.searchHistoryEnabled = value
+    if (!value) widgetPreferences.value.searchHistory = []
+  },
 })
 const extensionWidgetInstances = ref<WidgetInstance[]>([])
 const extensionQuarantinedWidgets = ref<unknown[]>([])
@@ -675,6 +683,21 @@ const searchEngines: SearchEngine[] = [
 const currentEngine = computed<SearchEngine>(() => searchEngines.find(engine => engine.id === widgetPreferences.value.searchEngineId) ?? searchEngines[0])
 const searchQuery = ref('')
 const isSearchFocused = ref(false)
+const searchInputRef = ref<HTMLInputElement | null>(null)
+const searchHistoryPanelRef = ref<InstanceType<typeof SearchHistoryPanel> | null>(null)
+const searchHistoryDismissed = ref(false)
+function handleSearchFocusOut(event: FocusEvent) {
+  if (!(event.currentTarget as HTMLElement).contains(event.relatedTarget as Node | null)) isSearchFocused.value = false
+}
+function selectSearchHistory(query: string) {
+  searchQuery.value = query
+  searchInputRef.value?.focus()
+  searchHistoryDismissed.value = true
+}
+function dismissSearchHistory() {
+  searchInputRef.value?.focus()
+  searchHistoryDismissed.value = true
+}
 const bookmarkSearchOpen = ref(false)
 const bookmarkSearchQuery = ref('')
 const bookmarkSearchInputRef = ref<HTMLInputElement | null>(null)
@@ -726,11 +749,9 @@ function handleSearchSubmit() {
   if (!query)
     return
   if (widgetPreferences.value.searchHistoryEnabled) {
-    widgetPreferences.value.searchHistory = [
-      query,
-      ...widgetPreferences.value.searchHistory.filter(item => item !== query),
-    ].slice(0, 10)
+    widgetPreferences.value.searchHistory = addSearchHistory(widgetPreferences.value.searchHistory, query)
   }
+  searchHistoryDismissed.value = true
   const targetUrl = directHttpUrl(query) ?? currentEngine.value.url.replace('%s', encodeURIComponent(query))
   runtime.openUrl(targetUrl, widgetPreferences.value.searchOpenMode)
 }
@@ -979,6 +1000,7 @@ async function loadDirectFromApi() {
 
 // 5. 分组 Tab 切换与卡片过滤（告别堆叠）
 const activeTabId = ref<number | null>(null)
+const groupSlideDirection = ref<'next' | 'previous'>('next')
 const sideRailRevealed = ref(!sidebarAutoHide.value)
 const wheelHintVisible = ref(false)
 const settingsModalVisible = ref(false)
@@ -986,6 +1008,7 @@ const editCardModalVisible = ref(false)
 const editCardData = ref<Panel.ItemInfo | null>(null)
 const editCardGroupId = ref<number | undefined>(undefined)
 let wheelLocked = false
+let wheelLockTimer: number | null = null
 let wheelHintTimer: number | null = null
 let suppressNextCardClick = false
 let suppressCardClickTimer: number | null = null
@@ -1050,7 +1073,7 @@ watch(sideRailSuppressed, (suppressed) => {
 }, { flush: 'sync' })
 
 const groupTabs = computed(() => {
-  return groups.value.map(g => ({
+  return groups.value.filter(isDesktopGroup).map(g => ({
     id: g.id as number,
     title: g.title || '',
     count: g.items?.length || 0,
@@ -1059,7 +1082,7 @@ const groupTabs = computed(() => {
 })
 
 const activeGroup = computed(() => groupTabs.value.find(group => group.id === activeTabId.value) || groupTabs.value[0])
-const activeGroupRecord = computed(() => groups.value.find(group => group.id === activeTabId.value) ?? groups.value[0] ?? null)
+const activeGroupRecord = computed(() => groups.value.find(group => isDesktopGroup(group) && group.id === activeTabId.value) ?? groups.value.find(isDesktopGroup) ?? null)
 const activeGroupItems = computed<Panel.ItemInfo[]>({
   get: () => activeGroupRecord.value?.items ?? [],
   set: (items) => {
@@ -1214,7 +1237,12 @@ watch(packageRevision, () => {
     loadExtensionWidgetLayout(widgetPreferences.value.pageLayouts[pageKey]?.contentLayout ?? emptyPageLayout().contentLayout, pageKey)
 })
 
-function selectGroup(id: number) {
+function selectGroup(id: number, direction?: 'next' | 'previous') {
+  if (id === activeTabId.value || !groupTabs.value.some(group => group.id === id))
+    return
+  const currentIndex = groupTabs.value.findIndex(group => group.id === activeTabId.value)
+  const nextIndex = groupTabs.value.findIndex(group => group.id === id)
+  groupSlideDirection.value = direction ?? (nextIndex >= currentIndex ? 'next' : 'previous')
   activeTabId.value = id
 }
 
@@ -1237,7 +1265,7 @@ function handleGroupWheel(event: WheelEvent) {
   if (settingsModalVisible.value || showWallpaperModal.value || showWidgetManager.value || showIconGallery.value || editCardModalVisible.value || conflictModalVisible.value)
     return
   const target = event.target as HTMLElement | null
-  if (target?.closest('input, textarea, [role="dialog"], .side-panel-scroll'))
+  if (target?.closest('input, textarea, [role="dialog"], .side-panel-scroll, .search-history-panel'))
     return
   if (Math.abs(event.deltaY) < 18 || wheelLocked || groupTabs.value.length < 2)
     return
@@ -1254,10 +1282,10 @@ function handleGroupWheel(event: WheelEvent) {
   const currentIndex = Math.max(0, groupTabs.value.findIndex(group => group.id === activeTabId.value))
   const direction = event.deltaY > 0 ? 1 : -1
   const nextIndex = (currentIndex + direction + groupTabs.value.length) % groupTabs.value.length
-  activeTabId.value = groupTabs.value[nextIndex].id
+  selectGroup(groupTabs.value[nextIndex].id, direction > 0 ? 'next' : 'previous')
   wheelHintVisible.value = true
   wheelLocked = true
-  window.setTimeout(() => { wheelLocked = false }, 420)
+  wheelLockTimer = window.setTimeout(() => { wheelLocked = false; wheelLockTimer = null }, 420)
   if (wheelHintTimer) window.clearTimeout(wheelHintTimer)
   wheelHintTimer = window.setTimeout(() => { wheelHintVisible.value = false }, 1100)
 }
@@ -1595,6 +1623,13 @@ function handleGroupIconSaved(updated: Panel.ItemIconGroup, meta: { queued: bool
   if (!meta.queued) void refreshBootstrap()
 }
 
+function handleGroupOrderSaved(ids: number[], meta: { queued: boolean }) {
+  const positions = new Map(ids.map((id, index) => [id, index + 1]))
+  groups.value.forEach(group => { group.sort = positions.get(group.id as number) ?? group.sort })
+  groups.value = [...groups.value].sort((a, b) => (a.sort ?? 9999) - (b.sort ?? 9999))
+  if (!meta.queued) void refreshBootstrap()
+}
+
 function handleBrowserOffline() {
   extensionSyncStatus.value = 'offline'
 }
@@ -1729,6 +1764,7 @@ onUnmounted(() => {
   stopClockTimer()
   if (sideHideTimer) clearTimeout(sideHideTimer)
   if (wheelHintTimer) clearTimeout(wheelHintTimer)
+  if (wheelLockTimer) clearTimeout(wheelLockTimer)
   if (suppressCardClickTimer) clearTimeout(suppressCardClickTimer)
   if (externalStorageTimer) clearTimeout(externalStorageTimer)
   removeSyncConflictListener?.()
@@ -1867,7 +1903,7 @@ onUnmounted(() => {
       </section>
 
       <!-- 主搜索栏只负责联网搜索与网址直达；书签搜索使用独立面板。 -->
-      <section v-if="widgetPreferences.search" class="search-section w-full max-w-[600px] mb-8">
+      <section v-if="widgetPreferences.search" class="search-section w-full max-w-[600px] mb-8" @focusin="isSearchFocused = true" @focusout="handleSearchFocusOut">
         <div
           class="search-bar-capsule flex items-center backdrop-blur-xl px-3 py-2 shadow-lg transition-all duration-300"
           :class="{ 'is-focused': isSearchFocused }"
@@ -1887,19 +1923,24 @@ onUnmounted(() => {
 
           <!-- 搜索输入框 -->
           <input
+            ref="searchInputRef"
             v-model="searchQuery"
-            :list="widgetPreferences.searchHistoryEnabled && widgetPreferences.searchHistory.length ? 'extension-search-history' : undefined"
             type="text"
+            autocomplete="off"
+            :maxlength="200"
+            aria-controls="extension-search-history"
+            :aria-expanded="widgetPreferences.searchHistoryEnabled && isSearchFocused && !searchHistoryDismissed && widgetPreferences.searchHistory.length > 0"
             placeholder="搜索网页或输入网址"
             aria-label="搜索网页或输入网址"
             class="extension-search-input flex-1 bg-transparent border-none outline-none px-3 text-sm md:text-base"
-            @focus="isSearchFocused = true"
-            @blur="isSearchFocused = false"
-            @keydown.enter="handleSearchSubmit"
+            @focus="isSearchFocused = true; searchHistoryDismissed = false"
+            @click="searchHistoryDismissed = false"
+            @input="searchHistoryDismissed = false"
+            @keydown.enter="!$event.isComposing && handleSearchSubmit()"
+            @keydown.down.prevent="searchHistoryPanelRef?.focusEntry()"
+            @keydown.up.prevent="searchHistoryPanelRef?.focusEntry(true)"
+            @keydown.esc.prevent="dismissSearchHistory"
           >
-          <datalist id="extension-search-history">
-            <option v-for="query in widgetPreferences.searchHistory" :key="query" :value="query" />
-          </datalist>
 
           <!-- 清除按钮 -->
           <button
@@ -1907,7 +1948,7 @@ onUnmounted(() => {
             type="button"
             class="clear-btn text-white/70 hover:text-white mr-1 p-1 rounded-full hover:bg-white/20 transition-colors"
             aria-label="清空搜索内容"
-            @click="searchQuery = ''"
+            @click="searchQuery = ''; searchHistoryDismissed = false; searchInputRef?.focus()"
           >
             <SvgIcon icon="material-symbols:close-rounded" class="w-4 h-4" />
           </button>
@@ -1935,6 +1976,17 @@ onUnmounted(() => {
           </button>
         </div>
 
+        <SearchHistoryPanel
+          id="extension-search-history"
+          ref="searchHistoryPanelRef"
+          :entries="widgetPreferences.searchHistory"
+          :query="searchQuery"
+          :visible="widgetPreferences.searchHistoryEnabled && isSearchFocused && !searchHistoryDismissed && !bookmarkSearchOpen"
+          @select="selectSearchHistory"
+          @remove="widgetPreferences.searchHistory = widgetPreferences.searchHistory.filter(item => item !== $event)"
+          @clear="clearSearchHistory"
+          @close="dismissSearchHistory"
+        />
         <Transition name="bookmark-search-panel">
           <section v-if="bookmarkSearchOpen" class="bookmark-search-panel" aria-label="搜索书签">
             <header class="bookmark-search-header">
@@ -1981,108 +2033,112 @@ onUnmounted(() => {
       </section>
 
       <section class="dashboard-canvas-section w-full max-w-[1120px]">
-        <div class="dashboard-canvas-header">
-          <div class="active-group-meta">
-            <span>{{ activeGroup?.title }}</span>
-            <small>{{ activeGroup?.count || 0 }} 个书签 · {{ buildWidgetDisplayGroups(extensionWidgetInstances).length }} 个组件</small>
-          </div>
-          <div v-if="extensionWidgetEditMode" class="extension-widget-toolbar">
-            <div class="extension-edit-mode-copy">
-              <strong>正在编辑当前页面</strong>
-              <small>拖动调整位置，拖拽边缘改变大小</small>
-            </div>
-            <button type="button" class="modal-secondary-action flex items-center gap-1" :title="t('widgetLayout.done')" :aria-label="t('widgetLayout.done')" @click="extensionWidgetEditMode = false">
-              <SvgIcon icon="material-symbols:check-rounded" class="w-4 h-4" />
-              <span>{{ t('widgetLayout.done') }}</span>
-            </button>
-          </div>
-        </div>
-
-        <div ref="extensionWidgetGridRef" class="extension-dashboard-grid" :class="{ 'is-editing': extensionWidgetEditMode }">
-          <VueDraggable
-            v-if="activeCanvasItems.length"
-            v-model="activeCanvasItems"
-            item-key="key"
-            class="extension-dashboard-track"
-            :disabled="!groupsReady || Boolean(resizingExtensionWidgetId) || activeCanvasItems.length < 2"
-            :delay="extensionWidgetEditMode ? 0 : 480"
-            :delay-on-touch-only="false"
-            :touch-start-threshold="8"
-            :fallback-tolerance="8"
-            filter="input, textarea, button, a, select, [contenteditable='true'], [data-no-drag], .widget-resize-handle"
-            :prevent-on-filter="false"
-            chosen-class="is-dashboard-dragging"
-            :animation="180"
-            @start="handleBookmarkDragStart"
-            @end="handleBookmarkDragEnd"
-          >
-            <div
-              v-for="item in activeCanvasItems"
-              :key="item.key"
-              class="dashboard-canvas-item"
-              :class="item.kind === 'widget' ? ['extension-widget-cell', { 'is-widget-hidden': item.group.members[0].hidden, 'is-resizing': resizingExtensionWidgetId === item.group.members[0].id }] : ['speed-card', { 'is-expanded': bookmarkLayout(item.card).columns > 1 || bookmarkLayout(item.card).rows > 1 }]"
-              :style="item.kind === 'widget' ? extensionWidgetCellStyle(item.group) : bookmarkCardStyle(item.card)"
-              :title="item.kind === 'bookmark' ? item.card.description || item.card.title : undefined"
-              :aria-label="item.kind === 'bookmark' ? item.card.title : `${widgetDefinitionTitle(widgetRegistry.get(item.group.members[0].type) ?? { type: item.group.members[0].type })} 小组件`"
-              :role="item.kind === 'bookmark' ? 'link' : undefined"
-              tabindex="0"
-              @click="item.kind === 'bookmark' && handleCardClick(item.card)"
-              @contextmenu="item.kind === 'bookmark' ? handleCardContextMenu($event, item.card) : handleWidgetContextMenu($event, item.group.members[0])"
-              @keydown.enter.prevent="item.kind === 'bookmark' && handleCardClick(item.card)"
-              @keydown.space.prevent="item.kind === 'bookmark' && handleCardClick(item.card)"
-              @keydown="item.kind === 'bookmark' ? openCardContextMenuFromKeyboard($event, item.card) : openWidgetContextMenuFromKeyboard($event, item.group.members[0])"
-            >
-              <template v-if="item.kind === 'bookmark'">
-                <button v-if="authStore.visitMode === VisitMode.VISIT_MODE_LOGIN" type="button" class="speed-card-edit" data-no-drag :title="t('common.edit')" :aria-label="t('common.edit')" @click.stop="openCardEditor(item.card)">
-                  <SvgIcon icon="material-symbols:edit-outline-rounded" class="w-3.5 h-3.5" />
+        <Transition :name="`group-slide-${groupSlideDirection}`" mode="out-in">
+          <div :key="activeTabId ?? 'empty'" class="dashboard-group-page">
+            <div class="dashboard-canvas-header">
+              <div class="active-group-meta">
+                <span>{{ activeGroup?.title }}</span>
+                <small>{{ activeGroup?.count || 0 }} 个书签 · {{ buildWidgetDisplayGroups(extensionWidgetInstances).length }} 个组件</small>
+              </div>
+              <div v-if="extensionWidgetEditMode" class="extension-widget-toolbar">
+                <div class="extension-edit-mode-copy">
+                  <strong>正在编辑当前页面</strong>
+                  <small>拖动调整位置，拖拽边缘改变大小</small>
+                </div>
+                <button type="button" class="modal-secondary-action flex items-center gap-1" :title="t('widgetLayout.done')" :aria-label="t('widgetLayout.done')" @click="extensionWidgetEditMode = false">
+                  <SvgIcon icon="material-symbols:check-rounded" class="w-4 h-4" />
+                  <span>{{ t('widgetLayout.done') }}</span>
                 </button>
-                <div class="card-icon-box">
-                  <ItemIcon :item-icon="item.card.icon" :size="64" :fallback-text="item.card.title" :site-url="item.card.url" class="card-item-icon" />
-                </div>
-                <div class="card-info">
-                  <span class="card-title">{{ item.card.title }}</span>
-                  <small v-if="bookmarkLayout(item.card).columns > 1 || bookmarkLayout(item.card).rows > 1" class="card-description">{{ item.card.description || item.card.url }}</small>
-                </div>
-              </template>
-
-              <template v-else>
-                <div v-if="extensionWidgetEditMode" class="extension-widget-editor" :class="{ 'is-compact': item.group.size.columns <= 2 }">
-                  <span class="extension-widget-handle" :title="t('widgetLayout.drag')" :aria-label="t('widgetLayout.drag')">
-                    <SvgIcon icon="material-symbols:drag-indicator" class="w-4 h-4" />
-                  </span>
-                  <span v-if="item.group.stackId" class="extension-widget-stack-badge">{{ `${t('widgetLayout.stack.title')} ${item.group.members.length}` }}</span>
-                  <span class="extension-widget-name">{{ widgetDefinitionTitle(widgetRegistry.get(item.group.members[0].type) ?? { type: item.group.members[0].type }) }}</span>
-                  <span class="extension-widget-size">{{ item.group.size.columns }}×{{ item.group.size.rows }}</span>
-                  <span class="extension-widget-actions">
-                    <button v-if="hasExtensionWidgetSettings(item.group.members[0])" type="button" class="is-labelled" :title="t('widgetLayout.configure')" :aria-label="t('widgetLayout.configure')" @click="openExtensionWidgetSettings(item.group.members[0])">配置</button>
-                    <NDropdown v-if="!item.group.stackId && extensionWidgetStackTargetOptions(item.group.members[0]).length" trigger="click" :options="extensionWidgetStackTargetOptions(item.group.members[0])" @select="stackExtensionWidgetWith(item.group.members[0], $event)">
-                      <button type="button" class="is-labelled" :title="t('widgetLayout.stack.add')" :aria-label="t('widgetLayout.stack.add')">叠放</button>
-                    </NDropdown>
-                    <button type="button" title="更多组件操作" aria-label="更多组件操作" @click.stop="handleWidgetContextMenu($event, item.group.members[0])"><SvgIcon icon="mingcute:more-1-fill" /></button>
-                  </span>
-                </div>
-                <WidgetStackHost :instances="item.group.members" />
-                <span class="dashboard-widget-caption">{{ widgetDefinitionTitle(widgetRegistry.get(item.group.members[0].type) ?? { type: item.group.members[0].type }) }}</span>
-                <template v-if="extensionWidgetEditMode && !item.group.stackId && !item.group.members[0].hidden">
-                  <button type="button" class="widget-resize-handle is-right" data-no-drag :aria-label="t('widgetLayout.widen')" @pointerdown="startExtensionWidgetResize($event, item.group.members[0], 'columns', extensionWidgetGridRef)" />
-                  <button type="button" class="widget-resize-handle is-bottom" data-no-drag :aria-label="t('widgetLayout.stretch')" @pointerdown="startExtensionWidgetResize($event, item.group.members[0], 'rows', extensionWidgetGridRef)" />
-                  <button type="button" class="widget-resize-handle is-corner" data-no-drag :aria-label="`${t('widgetLayout.widen')} / ${t('widgetLayout.stretch')}`" @pointerdown="startExtensionWidgetResize($event, item.group.members[0], 'both', extensionWidgetGridRef)" />
-                </template>
-              </template>
+              </div>
             </div>
-          </VueDraggable>
 
-          <div v-else class="extension-widget-empty">
-            <SvgIcon icon="material-symbols:dashboard-customize-outline-rounded" class="w-10 h-10 opacity-60" />
-            <p>当前页面还是空的</p>
-            <small>点击添加图标，选择网站或小组件开始布置</small>
+            <div ref="extensionWidgetGridRef" class="extension-dashboard-grid" :class="{ 'is-editing': extensionWidgetEditMode }">
+              <VueDraggable
+                v-if="activeCanvasItems.length"
+                v-model="activeCanvasItems"
+                item-key="key"
+                class="extension-dashboard-track"
+                :disabled="!groupsReady || Boolean(resizingExtensionWidgetId) || activeCanvasItems.length < 2"
+                :delay="extensionWidgetEditMode ? 0 : 480"
+                :delay-on-touch-only="false"
+                :touch-start-threshold="8"
+                :fallback-tolerance="8"
+                filter="input, textarea, button, a, select, [contenteditable='true'], [data-no-drag], .widget-resize-handle"
+                :prevent-on-filter="false"
+                chosen-class="is-dashboard-dragging"
+                :animation="180"
+                @start="handleBookmarkDragStart"
+                @end="handleBookmarkDragEnd"
+              >
+                <div
+                  v-for="item in activeCanvasItems"
+                  :key="item.key"
+                  class="dashboard-canvas-item"
+                  :class="item.kind === 'widget' ? ['extension-widget-cell', { 'is-widget-hidden': item.group.members[0].hidden, 'is-resizing': resizingExtensionWidgetId === item.group.members[0].id }] : ['speed-card', { 'is-expanded': bookmarkLayout(item.card).columns > 1 || bookmarkLayout(item.card).rows > 1 }]"
+                  :style="item.kind === 'widget' ? extensionWidgetCellStyle(item.group) : bookmarkCardStyle(item.card)"
+                  :title="item.kind === 'bookmark' ? item.card.description || item.card.title : undefined"
+                  :aria-label="item.kind === 'bookmark' ? item.card.title : `${widgetDefinitionTitle(widgetRegistry.get(item.group.members[0].type) ?? { type: item.group.members[0].type })} 小组件`"
+                  :role="item.kind === 'bookmark' ? 'link' : undefined"
+                  tabindex="0"
+                  @click="item.kind === 'bookmark' && handleCardClick(item.card)"
+                  @contextmenu="item.kind === 'bookmark' ? handleCardContextMenu($event, item.card) : handleWidgetContextMenu($event, item.group.members[0])"
+                  @keydown.enter.prevent="item.kind === 'bookmark' && handleCardClick(item.card)"
+                  @keydown.space.prevent="item.kind === 'bookmark' && handleCardClick(item.card)"
+                  @keydown="item.kind === 'bookmark' ? openCardContextMenuFromKeyboard($event, item.card) : openWidgetContextMenuFromKeyboard($event, item.group.members[0])"
+                >
+                  <template v-if="item.kind === 'bookmark'">
+                    <button v-if="authStore.visitMode === VisitMode.VISIT_MODE_LOGIN" type="button" class="speed-card-edit" data-no-drag :title="t('common.edit')" :aria-label="t('common.edit')" @click.stop="openCardEditor(item.card)">
+                      <SvgIcon icon="material-symbols:edit-outline-rounded" class="w-3.5 h-3.5" />
+                    </button>
+                    <div class="card-icon-box">
+                      <ItemIcon :item-icon="item.card.icon" :size="64" :fallback-text="item.card.title" :site-url="item.card.url" class="card-item-icon" />
+                    </div>
+                    <div class="card-info">
+                      <span class="card-title">{{ item.card.title }}</span>
+                      <small v-if="bookmarkLayout(item.card).columns > 1 || bookmarkLayout(item.card).rows > 1" class="card-description">{{ item.card.description || item.card.url }}</small>
+                    </div>
+                  </template>
+
+                  <template v-else>
+                    <div v-if="extensionWidgetEditMode" class="extension-widget-editor" :class="{ 'is-compact': item.group.size.columns <= 2 }">
+                      <span class="extension-widget-handle" :title="t('widgetLayout.drag')" :aria-label="t('widgetLayout.drag')">
+                        <SvgIcon icon="material-symbols:drag-indicator" class="w-4 h-4" />
+                      </span>
+                      <span v-if="item.group.stackId" class="extension-widget-stack-badge">{{ `${t('widgetLayout.stack.title')} ${item.group.members.length}` }}</span>
+                      <span class="extension-widget-name">{{ widgetDefinitionTitle(widgetRegistry.get(item.group.members[0].type) ?? { type: item.group.members[0].type }) }}</span>
+                      <span class="extension-widget-size">{{ item.group.size.columns }}×{{ item.group.size.rows }}</span>
+                      <span class="extension-widget-actions">
+                        <button v-if="hasExtensionWidgetSettings(item.group.members[0])" type="button" class="is-labelled" :title="t('widgetLayout.configure')" :aria-label="t('widgetLayout.configure')" @click="openExtensionWidgetSettings(item.group.members[0])">配置</button>
+                        <NDropdown v-if="!item.group.stackId && extensionWidgetStackTargetOptions(item.group.members[0]).length" trigger="click" :options="extensionWidgetStackTargetOptions(item.group.members[0])" @select="stackExtensionWidgetWith(item.group.members[0], $event)">
+                          <button type="button" class="is-labelled" :title="t('widgetLayout.stack.add')" :aria-label="t('widgetLayout.stack.add')">叠放</button>
+                        </NDropdown>
+                        <button type="button" title="更多组件操作" aria-label="更多组件操作" @click.stop="handleWidgetContextMenu($event, item.group.members[0])"><SvgIcon icon="mingcute:more-1-fill" /></button>
+                      </span>
+                    </div>
+                    <WidgetStackHost :instances="item.group.members" />
+                    <span class="dashboard-widget-caption">{{ widgetDefinitionTitle(widgetRegistry.get(item.group.members[0].type) ?? { type: item.group.members[0].type }) }}</span>
+                    <template v-if="extensionWidgetEditMode && !item.group.stackId && !item.group.members[0].hidden">
+                      <button type="button" class="widget-resize-handle is-right" data-no-drag :aria-label="t('widgetLayout.widen')" @pointerdown="startExtensionWidgetResize($event, item.group.members[0], 'columns', extensionWidgetGridRef)" />
+                      <button type="button" class="widget-resize-handle is-bottom" data-no-drag :aria-label="t('widgetLayout.stretch')" @pointerdown="startExtensionWidgetResize($event, item.group.members[0], 'rows', extensionWidgetGridRef)" />
+                      <button type="button" class="widget-resize-handle is-corner" data-no-drag :aria-label="`${t('widgetLayout.widen')} / ${t('widgetLayout.stretch')}`" @pointerdown="startExtensionWidgetResize($event, item.group.members[0], 'both', extensionWidgetGridRef)" />
+                    </template>
+                  </template>
+                </div>
+              </VueDraggable>
+
+              <div v-else class="extension-widget-empty">
+                <SvgIcon icon="material-symbols:dashboard-customize-outline-rounded" class="w-10 h-10 opacity-60" />
+                <p>当前页面还是空的</p>
+                <small>点击添加图标，选择网站或小组件开始布置</small>
+              </div>
+
+              <button v-if="activeGroup" type="button" class="dashboard-add-icon" :title="t('iconGallery.title')" :aria-label="t('iconGallery.title')" @click="openAddCenter()">
+                <span class="dashboard-add-icon-symbol"><SvgIcon icon="material-symbols-add-rounded" /></span>
+                <span>{{ t('iconGallery.title') }}</span>
+              </button>
+            </div>
           </div>
-
-          <button v-if="activeGroup" type="button" class="dashboard-add-icon" :title="t('iconGallery.title')" :aria-label="t('iconGallery.title')" @click="openAddCenter()">
-            <span class="dashboard-add-icon-symbol"><SvgIcon icon="material-symbols-add-rounded" /></span>
-            <span>{{ t('iconGallery.title') }}</span>
-          </button>
-        </div>
+        </Transition>
       </section>
       <footer class="workspace-footer">
         <span>属于你的每一次开始</span>
@@ -2219,6 +2275,7 @@ onUnmounted(() => {
       :sync-status="extensionSyncStatus"
       :sync-revision="syncRevision"
       @group-icon-saved="handleGroupIconSaved"
+      @group-order-saved="handleGroupOrderSaved"
       @refresh="refreshBootstrap"
       @open-wallpaper="settingsModalVisible = false; showWallpaperModal = true"
       @open-widget-manager="settingsModalVisible = false; showWidgetManager = true"
@@ -3042,7 +3099,7 @@ onUnmounted(() => {
 .sync-status-banner.is-error { border-color: var(--ext-danger); }
 .sync-status-banner.is-error > svg { color: var(--ext-danger); }
 
-.search-section { position: relative; max-width: 640px; margin-bottom: 56px !important; }
+.search-section { position: relative; z-index: 35; max-width: 640px; margin-bottom: 56px !important; }
 .search-bar-capsule {
   min-height: 60px;
   padding: 5px 8px 5px 10px !important;
@@ -3294,6 +3351,22 @@ onUnmounted(() => {
 
 /* Shared page canvas: bookmarks and widgets consume the exact same grid unit. */
 .dashboard-canvas-section { max-width: 1080px; margin-bottom: 32px; }
+.dashboard-group-page { width: 100%; }
+.group-slide-next-enter-active, .group-slide-previous-enter-active {
+  transition: transform 240ms cubic-bezier(.2, .7, .2, 1), opacity 240ms ease;
+}
+.group-slide-next-leave-active, .group-slide-previous-leave-active {
+  transition: transform 160ms ease-in, opacity 160ms ease-in;
+  pointer-events: none;
+}
+.group-slide-next-enter-from, .group-slide-previous-leave-to { opacity: 0; transform: translateY(36px); }
+.group-slide-next-leave-to, .group-slide-previous-enter-from { opacity: 0; transform: translateY(-36px); }
+@media (prefers-reduced-motion: reduce) {
+  .group-slide-next-enter-active, .group-slide-previous-enter-active,
+  .group-slide-next-leave-active, .group-slide-previous-leave-active { transition-duration: 1ms; }
+  .group-slide-next-enter-from, .group-slide-previous-leave-to,
+  .group-slide-next-leave-to, .group-slide-previous-enter-from { transform: none; }
+}
 .dashboard-canvas-header {
   min-height: 42px;
   margin-bottom: 24px;
@@ -3435,7 +3508,7 @@ onUnmounted(() => {
 .workspace-brand-mark { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--ext-border); border-radius: 9px; color: var(--ext-accent); background: var(--ext-surface); transition: border-color 150ms ease, background-color 150ms ease; }
 .workspace-brand-mark svg { width: 17px; height: 17px; }
 .clock-eyebrow { margin: 0 0 18px; color: var(--ext-text-soft); font-size: 12px; letter-spacing: .22em; }
-.extension-search-input { min-width: 0; }
+.extension-search-input { min-width: 0; width: 0; height: 40px; padding-block: 0 !important; border: 0 !important; border-radius: 0 !important; outline: 0 !important; box-shadow: none !important; appearance: none; -webkit-appearance: none; background: transparent !important; font: inherit; font-size: 15px; color: var(--ext-text); }
 .search-submit-btn { display: grid; place-items: center; width: 40px; height: 40px; flex: none; border-radius: 13px; color: var(--pn-color-surface); }
 .search-submit-btn:hover { filter: brightness(.93); }
 .engine-select-btn { min-height: 40px; }

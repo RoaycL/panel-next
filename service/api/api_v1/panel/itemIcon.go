@@ -6,9 +6,6 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"path"
-	"strconv"
-	"strings"
 	"panel-next/api/api_v1/common/apiData/commonApiStructs"
 	"panel-next/api/api_v1/common/apiData/panelApiStructs"
 	"panel-next/api/api_v1/common/apiReturn"
@@ -18,6 +15,9 @@ import (
 	"panel-next/lib/siteFavicon"
 	"panel-next/lib/syncstate"
 	"panel-next/models"
+	"path"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -42,6 +42,10 @@ func (a *ItemIcon) Edit(c *gin.Context) {
 	}
 
 	req.UserId = userInfo.ID
+	if req.Icon.Scale != 0 && (req.Icon.Scale < 0.5 || req.Icon.Scale > 2) {
+		apiReturn.ErrorParamFomat(c, "Icon scale must be between 0.5 and 2")
+		return
+	}
 
 	// json转字符串
 	if j, err := json.Marshal(req.Icon); err == nil {

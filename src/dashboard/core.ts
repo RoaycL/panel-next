@@ -12,6 +12,11 @@ export interface DashboardState {
   groups: DashboardGroup[]
 }
 
+/** Legacy settings shortcuts remain editable in settings, but no longer occupy a desktop page. */
+export function isDesktopGroup(group: Panel.ItemIconGroup): boolean {
+  return !['系统', 'system'].includes((group.title || '').trim().toLocaleLowerCase())
+}
+
 export function normalizeDashboardGroups(
   groups: readonly (Panel.ItemIconGroup & { items?: Panel.ItemInfo[] })[],
 ): DashboardGroup[] {
@@ -39,10 +44,11 @@ export function filterDashboardGroups(
   enabled: boolean,
 ): DashboardGroup[] {
   const query = keyword?.trim().toLocaleLowerCase()
+  const desktopGroups = groups.filter(isDesktopGroup)
   if (!enabled || !query)
-    return groups as DashboardGroup[]
+    return desktopGroups
   const result: DashboardGroup[] = []
-  for (const group of groups) {
+  for (const group of desktopGroups) {
     const matches = group.items.filter((item) => {
       return item.title.toLocaleLowerCase().includes(query)
         || item.url.toLocaleLowerCase().includes(query)

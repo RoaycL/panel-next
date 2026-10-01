@@ -42,6 +42,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'groupIconSaved', group: Panel.ItemIconGroup, meta: { queued: boolean }): void
+  (e: 'groupOrderSaved', ids: number[], meta: { queued: boolean }): void
   (e: 'update:show', value: boolean): void
   (e: 'refresh'): void
   (e: 'update:sidebarPosition', value: 'left' | 'right'): void
@@ -630,8 +631,8 @@ async function handleLogout() {
                 <NSelect v-model:value="searchOpenModeModel" :options="searchOpenModeOptions" size="small" class="setting-select-wide" />
               </label>
               <label class="sidebar-setting-row">
-                <span><SvgIcon icon="material-symbols:sync" /><span><b>搜索历史</b><small>最多仅在本机保存 10 条搜索词</small></span></span>
-                <NSwitch v-model:value="searchHistoryEnabledModel" />
+                <span><SvgIcon icon="panel-next-timer" /><span><b>保留搜索历史</b><small>开启后点击搜索框查看最近 10 条；关闭会清除本机历史</small></span></span>
+                <NSwitch v-model:value="searchHistoryEnabledModel" aria-label="保留搜索历史" />
               </label>
               <button v-if="searchHistoryCount" type="button" class="settings-inline-action" @click="$emit('clearSearchHistory')">
                 清除 {{ searchHistoryCount }} 条本地搜索历史
@@ -712,7 +713,7 @@ async function handleLogout() {
                 <label class="sidebar-setting-row"><span><SvgIcon icon="majesticons-applications" /><span><b>侧边栏密度</b><small>调整图标尺寸与栏宽</small></span></span><NSelect v-model:value="sidebarDensityModel" :options="sidebarDensityOptions" size="small" class="w-24" /></label>
               </div>
             </section>
-            <GroupAppearancePanel :groups="groups" @saved="(group, meta) => emit('groupIconSaved', group, meta)" />
+            <GroupAppearancePanel :groups="groups" @saved="(group, meta) => emit('groupIconSaved', group, meta)" @order-saved="(ids, meta) => emit('groupOrderSaved', ids, meta)" />
           </div>
 
           <!-- 2. 图库与素材中心 -->

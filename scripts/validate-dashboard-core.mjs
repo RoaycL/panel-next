@@ -16,7 +16,7 @@ if (transpiled.diagnostics?.length) {
     .join('\n'))
 }
 const encoded = Buffer.from(transpiled.outputText).toString('base64')
-const { createDashboardState, createItemSortRequest, filterDashboardGroups, selectItemUrl }
+const { createDashboardState, createItemSortRequest, filterDashboardGroups, isDesktopGroup, selectItemUrl }
   = await import(`data:text/javascript;base64,${encoded}`)
 
 const bootstrap = {
@@ -65,7 +65,20 @@ assert.equal(filtered[0].id, 11)
 assert.equal(filtered[0].title, 'Tools')
 assert.equal(filtered[0].items[0].id, 12)
 assert.equal(filterDashboardGroups(dashboard.groups, 'missing', true).length, 0)
-assert.equal(filterDashboardGroups(dashboard.groups, 'missing', false), dashboard.groups)
+assert.deepEqual(filterDashboardGroups(dashboard.groups, 'missing', false), dashboard.groups)
+const legacySystemGroup = { ...dashboard.groups[0], id: 99, title: '系统' }
+const groupsWithSystem = [...dashboard.groups, legacySystemGroup]
+assert.equal(isDesktopGroup(legacySystemGroup), false)
+assert.equal(isDesktopGroup({ title: ' System ' }), false)
+assert.equal(isDesktopGroup({ title: '系统工具' }), true)
+assert.deepEqual(filterDashboardGroups(groupsWithSystem, '', false), dashboard.groups)
+assert.deepEqual(filterDashboardGroups(groupsWithSystem, 'internal', true), filtered)
+assert.equal(groupsWithSystem.length, 2, 'Hiding the old settings page must not delete its data')
+assert.match(extensionView, /groups\.value\.filter\(isDesktopGroup\)/)
+assert.match(extensionView, /<Transition :name="`group-slide-\$\{groupSlideDirection\}`" mode="out-in">/)
+assert.match(extensionView, /:key="activeTabId \?\? 'empty'"/)
+assert.match(extensionView, /selectGroup\(groupTabs\.value\[nextIndex\]\.id, direction > 0 \? 'next' : 'previous'\)/)
+assert.match(extensionView, /@media \(prefers-reduced-motion: reduce\)/)
 
 assert.deepEqual(createItemSortRequest(dashboard.groups[0]), {
   itemIconGroupId: 11,

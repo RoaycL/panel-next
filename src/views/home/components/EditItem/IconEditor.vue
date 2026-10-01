@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NButton, NColorPicker, NInput, NModal, NUpload } from 'naive-ui'
+import { NButton, NColorPicker, NInput, NInputNumber, NModal, NSlider, NUpload } from 'naive-ui'
 import type { UploadFileInfo } from 'naive-ui'
 import { computed, ref, watch } from 'vue'
 import { ItemIcon } from '@/components/common'
@@ -9,6 +9,7 @@ import { useAuthStore } from '@/store'
 import { apiRespErrMsg } from '@/utils/request/apiMessage'
 import { getRuntime } from '@/runtime'
 import { t } from '@/locales'
+import { normalizeIconScale } from '@/icons/iconScale'
 
 const props = defineProps<{
   itemIcon: Panel.ItemIcon | null
@@ -44,6 +45,16 @@ const initData: Panel.ItemIcon = {
 
 const itemIconInfo = ref<Panel.ItemIcon>({ ...initData })
 const isBundledBrand = computed(() => itemIconInfo.value.itemType === 3 && itemIconInfo.value.text?.startsWith('brand:'))
+const scalePercent = computed(() => Math.round(normalizeIconScale(itemIconInfo.value.scale) * 100))
+function handleScaleChange(value: number | null) {
+  if (value === null)
+    return
+  itemIconInfo.value.scale = normalizeIconScale(value / 100)
+  handleChange()
+}
+function fillIconTile() {
+  handleScaleChange(isBundledBrand.value ? 128 : itemIconInfo.value.itemType === 2 ? 100 : itemIconInfo.value.itemType === 1 ? 200 : 180)
+}
 watch(() => props.itemIcon, (icon) => {
   itemIconInfo.value = {
     ...initData,
@@ -201,6 +212,29 @@ function handleGallerySelect(url: string) {
           </div>
         </div>
 
+        <div class="icon-scale-controls">
+          <div class="icon-scale-heading">
+            <span>{{ $t('iconItem.contentScale') }}</span>
+            <div class="icon-scale-actions">
+              <NButton size="tiny" secondary @click="fillIconTile">
+                {{ $t('iconItem.fillTile') }}
+              </NButton>
+              <NButton size="tiny" quaternary @click="handleScaleChange(100)">
+                {{ $t('common.reset') }}
+              </NButton>
+            </div>
+          </div>
+          <div class="icon-scale-inputs">
+            <NSlider :value="scalePercent" :min="50" :max="200" :step="1" :aria-label="$t('iconItem.contentScale')" @update:value="handleScaleChange" />
+            <NInputNumber :value="scalePercent" :min="50" :max="200" :step="1" size="small" :aria-label="$t('iconItem.contentScale')" @update:value="handleScaleChange">
+              <template #suffix>
+                %
+              </template>
+            </NInputNumber>
+          </div>
+          <small class="icon-cache-hint">{{ $t('iconItem.contentScaleHint') }}</small>
+        </div>
+
         <!-- 背景色调节 -->
         <div class="icon-color-controls flex items-center gap-2.5 mt-3 pt-2.5 border-t border-white/10 dark:border-white/10">
           <span class="text-xs text-slate-400 dark:text-zinc-400 whitespace-nowrap">{{ $t('common.backgroundColor') }}:</span>
@@ -306,12 +340,16 @@ function handleGallerySelect(url: string) {
 .icon-upload-actions :deep(.n-upload) { width: auto; flex: none; }
 .icon-color-controls > div { flex: 0 0 120px; }
 .icon-background-color-picker { border-radius: 8px; overflow: hidden; }
-.icon-background-color-picker :deep(.n-color-picker__fill) { inset: 0; border-radius: inherit; }
+.icon-color-controls :deep(.n-color-picker__fill) { inset: 0 !important; border-radius: inherit; overflow: hidden; }
 .icon-background-color-picker :deep(.n-color-picker__value) { padding: 0 8px; font-size: 12px; font-weight: 600; }
 .icon-color-controls button { flex: none; white-space: nowrap; }
 .icon-editor-container :deep(.text-slate-400) { color: var(--pn-color-text-muted); }
 .icon-editor-container .icon-color-controls { border-color: var(--pn-color-border); padding-top: 16px; margin-top: 16px; }
 .type-selector-bar { display: flex; margin-bottom: 18px; padding: 4px; }
 .type-pill-btn { flex: 1; justify-content: center; min-height: 34px; }
+.icon-scale-controls { margin-top: 16px; display: grid; gap: 9px; }
+.icon-scale-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--pn-color-text-secondary); }
+.icon-scale-actions { display: flex; align-items: center; gap: 4px; }
+.icon-scale-inputs { display: grid; grid-template-columns: minmax(60px, 1fr) 106px; gap: 16px; align-items: center; }
 
 </style>

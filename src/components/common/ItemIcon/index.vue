@@ -9,6 +9,7 @@ import { getRuntime } from '@/runtime'
 import { isIconifyName } from '@/themes/icons'
 import { readIconImageAppearance } from '@/icons/imageAppearance'
 import type { IconImageAppearance } from '@/icons/imageAppearance'
+import { normalizeIconScale } from '@/icons/iconScale'
 
 interface Prop {
   itemIcon?: Panel.ItemIcon | null
@@ -131,6 +132,7 @@ const foregroundColor = computed(() => {
   return color === '#fff' || color === '#ffffff' ? '#4285f4' : '#fff'
 })
 const markFontSize = computed(() => `${Math.round(props.size * (Array.from(fallbackMark.value).length > 2 ? 0.25 : 0.31))}px`)
+const iconScale = computed(() => normalizeIconScale(props.itemIcon?.scale))
 </script>
 
 <template>
@@ -144,7 +146,7 @@ const markFontSize = computed(() => `${Math.round(props.size * (Array.from(fallb
           'item-icon-image-transparent': hasImage && visibleAppearance.transparent,
           'item-icon-image-dark-mark': hasImage && visibleAppearance.transparent && visibleAppearance.darkMonochrome,
         }"
-        :style="{ backgroundColor, color: foregroundColor }"
+        :style="{ backgroundColor, color: foregroundColor, '--item-icon-scale': iconScale }"
       >
         <template v-if="!imageLoaded || imageFailed">
           <img v-if="brandIcon || fallbackBrand" :src="brandIcon || fallbackBrand" alt="" class="item-icon-brand" @load="inspectImage($event, true)">
@@ -166,6 +168,11 @@ const markFontSize = computed(() => `${Math.round(props.size * (Array.from(fallb
 .item-icon-surface-transparent .item-icon-image { object-fit: contain; }
 .item-icon-brand { width: 78%; height: 78%; object-fit: contain; border-radius: calc(var(--pn-bookmark-icon-radius, 16px) * .78); }
 .item-icon-remote { position: absolute; inset: 20%; width: 60%; height: 60%; }
+.item-icon-surface > .item-icon-image,
+.item-icon-surface > .item-icon-brand,
+.item-icon-surface > .item-icon-glyph,
+.item-icon-surface > .item-icon-mark,
+.item-icon-surface > .item-icon-remote { transform: scale(var(--item-icon-scale, 1)); transform-origin: center; }
 html.dark .item-icon-surface-image { background-color: #000 !important; }
 html.dark .item-icon-surface-image:not(.item-icon-image-transparent)::after { position: absolute; inset: 0; z-index: 1; border-radius: inherit; background: rgba(0, 0, 0, .14); pointer-events: none; content: ''; }
 html.dark .item-icon-image-transparent > img { filter: drop-shadow(0 0 1px rgba(255, 255, 255, .4)); }

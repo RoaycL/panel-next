@@ -7,16 +7,20 @@ import { resolveThemeWallpaper, withThemeWallpaper } from '@/themes/wallpaper'
 import { validateThemeWallpapers } from '@/themes/schema'
 import type { ResolvedThemeMode } from '@/themes/types'
 import UploadFileManager from '@/components/apps/UploadFileManager/index.vue'
-import { usePanelState } from '@/store'
+import { useAuthStore, usePanelState } from '@/store'
 import { getRuntime } from '@/runtime'
 import { saveAndSyncExtensionWallpaper } from '@/runtime/extensionWallpaper'
 import { enqueueAppearanceSave } from '@/themes/appearanceSaveQueue'
 import { set as setUserConfig } from '@/api/panel/userConfig'
 import GallerySelector from '@/components/common/GallerySelector/index.vue'
+import { preloadWallpaper } from '@/runtime/wallpaperLoader'
 
 defineEmits<{ (event: 'browse'): void }>()
 const showGallery = ref(false)
 const panel = usePanelState()
+const auth = useAuthStore()
+let selectionGeneration = 0
+const validatingImage = ref(false)
 const theme = useTheme()
 const editingMode = ref<ResolvedThemeMode>(theme.resolvedMode)
 const selection = computed(() => panel.panelConfig.theme ?? themeRegistry.createSelection('core.default', 'auto'))
@@ -39,9 +43,23 @@ function setShared(value: boolean) {
 function browse() {
   showGallery.value = true
 }
-function selectWallpaper(url: string, forceShared = false) {
+async function selectWallpaper(url: string, forceShared = false) {
   const error = validateThemeWallpapers({ light: url })
   if (error) { message.error('请输入有效的图片地址（HTTP/HTTPS 或站内路径）'); return }
+  const generation = ++selectionGeneration
+  const mode = editingMode.value
+  const themeId = selection.value.themeId
+  const accountId = auth.userInfo?.id
+  const origin = getRuntime().getServerOrigin()
+  validatingImage.value = Boolean(url)
+  try { await preloadWallpaper(getRuntime().resolveUrl(url)) }
+  catch (failure) {
+    if (generation === selectionGeneration) { validatingImage.value = false; message.error(failure instanceof Error ? failure.message : '壁纸加载失败') }
+    return
+  }
+  if (generation !== selectionGeneration) return
+  validatingImage.value = false
+  if (mode !== editingMode.value || themeId !== selection.value.themeId || accountId !== auth.userInfo?.id || origin !== getRuntime().getServerOrigin()) return
   if (forceShared) separate.value = false
   panel.panelConfig.theme = withThemeWallpaper(selection.value, editingMode.value, url, !separate.value)
   showGallery.value = false
@@ -84,11 +102,14 @@ function scheduleSave() {
 function clearWallpaper() {
   selectWallpaper('')
 }
-onBeforeUnmount(() => { if (timer) void save() })
+onBeforeUnmount(() => { selectionGeneration++; if (timer) void save() })
 </script>
 
 <template>
   <section class="wallpaper-settings">
+    <p v-if="validatingImage" role="status">
+      正在加载壁纸原图，期间保留当前背景…
+    </p>
     <div class="wallpaper-overview settings-glass-card">
       <div class="wallpaper-live-preview">
         <img v-if="wallpaperUrl && !imageFailed" :key="wallpaperUrl" :src="wallpaperUrl" :style="imageStyle" alt="当前壁纸预览" @load="imageFailed = false" @error="imageFailed = true">

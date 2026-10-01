@@ -39,9 +39,10 @@ export interface WallhavenSearchParams {
   page?: number
 }
 
-export function getWallhavenWallpapers(params: WallhavenSearchParams = {}) {
+export function getWallhavenWallpapers(params: WallhavenSearchParams = {}, apiKey = '') {
   return get<WallhavenResponse>({
     url: '/v1/widgets/wallhaven',
     data: params,
+    headers: apiKey ? { 'X-Wallhaven-Api-Key': apiKey } : undefined,
   })
 }

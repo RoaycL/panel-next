@@ -2,6 +2,7 @@ package wallhaven
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -26,6 +27,8 @@ const (
 var (
 	ErrUpstreamUnavailable = errors.New("wallhaven service unavailable")
 	ErrInvalidParams       = errors.New("invalid wallhaven search parameters")
+	ErrUnauthorized        = errors.New("Wallhaven API Key 无效或无权访问此内容")
+	apiKeyPattern          = regexp.MustCompile(`^[a-zA-Z0-9]{16,128}$`)
 	bitsetPattern          = regexp.MustCompile(`^[01]{3}$`)
 	resolutionPattern      = regexp.MustCompile(`^[0-9]{2,5}x[0-9]{2,5}$`)
 	ratioPattern           = regexp.MustCompile(`^[0-9]{1,3}x[0-9]{1,3}(,[0-9]{1,3}x[0-9]{1,3}){0,7}$`)
@@ -90,6 +93,7 @@ var DefaultClient = NewClient(
 )
 
 type SearchParams struct {
+	APIKey     string
 	Query      string
 	Categories string
 	Purity     string
@@ -127,10 +131,8 @@ func (client *Client) Search(ctx context.Context, params SearchParams) (Result, 
 		return Result{}, err
 	}
 
-	cacheKey := fmt.Sprintf("%s|%s|%s|%s|%s|%s|%s|%s|%d",
-		params.Query, params.Categories, params.Purity, params.Sorting,
-		params.Order, params.TopRange, params.AtLeast, params.Ratios, params.Page,
-	)
+	encodedParams, _ := json.Marshal(params)
+	cacheKey := fmt.Sprintf("%x", sha256.Sum256(encodedParams))
 
 	now := time.Now()
 	client.mu.Lock()
@@ -165,14 +167,27 @@ func (client *Client) Search(ctx context.Context, params SearchParams) (Result, 
 	}
 	req.Header.Set("User-Agent", providerUserAgent)
 	req.Header.Set("Accept", "application/json")
+	if params.APIKey != "" {
+		req.Header.Set("X-API-Key", params.APIKey)
+	}
 
-	resp, err := client.httpClient.Do(req)
+	httpClient := client.httpClient
+	if params.APIKey != "" {
+		isolated := *httpClient
+		// A provider redirect must never forward a user's credential to another host.
+		isolated.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+		httpClient = &isolated
+	}
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return Result{}, fmt.Errorf("wallhaven upstream request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+			return Result{}, ErrUnauthorized
+		}
 		return Result{}, fmt.Errorf("wallhaven upstream status %d", resp.StatusCode)
 	}
 
@@ -250,6 +265,9 @@ func (client *Client) Search(ctx context.Context, params SearchParams) (Result, 
 }
 
 func validateSearchParams(params SearchParams) error {
+	if (params.APIKey != "" && !apiKeyPattern.MatchString(params.APIKey)) || (len(params.Purity) == 3 && params.Purity[2] == '1' && params.APIKey == "") {
+		return ErrUnauthorized
+	}
 	validSorting := map[string]bool{"date_added": true, "relevance": true, "random": true, "views": true, "favorites": true, "toplist": true, "hot": true}
 	validTopRange := map[string]bool{"1d": true, "3d": true, "1w": true, "1M": true, "3M": true, "6M": true, "1y": true}
 	if utf8.RuneCountInString(params.Query) > 100 || !bitsetPattern.MatchString(params.Categories) ||

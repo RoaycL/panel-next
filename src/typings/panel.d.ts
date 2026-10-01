@@ -28,6 +28,7 @@ declare namespace Panel {
         text ?: string
         // bgColor ?: string
         backgroundColor ?: string
+        scale ?: number // Content zoom, 0.5–2; omitted means legacy size.
         dockerContainerId ?: string // Docker 容器 ID（itemType=4 时使用）
     }
 

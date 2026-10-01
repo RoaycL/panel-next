@@ -13,6 +13,7 @@ import { packageRevision } from '@/packages/manager'
 import { useTheme as useThemeContext } from '@/themes/context'
 import { themeRegistry } from '@/themes/registry'
 import { resolveThemeWallpaper } from '@/themes/wallpaper'
+import { useLoadedWallpaper } from '@/runtime/wallpaperLoader'
 
 import { setTitle, updateLocalUserInfo } from '@/utils/cmn'
 import { sanitizeUserHtml } from '@/utils/sanitizeHtml'
@@ -32,7 +33,7 @@ import { replayOfflineQueue } from '@/sync/offlineReplay'
 import { getPendingMutationCount } from '@/sync/offlineQueue'
 import type { ConflictDescriptor, ConflictResolutionChoice } from '@/sync/conflictResolver'
 import type { DashboardGroup } from '@/dashboard/core'
-import { createDashboardState, createItemSortRequest, filterDashboardGroups, normalizeDashboardGroups, selectItemUrl } from '@/dashboard/core'
+import { createDashboardState, createItemSortRequest, filterDashboardGroups, isDesktopGroup, normalizeDashboardGroups, selectItemUrl } from '@/dashboard/core'
 import ThemeIcon from '@/themes/ThemeIcon.vue'
 import type { WidgetDisplayGroup, WidgetInstance } from '@/widgets'
 import { WidgetHost, WidgetStackHost, WidgetSettingsModal, applyWidgetDisplayOrder, buildWidgetDisplayGroups, canStackWidgets, clearWidgetStorage, createHeaderClockWidget, createHeaderSearchWidget, createHeaderWeatherWidget, createTrendingWidget, createCountdownWidget, generateWidgetInstanceId, moveWidgetWithinStack, normalizeWidgetStacks, resizeInstanceWithinBounds, serializeWidgetLayout, stackWidgets, unstackWidget, widgetRegistry } from '@/widgets'
@@ -49,11 +50,13 @@ const dialog = useDialog()
 const appStore = useAppStore()
 const panelState = usePanelState()
 const wallpaperTheme = useThemeContext()
-const activeWallpaper = computed(() => {
+const requestedWallpaper = computed(() => {
   void packageRevision.value
   const url = resolveThemeWallpaper(wallpaperTheme.selection, themeRegistry.get(wallpaperTheme.themeId), wallpaperTheme.resolvedMode, panelState.panelConfig.backgroundImageSrc)
   return url ? getRuntime().resolveUrl(url) : ''
 })
+const { displayed: activeWallpaper, error: wallpaperLoadError } = useLoadedWallpaper(requestedWallpaper)
+watch(wallpaperLoadError, error => { if (error) ms.warning(error) })
 const authStore = useAuthStore()
 const userStore = useUserStore()
 const runtime = getRuntime()
@@ -96,7 +99,7 @@ const safeFooterHtml = computed(() => {
 })
 
 const items = ref<DashboardGroup[]>([])
-const catalogPages = computed(() => items.value.flatMap(group => typeof group.id === 'number' ? [{ id: group.id, title: group.title || '' }] : []))
+const catalogPages = computed(() => items.value.filter(isDesktopGroup).flatMap(group => typeof group.id === 'number' ? [{ id: group.id, title: group.title || '' }] : []))
 const filterItems = ref<DashboardGroup[]>([])
 const searchKeyword = ref('')
 const groupsLoaded = ref(false)
