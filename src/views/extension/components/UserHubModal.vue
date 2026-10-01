@@ -163,10 +163,8 @@ const sidebarDensityOptions = [
 
 // 异步加载管理模块
 const UploadFileManagerApp = defineAsyncComponent(() => import('@/components/apps/UploadFileManager/index.vue'))
-const DockerManagerApp = defineAsyncComponent(() => import('@/components/apps/DockerManager/index.vue'))
 const SiteSettingApp = defineAsyncComponent(() => import('@/components/apps/SiteSetting/index.vue'))
 const UserInfoApp = defineAsyncComponent(() => import('@/components/apps/UserInfo/index.vue'))
-const UserSessionsApp = defineAsyncComponent(() => import('@/components/apps/UserSessions/index.vue'))
 const AboutApp = defineAsyncComponent(() => import('@/components/apps/About/index.vue'))
 const BackupRestoreApp = defineAsyncComponent(() => import('@/components/apps/BackupRestore/index.vue'))
 const ImportExportApp = defineAsyncComponent(() => import('@/components/apps/ImportExport/index.vue'))
@@ -175,7 +173,7 @@ const ExtensionHistoryPanel = defineAsyncComponent(() => import('./ExtensionHist
 const WallpaperSettingsPanel = defineAsyncComponent(() => import('./WallpaperSettingsPanel.vue'))
 const GroupAppearancePanel = defineAsyncComponent(() => import('./GroupAppearancePanel.vue'))
 
-type NavKey = 'profile' | 'search' | 'time' | 'style' | 'layout' | 'sidebar' | 'gallery' | 'backup' | 'docker' | 'system' | 'server' | 'about'
+type NavKey = 'profile' | 'search' | 'time' | 'style' | 'layout' | 'sidebar' | 'gallery' | 'backup' | 'system' | 'server' | 'about'
 type NavSection = 'personal' | 'workspace' | 'data' | 'admin' | 'support'
 interface HubNavItem {
   key: NavKey
@@ -246,7 +244,7 @@ const navItems = computed<HubNavItem[]>(() => {
       key: 'profile',
       section: 'personal',
       label: '个人中心',
-      desc: '账号资料、安全与多端设备会话',
+      desc: '账号资料与安全设置',
       icon: 'material-symbols:account-circle',
     },
     {
@@ -299,13 +297,6 @@ const navItems = computed<HubNavItem[]>(() => {
       icon: 'icon-park-outline:import-and-export',
     },
     {
-      key: 'docker',
-      section: 'admin',
-      label: 'Docker 容器管理',
-      desc: '服务器容器监控、启停与控制',
-      icon: 'mdi:docker',
-    },
-    {
       key: 'system',
       section: 'admin',
       label: '系统与站点配置',
@@ -329,7 +320,7 @@ const navItems = computed<HubNavItem[]>(() => {
   ]
   return authStore.userInfo?.role === 1
     ? items
-    : items.filter(item => item.key !== 'docker' && item.key !== 'system')
+    : items.filter(item => item.key !== 'system')
 })
 const navSectionLabels: Record<NavSection, string> = {
   personal: '账号',
@@ -576,12 +567,12 @@ async function handleLogout() {
 
         <!-- 动态模块渲染容器 -->
         <div ref="contentBodyRef" class="content-body flex-1 overflow-y-auto p-6" :data-settings-page="currentTab">
-          <!-- 0. 个人中心：账号资料、安全与设备会话只保留这一处。 -->
+          <!-- 0. 个人中心：账号资料与安全设置。 -->
           <div v-if="currentTab === 'profile'" class="view-panel max-w-2xl mx-auto py-2 space-y-6">
             <section v-if="!authStore.token" class="settings-glass-card guest-profile-card">
               <div class="settings-section-heading">
                 <span class="settings-section-icon"><SvgIcon icon="material-symbols:account-circle" /></span>
-                <div><h3>登录后进入个人中心</h3><p>访客模式可以直接使用主页；登录后可管理资料、密码和多端设备会话。</p></div>
+                <div><h3>登录后进入个人中心</h3><p>访客模式可以直接使用主页；登录后可管理个人资料和密码。</p></div>
               </div>
               <button type="button" class="guest-login-action" @click="showLogin">
                 <SvgIcon icon="ph:user-bold" />
@@ -594,13 +585,6 @@ async function handleLogout() {
                 <template #default>
                   <div class="account-center-content">
                     <UserInfoApp embedded />
-                    <section class="device-session-section">
-                      <div class="settings-section-heading">
-                        <span class="settings-section-icon"><SvgIcon icon="mdi:devices" /></span>
-                        <div><h3>多端设备会话</h3><p>查看当前登录设备，刷新活动状态并撤销不再使用的会话。</p></div>
-                      </div>
-                      <UserSessionsApp embedded />
-                    </section>
                   </div>
                 </template>
                 <template #fallback>
@@ -751,20 +735,6 @@ async function handleLogout() {
                   <NDivider style="border-color: rgba(255,255,255,0.1);" />
                   <BackupRestoreApp />
                 </div>
-              </template>
-              <template #fallback>
-                <div class="flex items-center justify-center py-20">
-                  <NSpin size="large" />
-                </div>
-              </template>
-            </Suspense>
-          </div>
-
-          <!-- 3. Docker 容器管理 -->
-          <div v-else-if="currentTab === 'docker'" class="view-panel">
-            <Suspense>
-              <template #default>
-                <DockerManagerApp />
               </template>
               <template #fallback>
                 <div class="flex items-center justify-center py-20">
@@ -969,13 +939,6 @@ async function handleLogout() {
 }
 
 .account-center-content { display: flex; min-width: 0; flex-direction: column; gap: 18px; }
-.device-session-section {
-  min-width: 0;
-  padding: 18px;
-  border: 1px solid var(--hub-border);
-  border-radius: 18px;
-  background: var(--hub-surface);
-}
 
 .settings-section-heading { display: flex; align-items: flex-start; gap: 12px; }
 .settings-section-heading h3 { margin: 0; color: var(--hub-text-strong); font-size: 15px; font-weight: 720; }

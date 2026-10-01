@@ -4,7 +4,6 @@ type ApiSystem struct {
 	About                 About
 	LoginApi              LoginApi
 	UserApi               UserApi
-	UserSessionApi        UserSessionApi
 	ClientCapabilitiesApi ClientCapabilitiesApi
 	SyncBootstrapApi      SyncBootstrapApi
 	SyncChangesApi        SyncChangesApi
@@ -16,6 +15,5 @@ type ApiSystem struct {
 	BackupApi             BackupApi
 	SiteSettingApi        SiteSettingApi
 	PublicFileApi         PublicFileApi
-	DockerApi             DockerApi
 	OpenAPIApi            OpenAPIApi
 }

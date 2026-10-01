@@ -1,5 +1,7 @@
 # 设备会话安全设计
 
+> 设置中的多端会话管理和 `/api/user/session/*` 管理接口已移除。本文描述的内部认证、刷新、退出和改密撤销机制仍保留，不影响现有用户登录。
+
 ## 范围
 
 `user_session` 为 Web 与 Chrome Extension 提供可撤销的设备级会话。`SESSION-01` 建立数据模型和迁移，`SESSION-02` 提供 Token 签发、校验、轮换与重用检测服务；`SESSION-06`、`SESSION-07` 已分别接入 Web 与 Extension。

@@ -54,6 +54,28 @@ type MetaInfo struct {
 	Total       int `json:"total"`
 }
 
+// Wallhaven may encode pagination counts as JSON integers or decimal strings.
+// Keep the public result numeric while rejecting malformed or overflowing values.
+type upstreamCount int
+
+func (count *upstreamCount) UnmarshalJSON(data []byte) error {
+	raw := strings.TrimSpace(string(data))
+	if strings.HasPrefix(raw, "\"") {
+		if err := json.Unmarshal(data, &raw); err != nil {
+			return fmt.Errorf("invalid wallhaven pagination count")
+		}
+	}
+	if raw == "" || strings.IndexFunc(raw, func(r rune) bool { return r < '0' || r > '9' }) >= 0 {
+		return fmt.Errorf("invalid wallhaven pagination count")
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return fmt.Errorf("invalid wallhaven pagination count")
+	}
+	*count = upstreamCount(value)
+	return nil
+}
+
 type Result struct {
 	Items     []WallpaperItem `json:"items"`
 	Meta      MetaInfo        `json:"meta"`
@@ -209,10 +231,10 @@ func (client *Client) Search(ctx context.Context, params SearchParams) (Result, 
 			} `json:"thumbs"`
 		} `json:"data"`
 		Meta struct {
-			CurrentPage int `json:"current_page"`
-			LastPage    int `json:"last_page"`
-			PerPage     int `json:"per_page"`
-			Total       int `json:"total"`
+			CurrentPage upstreamCount `json:"current_page"`
+			LastPage    upstreamCount `json:"last_page"`
+			PerPage     upstreamCount `json:"per_page"`
+			Total       upstreamCount `json:"total"`
 		} `json:"meta"`
 	}
 
@@ -244,10 +266,10 @@ func (client *Client) Search(ctx context.Context, params SearchParams) (Result, 
 	result := Result{
 		Items: items,
 		Meta: MetaInfo{
-			CurrentPage: upstream.Meta.CurrentPage,
-			LastPage:    upstream.Meta.LastPage,
-			PerPage:     upstream.Meta.PerPage,
-			Total:       upstream.Meta.Total,
+			CurrentPage: int(upstream.Meta.CurrentPage),
+			LastPage:    int(upstream.Meta.LastPage),
+			PerPage:     int(upstream.Meta.PerPage),
+			Total:       int(upstream.Meta.Total),
 		},
 		FetchedAt: now.UTC(),
 		Cached:    false,

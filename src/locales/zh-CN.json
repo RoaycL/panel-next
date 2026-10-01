@@ -15,24 +15,7 @@
     "pblicText": "公开",
     "role": "角色",
     "setOrUnsetPublicMode": "设置/取消公开访问",
-    "userCountText": "共{count}位用户",
-    "sessionsAppName": "设备会话",
-    "sessionsAlertText": "查看和管理当前登录的设备会话，可撤销单个会话或全部会话。",
-    "deviceName": "设备名称",
-    "unknownDevice": "未知设备",
-    "currentSession": "当前会话",
-    "clientType": "客户端类型",
-    "clientWeb": "Web",
-    "clientExtension": "Chrome 扩展",
-    "createdAt": "创建时间",
-    "lastActiveAt": "最后活跃",
-    "refreshExpiresAt": "登录有效期",
-    "neverExpires": "长期有效（退出或撤销前）",
-    "revoke": "撤销",
-    "cannotRevokeCurrent": "无法撤销当前会话",
-    "revokeConfirm": "确定要撤销该设备会话吗？撤销后需要重新登录。",
-    "revokeAllConfirm": "确定要撤销所有设备会话吗？撤销后需要重新登录。",
-    "revokeAll": "撤销全部会话"
+    "userCountText": "共{count}位用户"
   },
   "api": {
     "loginExpires": "登录状态已过期，请重新登录"
@@ -181,25 +164,6 @@
 	"publicGallery": {
 		"appName": "公共图库",
 		"alertText": "管理员维护的公共图库，所有账号可只读选择使用。"
-	},
-	"dockerManager": {
-		"appName": "Docker 管理",
-		"alertText": "管理 Docker 容器：启动、停止和重启。",
-		"unavailable": "Docker 不可用：未检测到 Docker Engine 或 Socket 未挂载。",
-		"name": "容器名称",
-		"image": "镜像",
-		"status": "状态",
-		"ports": "端口",
-		"start": "启动",
-		"stop": "停止",
-		"restart": "重启",
-		"readonly": "只读",
-		"startConfirm": "确定启动容器 {name} 吗？",
-		"stopConfirm": "确定停止容器 {name} 吗？",
-		"restartConfirm": "确定重启容器 {name} 吗？",
-		"createCard": "创建卡片",
-		"createCardHint": "容器 {name} 的卡片创建功能将在卡片编辑器中完成",
-		"action": "操作"
 	},
     "exportImport": {
       "appName": "导出导入",

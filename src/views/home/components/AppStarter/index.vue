@@ -165,20 +165,6 @@ onMounted(() => {
         auth: 1,
       },
       {
-        name: t('adminSettingUsers.sessionsAppName'),
-        componentName: 'UserSessions',
-        icon: 'mdi:devices',
-        category: 'admin',
-        auth: 1,
-      },
-      {
-        name: t('apps.dockerManager.appName'),
-        componentName: 'DockerManager',
-        icon: 'mdi:docker',
-        category: 'admin',
-        auth: 1,
-      },
-      {
         name: t('apps.publicGallery.appName'),
         componentName: 'PublicGallery',
         icon: 'mdi:image-multiple-outline',

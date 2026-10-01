@@ -109,15 +109,10 @@ body:is([data-panel-runtime='extension'], [data-panel-runtime='web']) .edit-item
 }
 
 /* Inner settings surfaces must not revert to near-opaque SDK defaults. */
-body:is([data-panel-runtime='extension'], [data-panel-runtime='web']) :is(.session-summary-grid > div, .avatar-preset-button, .profile-avatar, .profile-preview, .profile-theme-segment.active) {
+body:is([data-panel-runtime='extension'], [data-panel-runtime='web']) :is(.profile-avatar, .profile-preview, .profile-theme-segment.active) {
   background: var(--pn-glass-control) !important;
   border-color: var(--pn-glass-border);
   box-shadow: var(--pn-glass-highlight);
-}
-
-body:is([data-panel-runtime='extension'], [data-panel-runtime='web']) .avatar-preset-button:is(:hover, .active) {
-  border-color: var(--pn-color-accent);
-  background: color-mix(in srgb, var(--pn-color-accent) 14%, var(--pn-glass-control)) !important;
 }
 
 body:is([data-panel-runtime='extension'], [data-panel-runtime='web']) .user-info-page .profile-hero {

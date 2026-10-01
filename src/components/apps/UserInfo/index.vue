@@ -54,13 +54,6 @@ const draftAvatarUrl = computed(() => runtime.resolveUrl(profileHeadImage.value.
 const isProfileDirty = computed(() => nickName.value.trim() !== (authStore.userInfo?.name || authStore.userInfo?.username || '').trim()
   || profileMail.value.trim() !== (authStore.userInfo?.mail || '').trim()
   || profileHeadImage.value.trim() !== (authStore.userInfo?.headImage || '').trim())
-const avatarPresets = [
-  'https://api.dicebear.com/7.x/bottts/svg?seed=Felix',
-  'https://api.dicebear.com/7.x/bottts/svg?seed=Luna',
-  'https://api.dicebear.com/7.x/bottts/svg?seed=Leo',
-  'https://api.dicebear.com/7.x/bottts/svg?seed=Mia',
-  'https://api.dicebear.com/7.x/avataaars/svg?seed=Max',
-]
 
 function resetProfileDraft() {
   nickName.value = authStore.userInfo?.name || authStore.userInfo?.username || ''
@@ -358,7 +351,7 @@ async function handleChangeTheme(value: Theme) {
               <strong>{{ authStore.userInfo?.username || '-' }}</strong>
               <span class="profile-role" :class="{ 'profile-role-admin': isAdmin }">{{ isAdmin ? t('apps.userInfo.roleAdmin') : t('apps.userInfo.roleUser') }}</span>
             </div>
-            <p>上传自己的图片，或选择下方预设头像。修改后点击保存。</p>
+            <p>上传自己的头像，修改后点击保存。</p>
           </div>
         </div>
         <div class="profile-avatar-upload-row">
@@ -383,21 +376,6 @@ async function handleChangeTheme(value: Theme) {
             </NButton>
           </NUpload>
           <small>PNG / JPG / WebP / GIF · 最大 2 MB</small>
-        </div>
-        <div class="profile-avatar-presets" aria-label="预设头像">
-          <button
-            v-for="(url, index) in avatarPresets"
-            :key="url"
-            type="button"
-            class="avatar-preset-button"
-            :class="{ active: profileHeadImage === url }"
-            :aria-label="`选择预设头像 ${index + 1}`"
-            :aria-pressed="profileHeadImage === url"
-            :disabled="isUploadingAvatar || isSavingProfile"
-            @click="profileHeadImage = url"
-          >
-            <ProfileAvatar :src="url" :size="36" />
-          </button>
         </div>
         <details class="profile-avatar-custom">
           <summary>自定义头像地址</summary>
@@ -594,11 +572,9 @@ async function handleChangeTheme(value: Theme) {
 .profile-account-line strong { overflow-wrap: anywhere; font-size: 16px; }
 .profile-account-line .profile-role { padding: 3px 8px; border-radius: 20px; font-size: 11px; }
 .profile-avatar-copy p { margin: 6px 0 0; color: var(--pn-color-text-secondary); font-size: 12px; line-height: 1.6; }
-.profile-avatar-presets { display: flex; flex-wrap: wrap; gap: 8px; }
 .profile-avatar-upload-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .profile-avatar-upload-row > :deep(.profile-avatar-upload) { width: auto; flex: none; }
 .profile-avatar-upload-row small { color: var(--pn-color-text-secondary); font-size: 11px; }
-.avatar-preset-button:disabled { opacity: .5; cursor: not-allowed; transform: none; }
 .profile-avatar-custom { min-width: 0; color: var(--pn-color-text-secondary); font-size: 12px; }
 .profile-avatar-custom summary { cursor: pointer; width: fit-content; padding: 4px 0; }
 .profile-avatar-custom[open] summary { margin-bottom: 8px; }
@@ -611,30 +587,4 @@ async function handleChangeTheme(value: Theme) {
   .profile-editor { padding: 14px; }
 }
 
-.avatar-preset-button {
-  width: 42px;
-  height: 42px;
-  padding: 3px;
-  overflow: hidden;
-  border: 1px solid var(--pn-color-border, rgba(148, 163, 184, .24));
-  border-radius: var(--pn-radius-medium, 12px);
-  background: var(--pn-color-surface, #fff);
-  cursor: pointer;
-  transition: border-color .18s ease, transform .18s ease, background-color .18s ease;
-}
-
-.avatar-preset-button:hover,
-.avatar-preset-button.active {
-  border-color: var(--pn-color-accent, #10b981);
-  background: color-mix(in srgb, var(--pn-color-accent, #10b981) 14%, var(--pn-color-surface, #fff));
-  transform: translateY(-1px);
-}
-.avatar-preset-button:focus-visible { outline: 2px solid var(--pn-color-accent); outline-offset: 3px; }
-
-.avatar-preset-button img {
-  width: 100%;
-  height: 100%;
-  border-radius: 8px;
-  object-fit: cover;
-}
 </style>

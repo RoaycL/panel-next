@@ -2,6 +2,7 @@ package wallhaven
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,40 @@ import (
 	"testing"
 	"time"
 )
+
+func TestPaginationCountsAcceptNumbersAndStrings(t *testing.T) {
+	for _, meta := range []string{
+		`{"current_page":1,"last_page":2,"per_page":24,"total":48}`,
+		`{"current_page":1,"last_page":2,"per_page":"24","total":48}`,
+		`{"current_page":"1","last_page":"2","per_page":"24","total":"48"}`,
+	} {
+		t.Run(meta, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, _ = w.Write([]byte(`{"data":[],"meta":` + meta + `}`))
+			}))
+			defer server.Close()
+			client := NewClient(server.Client(), server.URL, time.Minute)
+			for _, key := range []string{"", strings.Repeat("a", 32)} {
+				result, err := client.Search(context.Background(), SearchParams{APIKey: key})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if result.Meta != (MetaInfo{CurrentPage: 1, LastPage: 2, PerPage: 24, Total: 48}) {
+					t.Fatalf("unexpected pagination: %+v", result.Meta)
+				}
+			}
+		})
+	}
+}
+
+func TestPaginationCountRejectsInvalidValues(t *testing.T) {
+	for _, raw := range []string{`null`, `true`, `-1`, `1.5`, `""`, `"abc"`, `"24.5"`, `"-1"`, `"999999999999999999999999"`, `{}`} {
+		var count upstreamCount
+		if err := json.Unmarshal([]byte(raw), &count); err == nil {
+			t.Fatalf("invalid count accepted: %s", raw)
+		}
+	}
+}
 
 func TestAPIKeyHeaderAndCacheIsolation(t *testing.T) {
 	calls := 0
