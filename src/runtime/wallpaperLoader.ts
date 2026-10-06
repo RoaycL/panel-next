@@ -24,16 +24,24 @@ export function useLoadedWallpaper(source: Readonly<Ref<string>>) {
   const displayed = ref('')
   const error = ref('')
   let generation = 0
+  // The last URL that actually loaded; an optimistic paint is never a fallback.
+  let loaded = ''
   watch(source, async url => {
     const current = ++generation
     error.value = ''
     if (!url) { displayed.value = ''; return }
+    // With nothing on screen there is no old image to keep, so waiting for the
+    // preload would only show a blank page. Let the browser paint from cache.
+    if (!displayed.value) displayed.value = url
     try {
       await preloadWallpaper(url)
-      if (current === generation) displayed.value = url
+      if (current === generation) { loaded = url; displayed.value = url }
     }
     catch (failure) {
-      if (current === generation) error.value = failure instanceof Error ? failure.message : '壁纸加载失败'
+      if (current === generation) {
+        displayed.value = loaded
+        error.value = failure instanceof Error ? failure.message : '壁纸加载失败'
+      }
     }
   }, { immediate: true })
   onBeforeUnmount(() => { generation++ })

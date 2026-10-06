@@ -533,3 +533,23 @@ export function createExtensionRuntime(): RuntimeAdapter {
     },
   }
 }
+
+// A synchronous mirror of the displayed wallpaper, read by
+// extension/boot-wallpaper.js before the application loads. chrome.storage is
+// async and only ready after the bundle runs.
+const BOOT_WALLPAPER_KEY = 'panelNext.bootWallpaper'
+
+export function rememberBootWallpaper(url: string, mask: number) {
+  // The mounted wallpaper layer owns the picture from here on. Drop a boot
+  // paint that no longer matches so it cannot show through a translucent theme.
+  const root = document.documentElement
+  if (root.dataset.bootWallpaper !== undefined && root.dataset.bootWallpaper !== url) {
+    root.style.removeProperty('background')
+    delete root.dataset.bootWallpaper
+  }
+  try {
+    if (url) localStorage.setItem(BOOT_WALLPAPER_KEY, JSON.stringify({ url, mask }))
+    else localStorage.removeItem(BOOT_WALLPAPER_KEY)
+  }
+  catch { /* Quota or privacy settings only disable the early paint. */ }
+}
