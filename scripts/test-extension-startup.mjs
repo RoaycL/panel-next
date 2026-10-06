@@ -17,6 +17,8 @@ const bootScript = read('extension/boot-wallpaper.js')
 const bootKey = read('src/runtime/extension.ts').match(/const BOOT_WALLPAPER_KEY = '([^']+)'/)?.[1]
 assert.ok(bootKey && bootScript.includes(`localStorage.getItem('${bootKey}')`), 'Boot script and runtime share the mirror key')
 assert.match(read('vite.config.mts'), /'boot-wallpaper\.js'\]/)
+assert.match(bootScript, /setAttribute\('data-boot-wallpaper', boot\.url\)/)
+assert.match(read('src/runtime/extension.ts'), /root\.dataset\.bootWallpaper !== url\) \{\s*root\.style\.removeProperty\('background'\)/, 'A stale boot paint is dropped once the app shows another wallpaper')
 assert.match(read('extension/newtab.html'), /data-panel-runtime="extension"/)
 assert.match(read('extension/newtab.html'), /\[data-boot-wallpaper\] \.loading-wrap \{ visibility: hidden; \}/)
 assert.match(dashboard, /rememberBootWallpaper\(url, mask\)/)
