@@ -109,6 +109,10 @@ func (a *UserApi) UpdatePasssword(c *gin.Context) {
 			return
 		}
 	}
+	if params.NewPassword == cmn.DefaultAdminPassword {
+		apiReturn.Error(c, "新密码不能是默认密码")
+		return
+	}
 	hash, err := cmn.HashPassword(params.NewPassword)
 	if err != nil {
 		apiReturn.Error(c, err.Error())

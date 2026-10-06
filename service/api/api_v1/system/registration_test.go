@@ -31,6 +31,11 @@ func registrationDB(t *testing.T) *gorm.DB {
 	if err := database.EnsureDefaultSystemSettings(db); err != nil {
 		t.Fatal(err)
 	}
+	// Fresh installs keep registration closed; these tests exercise it open.
+	if err := db.Model(&models.SystemSetting{}).Where("config_name = ?", "system_application").
+		Update("config_value", `{"openRegister":true,"loginCaptcha":false,"webSiteUrl":""}`).Error; err != nil {
+		t.Fatal(err)
+	}
 	oldDB, oldModelsDB, oldSettings := global.Db, models.Db, global.SystemSetting
 	oldUserTokens := global.UserToken
 	global.UserToken = cache.NewGoCache[models.User](time.Hour, 0)

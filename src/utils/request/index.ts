@@ -6,6 +6,7 @@ import { t } from '@/locales'
 import { useAppStore, useAuthStore } from '@/store'
 import { router } from '@/router'
 import { getRuntime } from '@/runtime'
+import { passwordChangeRequired } from '@/runtime/passwordChange'
 
 let loginMessageShow = false
 let lastNetworkErrorNoticeAt = 0
@@ -125,6 +126,12 @@ function http<T = any>(options: HttpOption, sessionRetry = false): Promise<Respo
         }
         router.push({ path: '/login' })
       }
+      return res.data
+    }
+
+    if (res.data.code === 1010) {
+      // The guard dialog takes over; the caller sees a normal business error.
+      passwordChangeRequired.value = true
       return res.data
     }
 

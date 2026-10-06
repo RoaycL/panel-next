@@ -36,10 +36,10 @@ func TestEnsureDefaultSystemSettingsIsIdempotent(t *testing.T) {
 	if err := json.Unmarshal([]byte(settings[1].ConfigValue), &application); err != nil {
 		t.Fatalf("invalid application setting JSON: %v", err)
 	}
-	if application["loginCaptcha"] != false || application["openRegister"] != true {
+	if application["loginCaptcha"] != false || application["openRegister"] != false {
 		t.Fatalf("unexpected application defaults: %#v", application)
 	}
-	if err := db.Model(&models.SystemSetting{}).Where("config_name = ?", "system_application").Update("config_value", `{"openRegister":false,"custom":"preserve"}`).Error; err != nil {
+	if err := db.Model(&models.SystemSetting{}).Where("config_name = ?", "system_application").Update("config_value", `{"openRegister":true,"custom":"preserve"}`).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := EnsureDefaultSystemSettings(db); err != nil {
@@ -49,7 +49,7 @@ func TestEnsureDefaultSystemSettingsIsIdempotent(t *testing.T) {
 	if err := db.First(&existing, "config_name = ?", "system_application").Error; err != nil {
 		t.Fatal(err)
 	}
-	if existing.ConfigValue != `{"openRegister":false,"custom":"preserve"}` {
+	if existing.ConfigValue != `{"openRegister":true,"custom":"preserve"}` {
 		t.Fatal("upgrade changed existing registration policy")
 	}
 }
