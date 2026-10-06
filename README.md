@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-2ea44f.svg)](./LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/RoaycL/panel-next?style=flat&logo=github)](https://github.com/RoaycL/panel-next)
-[![Version](https://img.shields.io/badge/testing-v0.0.1-orange.svg)](https://github.com/RoaycL/panel-next/releases)
+[![Version](https://img.shields.io/github/v/release/RoaycL/panel-next?include_prereleases&label=testing&color=orange)](https://github.com/RoaycL/panel-next/releases)
 
 [功能特性](#-功能特性) • [快速开始](#-快速开始) • [Chrome 扩展安装](#-chrome-扩展安装) • [系统架构](#-系统架构) • [开发指南](#-本地开发) • [开源协议](#-开源协议)
 
@@ -83,9 +83,11 @@ services:
     container_name: panel-next
     restart: always
     ports:
-      - "3003:3003"
+      - "3002:3002"
     volumes:
-      - ./data:/app/data
+      - ./conf:/app/conf          # conf.ini，首次启动自动生成
+      - ./uploads:/app/uploads    # 上传的图标与壁纸
+      - ./database:/app/database  # SQLite 数据库
     environment:
       - TZ=Asia/Shanghai
 ```
@@ -96,8 +98,9 @@ services:
 docker compose up -d
 ```
 
-3. 浏览器访问：`http://<你的服务器IP>:3003`（首次安装默认管理员账号：`admin`，默认密码：`admin123`，请首次登录后立即修改密码，并在对外开放前启用 HTTPS）。
-4. 登录页提供「注册新账号」，只需用户名与密码，昵称可选，不需要邮箱。新安装默认开放注册，管理员可在「站点设置 → 账号与注册」关闭。升级已有数据不会重置账号、密码或注册开关。
+3. 浏览器访问：`http://<你的服务器IP>:3002`。首次安装的管理员账号为 `admin`，初始密码为 `admin123`；登录后必须先修改密码才能继续使用。对外开放前请启用 HTTPS。
+4. Docker 首次启动会在 `conf/conf.ini` 生成配置，默认使用 SQLite（数据在 `database/`）。如需 PostgreSQL 或 MySQL，修改 `conf.ini` 中的 `database_drive` 与对应连接信息后重启容器。
+5. 新安装默认**关闭**注册。需要多人使用时，管理员可在「站点设置 → 账号与注册」开启；开启后登录页提供「注册新账号」，只需用户名与密码。升级已有数据不会重置账号、密码或注册开关。
 
 详细规则、注册接口与旧账号迁移见 [账号体系说明](doc/accounts.md)。
 
@@ -112,7 +115,7 @@ Panel Next 扩展将彻底接管浏览器的新标签页，提供如同原生桌
 3. 打开 Chrome 浏览器，访问 `chrome://extensions/`；
 4. 开启右上角的 **「开发者模式 (Developer mode)」**；
 5. 点击左上角的 **「加载已解压的扩展程序 (Load unpacked)」**，选择刚才解压的目录；
-6. 新建一个标签页，即可看到 Panel Next 桌面；点击左侧个人中心，输入您的服务端地址（例如 `http://192.168.1.100:3003`）即可完成绑定并同步分组与书签。扩展样式和小组件显示偏好在扩展内独立设置。
+6. 新建一个标签页，即可看到 Panel Next 桌面；点击左侧个人中心，输入您的服务端地址（例如 `http://192.168.1.100:3002`）即可完成绑定并同步分组与书签。扩展样式和小组件显示偏好在扩展内独立设置。
 
 ---
 
@@ -141,7 +144,6 @@ flowchart TD
 
     subgraph Storage["数据存储层"]
         Postgres["PostgreSQL / MySQL / SQLite"]
-        DockerSock["Docker Engine API"]
     end
 
     WebClient --> Core
@@ -152,7 +154,6 @@ flowchart TD
     APIRouter --> Proxies
     SessionMgr --> Postgres
     SyncEngine --> Postgres
-    APIRouter --> DockerSock
 ```
 
 ---

@@ -40,10 +40,11 @@ COPY --from=web_image /build/dist /app/web
 COPY --from=server_image /build/panel-next /app/panel-next
 COPY ./LICENSE /app/LICENSE
 
-EXPOSE 3002 3003
+EXPOSE 3002
 
+# conf/conf.ini is generated on first start (SQLite by default), so a mounted
+# conf/ volume is filled instead of being shadowed by a build-time file.
 RUN apk add --no-cache bash ca-certificates su-exec tzdata \
-    && chmod +x ./panel-next \
-    && ./panel-next -config
+    && chmod +x ./panel-next
 
 CMD ./panel-next
