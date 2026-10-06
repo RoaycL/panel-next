@@ -27,6 +27,7 @@
     "1005": "Currently no permission to operate",
     "1006": "Account does not exist",
     "1007": "Old password error",
+    "1010": "Change the default password first",
     "1200": "database error",
     "1201": "Please keep at least one",
     "1202": "Data record not found",
@@ -295,6 +296,18 @@
     "verify": "Verify",
     "warning": "Warning",
     "yes": "Yes"
+  },
+  "defaultPassword": {
+    "confirm": "Confirm new password",
+    "current": "Current password",
+    "done": "Password changed. Sign in with the new password.",
+    "hint": "This account still uses the default password admin123. Change it to continue; you will sign in again afterwards.",
+    "logout": "Sign out",
+    "mismatch": "The new passwords do not match",
+    "new": "New password",
+    "same": "The new password cannot be the default password",
+    "submit": "Change password",
+    "title": "Change the default password"
   },
   "deskModule": {
     "clock": {

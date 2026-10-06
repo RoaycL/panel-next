@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strings"
 	"panel-next/global"
 	"panel-next/lib/cmn"
 	"panel-next/lib/iniConfig"
@@ -82,6 +83,9 @@ func Conf(defaultConfig map[string]map[string]string) (config *iniConfig.IniConf
 		// docker 运行模式，生成配置文件
 		if global.ISDOCKER != "" {
 			cmn.AssetsTakeFileToPath("conf.example.ini", "conf/conf.ini")
+			if err := useSQLiteByDefault("conf/conf.ini"); err != nil {
+				global.Logger.Errorln("无法将 Docker 默认数据库设置为 sqlite:", err)
+			}
 			config = iniConfig.NewIniConfig("conf/conf.ini") // 读取配置
 			config.Default = defaultConfig
 		} else {
@@ -105,4 +109,16 @@ func CreateConfExample(confName string, targetName string) (err error) {
 	}
 
 	return nil
+}
+
+// useSQLiteByDefault makes a freshly generated Docker config start without an
+// external database; the example file defaults to PostgreSQL, which a plain
+// `docker run` does not provide. Existing configs are never touched.
+func useSQLiteByDefault(path string) error {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	updated := strings.Replace(string(content), "\ndatabase_drive=postgres\n", "\ndatabase_drive=sqlite\n", 1)
+	return os.WriteFile(path, []byte(updated), 0o644)
 }

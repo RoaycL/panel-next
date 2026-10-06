@@ -243,7 +243,8 @@ func NotFoundAndCreateUser(db *gorm.DB) error {
 
 func EnsureDefaultSystemSettings(db *gorm.DB) error {
 	application, err := json.Marshal(map[string]any{
-		"openRegister": true,
+		// Registration stays closed until an administrator opens it.
+		"openRegister": false,
 		"loginCaptcha": false,
 		"webSiteUrl":   "",
 	})

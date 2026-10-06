@@ -7,6 +7,7 @@ import (
 
 	"panel-next/api/api_v1/common/apiReturn"
 	"panel-next/global"
+	"panel-next/lib/cmn"
 	sessionlib "panel-next/lib/session"
 	"panel-next/models"
 
@@ -24,12 +25,14 @@ func LoginInterceptor(c *gin.Context) {
 	if accessToken != "" {
 		deviceErr = authenticateDeviceSession(c, accessToken)
 		if deviceErr == nil {
+			requirePasswordChange(c)
 			return
 		}
 	}
 
 	legacyActive := legacyCompatibilityActive()
 	if cToken != "" && legacyActive && authenticateLegacyToken(c, cToken) {
+		requirePasswordChange(c)
 		return
 	}
 
@@ -45,6 +48,33 @@ func LoginInterceptor(c *gin.Context) {
 	default:
 		apiReturn.ErrorByCode(c, 1000)
 	}
+	c.Abort()
+}
+
+// Routes an account still on the factory password may use: enough to read
+// who it is, change the password and sign out.
+var passwordChangeRoutes = map[string]struct{}{
+	"/api/user/getInfo":        {},
+	"/api/user/updatePassword": {},
+	"/api/logout":              {},
+	"/api/v1/sessions/upgrade": {},
+}
+
+// requirePasswordChange blocks everything else until the default password is
+// replaced, so a fresh install cannot stay reachable with admin/admin123.
+func requirePasswordChange(c *gin.Context) {
+	value, exists := c.Get("userInfo")
+	if !exists {
+		return
+	}
+	info, ok := value.(models.User)
+	if !ok || !cmn.IsDefaultPassword(info.Password) {
+		return
+	}
+	if _, allowed := passwordChangeRoutes[c.FullPath()]; allowed {
+		return
+	}
+	apiReturn.ErrorByCode(c, 1010)
 	c.Abort()
 }
 

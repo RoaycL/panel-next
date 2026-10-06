@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path"
 	"strings"
 	"time"
 
@@ -129,30 +128,9 @@ func downloadCandidate(ctx context.Context, client *http.Client, target, directo
 	if len(data) == 0 || len(data) > 1<<20 {
 		return nil, fmt.Errorf("图标为空或超过 1 MB")
 	}
-	contentType := http.DetectContentType(data)
-	prefix := strings.ToLower(strings.TrimSpace(string(data[:minLength(len(data), 512)])))
-	isSVG := (strings.HasPrefix(prefix, "<svg") || strings.HasPrefix(prefix, "<?xml")) && strings.Contains(prefix, "<svg")
-	isICO := len(data) >= 4 && data[0] == 0 && data[1] == 0 && data[2] == 1 && data[3] == 0
-	if !strings.HasPrefix(contentType, "image/") && !isSVG && !isICO {
-		return nil, fmt.Errorf("返回的不是图片，可能是登录页或防爬验证页")
-	}
-	parsed, _ := url.Parse(target)
-	ext := strings.ToLower(path.Ext(parsed.Path))
-	switch {
-	case isSVG:
-		ext = ".svg"
-	case isICO:
-		ext = ".ico"
-	case contentType == "image/png":
-		ext = ".png"
-	case contentType == "image/jpeg":
-		ext = ".jpg"
-	case contentType == "image/gif":
-		ext = ".gif"
-	case contentType == "image/webp":
-		ext = ".webp"
-	default:
-		ext = ".img"
+	ext, err := ImageExtension(data)
+	if err != nil {
+		return nil, err
 	}
 	file, err := os.CreateTemp(directory, "icon-*"+ext)
 	if err != nil {
@@ -168,6 +146,35 @@ func downloadCandidate(ctx context.Context, client *http.Client, target, directo
 		return nil, err
 	}
 	return file, nil
+}
+
+// ImageExtension sniffs downloaded bytes and returns the extension to store
+// them under, refusing anything that is not an image (login pages, HTML).
+func ImageExtension(data []byte) (string, error) {
+	if len(data) == 0 {
+		return "", fmt.Errorf("图标为空")
+	}
+	contentType := http.DetectContentType(data)
+	prefix := strings.ToLower(strings.TrimSpace(string(data[:minLength(len(data), 512)])))
+	isSVG := (strings.HasPrefix(prefix, "<svg") || strings.HasPrefix(prefix, "<?xml")) && strings.Contains(prefix, "<svg")
+	isICO := len(data) >= 4 && data[0] == 0 && data[1] == 0 && data[2] == 1 && data[3] == 0
+	switch {
+	case isSVG:
+		return ".svg", nil
+	case isICO:
+		return ".ico", nil
+	case contentType == "image/png":
+		return ".png", nil
+	case contentType == "image/jpeg":
+		return ".jpg", nil
+	case contentType == "image/gif":
+		return ".gif", nil
+	case contentType == "image/webp":
+		return ".webp", nil
+	case strings.HasPrefix(contentType, "image/"):
+		return ".img", nil
+	}
+	return "", fmt.Errorf("返回的不是图片，可能是登录页或防爬验证页")
 }
 
 func minLength(a, b int) int {

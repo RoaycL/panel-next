@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	allowMethods  = "GET, POST, DELETE, OPTIONS"
+	allowMethods  = "GET, POST, PATCH, DELETE, OPTIONS"
 	allowHeaders  = "Accept, Accept-Language, Authorization, Content-Type, Lang, Token, X-Panel-API-Version, X-Requested-With, X-Wallhaven-Api-Key"
 	exposeHeaders = "Content-Disposition, X-Panel-API-Min-Version, X-Panel-API-Version"
 )
@@ -153,7 +153,7 @@ func (p *Policy) headersAllowed(raw string) bool {
 
 func allowedMethod(method string) bool {
 	switch strings.ToUpper(strings.TrimSpace(method)) {
-	case http.MethodGet, http.MethodPost, http.MethodDelete:
+	case http.MethodGet, http.MethodPost, http.MethodPatch, http.MethodDelete:
 		return true
 	default:
 		return false

@@ -31,6 +31,9 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Lint
+        run: pnpm run lint
+
       - name: Validate version
         run: node scripts/validate-version.mjs
 

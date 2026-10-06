@@ -5,6 +5,7 @@ import (
 	"errors"
 	"regexp"
 	"strings"
+	"sync"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -45,4 +46,21 @@ func VerifyPassword(hash, password string) bool {
 		return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
 	}
 	return len(hash) == 32 && subtle.ConstantTimeCompare([]byte(hash), []byte(PasswordEncryption(password))) == 1
+}
+
+var defaultPasswordHashes sync.Map
+
+// IsDefaultPassword reports whether a stored hash still matches the factory
+// admin password. bcrypt is slow, so results are memoized per hash: a new hash
+// appears only when the password changes.
+func IsDefaultPassword(hash string) bool {
+	if hash == "" {
+		return false
+	}
+	if cached, ok := defaultPasswordHashes.Load(hash); ok {
+		return cached.(bool)
+	}
+	matches := VerifyPassword(hash, DefaultAdminPassword)
+	defaultPasswordHashes.Store(hash, matches)
+	return matches
 }

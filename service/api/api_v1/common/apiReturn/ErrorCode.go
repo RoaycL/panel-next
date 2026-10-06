@@ -13,6 +13,7 @@ var ErrorCodeMap = map[int]string{
 	1007: "Old password error",                  // 旧密码不正确
 	1008: "Access token expired",                // Access Token 已过期，可尝试刷新
 	1009: "Legacy token compatibility expired",  // 旧 Token 兼容窗口已结束
+	1010: "Change the default password first",   // 仍在使用默认密码，必须先修改
 
 	// 数据类
 	1200: "Database error",           // 数据库错误

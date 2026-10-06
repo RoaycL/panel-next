@@ -48,7 +48,7 @@ assert.deepEqual([...purity.matchAll(/value: '([01]+)'/g)].map(match => match[1]
 assert.match(purity, /value: '001', disabled: !wallhavenApiKey.value/)
 const sorting = gallery.match(/const wallhavenSortingOptions = \[([\s\S]*?)\]/)?.[1]
 assert.ok(sorting)
-for (const [, label] of sorting.matchAll(/label: '([^']+)'/g)) assert.doesNotMatch(label, /[A-Za-z]/, 'Sorting labels must be Chinese only')
+for (const [, label] of sorting.matchAll(/label: '([^']+)'/g)) assert.doesNotMatch(label, /[A-Z]/i, 'Sorting labels must be Chinese only')
 assert.match(gallery, /grid-template-columns: repeat\(auto-fill, minmax\(200px, 1fr\)\)/)
 assert.match(gallery, /aspect-ratio: 16 \/ 10/)
 console.log('Wallpaper loading, fallback, latest-selection races and gallery URL resolution passed.')

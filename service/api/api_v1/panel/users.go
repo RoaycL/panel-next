@@ -41,6 +41,10 @@ func (a UsersApi) Create(c *gin.Context) {
 		apiReturn.Error(c, err.Error())
 		return
 	}
+	if !validRole(param.Role) {
+		apiReturn.ErrorParamFomat(c, "role")
+		return
+	}
 	hash, err := cmn.HashPassword(param.Password)
 	if err != nil {
 		apiReturn.Error(c, err.Error())
@@ -82,6 +86,11 @@ func (a UsersApi) Create(c *gin.Context) {
 	}
 
 	apiReturn.SuccessData(c, gin.H{"userId": userInfo.ID})
+}
+
+// validRole accepts the two roles the panel knows: 1 admin, 2 user.
+func validRole(role int) bool {
+	return role == 1 || role == 2
 }
 
 func (a UsersApi) Deletes(c *gin.Context) {
@@ -187,6 +196,22 @@ func (a UsersApi) Update(c *gin.Context) {
 			return
 		}
 	}
+	if !validRole(param.Role) {
+		apiReturn.ErrorParamFomat(c, "role")
+		return
+	}
+	if previous.Role == 1 && param.Role != 1 {
+		// Demoting the last administrator would lock everyone out of settings.
+		var admins int64
+		if err := global.Db.Model(&models.User{}).Where("role = ? AND id <> ?", 1, previous.ID).Count(&admins).Error; err != nil {
+			apiReturn.ErrorDatabase(c, err.Error())
+			return
+		}
+		if admins == 0 {
+			apiReturn.ErrorByCode(c, 1201)
+			return
+		}
+	}
 	if len(param.Username) < 3 {
 		// 账号不得少于3个字符
 		apiReturn.ErrorParamFomat(c, "The account must be no less than 3 characters long")
@@ -208,17 +233,10 @@ func (a UsersApi) Update(c *gin.Context) {
 
 	mUser := models.User{}
 
-	userInfo := models.User{}
 	// 验证账号是否存在
-	if user, err := mUser.CheckUsernameExist(param.Username); err != nil {
-		userInfo = user
-		if user.ID != param.ID {
-			apiReturn.ErrorByCode(c, 1006)
-			// apiReturn.Error(c, global.Lang.Get("register.mail_exist"))
-			return
-		}
-	} else {
-		userInfo = user
+	if user, err := mUser.CheckUsernameExist(param.Username); err != nil && user.ID != param.ID {
+		apiReturn.ErrorByCode(c, 1006)
+		return
 	}
 
 	param.Token = "" // 修改资料就重置token
@@ -231,7 +249,9 @@ func (a UsersApi) Update(c *gin.Context) {
 		_, _ = sessionlib.NewManager(global.Db).RevokeAll(c.Request.Context(), param.ID)
 	}
 	// global.Logger.Debug("修改资料清空token", userInfo.Token)
-	global.UserToken.Delete(userInfo.Token) // 更新用户信息
+	// The cached legacy token belongs to the stored row; the username lookup
+	// above finds nobody when the username changes.
+	global.UserToken.Delete(previous.Token)
 	// 返回token等基本信息
 	param.Password = ""
 	param.Token = ""

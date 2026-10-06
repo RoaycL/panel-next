@@ -16,6 +16,7 @@ import { themeRegistry } from '@/themes/registry'
 import { extensionLoginVisible } from '@/runtime/extensionLogin'
 import { packageRevision } from '@/packages/manager'
 import ExtensionUpdateNotice from '@/components/common/ExtensionUpdateNotice.vue'
+import DefaultPasswordGuard from '@/components/common/DefaultPasswordGuard.vue'
 
 const LoginForm = defineAsyncComponent(() => import('@/views/login/index.vue'))
 const extensionDashboardRevision = ref(0)
@@ -69,6 +70,7 @@ watch(() => providerView.value.cssVariables, (variables) => {
         <NaiveProvider>
           <RouterView :key="extensionDashboardRevision" />
           <ExtensionUpdateNotice v-if="runtime.kind === 'extension'" />
+          <DefaultPasswordGuard v-if="overlaysReady" />
           <NModal
             v-if="runtime.kind === 'extension' && overlaysReady"
             v-model:show="extensionLoginVisible"

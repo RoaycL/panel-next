@@ -7,7 +7,12 @@ const auth = { token: 'device', userInfo: { id: 7 } }
 const app = { theme: 'dark', language: 'zh-CN', setTheme(value) { this.theme = value }, setLanguage(value) { this.language = value }, $subscribe() {} }
 const panel = { networkMode: 2, panelConfig: { maxWidthUnit: '%', backgroundImageSrc: '/day.jpg' }, setNetworkMode(value) { this.networkMode = value }, applyPanelConfig(value) { this.panelConfig = structuredClone(value) }, $subscribe() {} }
 const defaults = { clock: true, search: true, searchHistory: ['private query'], pendingWidgetCleanupIds: ['local.cleanup'], pageLayouts: {}, contentLayout: { schemaVersion: 1, widgets: [] } }
-let revision = '1', cloud = { maxWidthUnit: '%', backgroundImageSrc: '/day.jpg' }, posts = 0, offline = false, origin = 'https://panel.test', hook
+let revision = '1'
+let cloud = { maxWidthUnit: '%', backgroundImageSrc: '/day.jpg' }
+let posts = 0
+let offline = false
+let origin = 'https://panel.test'
+let hook
 const runtime = { kind: 'extension', getServerOrigin: () => origin, storage: { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value), removeItem: key => values.delete(key), flush: async () => {} } }
 const fixture = {
   ref: value => ({ value }), getRuntime: () => runtime, useAuthStore: () => auth, useAppStore: () => app, usePanelState: () => panel,

@@ -68,7 +68,8 @@ func InitRouters(addr string) error {
 	})
 
 	sourcePath := global.Config.GetValueString("base", "source_path")
-	router.Static(sourcePath[1:], sourcePath)
+	uploads := router.Group(sourcePath[1:], uploadedFileHeaders)
+	uploads.Static("/", sourcePath)
 
 	// OPS-05: 在线检查新版本（代理但不执行升级）
 	router.GET("/api/v1/openapi/check-update", func(c *gin.Context) {
@@ -97,6 +98,15 @@ func InitRouters(addr string) error {
 
 	global.Logger.Info("Panel Next is Started.  Listening and serving HTTP on ", addr)
 	return router.Run(addr)
+}
+
+// uploadedFileHeaders stops user uploads (SVG in particular) from running
+// script on the panel's origin when opened directly. <img> rendering is
+// unaffected by the document policy of the image response.
+func uploadedFileHeaders(c *gin.Context) {
+	c.Header("Content-Security-Policy", "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox")
+	c.Header("X-Content-Type-Options", "nosniff")
+	c.Next()
 }
 
 const clearPageHTML = `<!DOCTYPE html>

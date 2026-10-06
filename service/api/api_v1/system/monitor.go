@@ -4,6 +4,7 @@ import (
 	"strings"
 	"panel-next/api/api_v1/common/apiData/systemApiStructs"
 	"panel-next/api/api_v1/common/apiReturn"
+	"panel-next/api/api_v1/common/base"
 	"panel-next/global"
 	"panel-next/lib/monitor"
 	"time"
@@ -66,6 +67,13 @@ func (a *MonitorApi) GetDiskStateByPath(c *gin.Context) {
 		return
 	}
 
+	// Visitors may only read real mount points: arbitrary paths would let them
+	// probe the file system and grow the cache with one entry per path.
+	if base.GetCurrentVisitMode(c) == base.VISIT_MODE_PUBLIC && !isMountpoint(path) {
+		apiReturn.ErrorParamFomat(c, "path")
+		return
+	}
+
 	cacheDiskName := global.SystemMonitor_DISK_INFO + path
 
 	if v, ok := global.SystemMonitor.Get(cacheDiskName); ok {
@@ -92,4 +100,17 @@ func (a *MonitorApi) GetDiskMountpoints(c *gin.Context) {
 	} else {
 		apiReturn.SuccessData(c, list)
 	}
+}
+
+func isMountpoint(path string) bool {
+	partitions, err := monitor.GetDiskMountpoints()
+	if err != nil {
+		return false
+	}
+	for _, partition := range partitions {
+		if partition.Mountpoint == path {
+			return true
+		}
+	}
+	return false
 }

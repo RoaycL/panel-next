@@ -177,23 +177,22 @@ func (a *FileApi) Deletes(c *gin.Context) {
 		return
 	}
 
-	global.Db.Transaction(func(tx *gorm.DB) error {
-		files := []models.File{}
-
-		if err := tx.Order("created_at desc").Find(&files, "user_id=? AND id in ?", userInfo.ID, req.Ids).Error; err != nil {
+	files := []models.File{}
+	err := global.Db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Find(&files, "user_id=? AND id in ?", userInfo.ID, req.Ids).Error; err != nil {
 			return err
 		}
-
-		for _, v := range files {
-			os.Remove(v.Src)
-		}
-
-		if err := tx.Order("created_at desc").Delete(&files, "user_id=? AND id in ?", userInfo.ID, req.Ids).Error; err != nil {
-			return err
-		}
-
-		return nil
+		return tx.Delete(&models.File{}, "user_id=? AND id in ?", userInfo.ID, req.Ids).Error
 	})
+	if err != nil {
+		apiReturn.ErrorDatabase(c, err.Error())
+		return
+	}
+	// Remove files only after the records are gone, so a failed delete never
+	// leaves rows pointing at missing files.
+	for _, v := range files {
+		os.Remove(v.Src)
+	}
 
 	apiReturn.Success(c)
 

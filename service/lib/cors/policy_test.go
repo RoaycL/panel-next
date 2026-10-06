@@ -156,3 +156,18 @@ func corsRequest(handler http.Handler, method, origin, requestedMethod, requeste
 	handler.ServeHTTP(response, request)
 	return response
 }
+
+func TestPolicyAllowsOpenAPIPatchPreflight(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	policy, err := NewPolicy("https://panel.example.com", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := gin.New()
+	router.Use(policy.Handler())
+	router.OPTIONS("/probe", func(c *gin.Context) {})
+	response := corsRequest(router, http.MethodOptions, "https://panel.example.com", http.MethodPatch, "Authorization, Content-Type")
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("PATCH preflight for the OpenAPI was refused: %d", response.Code)
+	}
+}

@@ -6,6 +6,7 @@ import (
 
 	"panel-next/api/api_v1/common/apiReturn"
 	"panel-next/lib/syncstate"
+	"panel-next/models"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
@@ -47,4 +48,15 @@ func returnSyncMutationError(c *gin.Context, err error) {
 		return
 	}
 	apiReturn.ErrorDatabase(c, err.Error())
+}
+
+// ItemChangePayload is the sync journal payload for an item written outside
+// this package (the OpenAPI), so every writer publishes the same shape.
+func ItemChangePayload(item models.ItemIcon) map[string]any {
+	return itemChangePayload(item)
+}
+
+// GroupChangePayload is the group counterpart of ItemChangePayload.
+func GroupChangePayload(group models.ItemIconGroup) map[string]any {
+	return groupChangePayload(group)
 }

@@ -1,24 +1,30 @@
 package system
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"strconv"
+	"time"
+
 	"panel-next/api/api_v1/common/apiReturn"
 	"panel-next/api/api_v1/common/base"
+	"panel-next/api/api_v1/panel"
 	"panel-next/global"
 	"panel-next/lib/cmn"
+	"panel-next/lib/safehttp"
+	"panel-next/lib/siteFavicon"
+	"panel-next/lib/syncstate"
 	"panel-next/models"
 	"panel-next/models/datatype"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
+	"gorm.io/gorm"
 )
 
 type OpenAPIApi struct{}
@@ -55,21 +61,22 @@ func (a *OpenAPIApi) CreateItem(c *gin.Context) {
 		apiReturn.ErrorParamFomat(c, "title and url")
 		return
 	}
+	if req.ItemIconGroupId <= 0 {
+		apiReturn.ErrorParamFomat(c, "itemIconGroupId")
+		return
+	}
 
-	iconJson, _ := json.Marshal(req.Icon)
 	if req.RemoteIconUrl != "" {
 		// API-03: 下载远程图标到本地
-		configUpload := global.Config.GetValueString("base", "source_path")
-		savePath := configUpload + "/openapi/"
-		if isExist, _ := cmn.PathExists(savePath); !isExist {
-			os.MkdirAll(savePath, 0o755)
+		localPath, err := downloadRemoteIcon(c.Request.Context(), userInfo.ID, req.RemoteIconUrl)
+		if err != nil {
+			apiReturn.Error(c, "remote icon: "+err.Error())
+			return
 		}
-		if localPath, err := downloadRemoteIcon(req.RemoteIconUrl, savePath); err == nil {
-			req.Icon.Src = localPath[1:]
-			req.Icon.ItemType = 2
-			iconJson, _ = json.Marshal(req.Icon)
-		}
+		req.Icon.Src = localPath[1:]
+		req.Icon.ItemType = 2
 	}
+	iconJson, _ := json.Marshal(req.Icon)
 
 	item := models.ItemIcon{
 		Title:           req.Title,
@@ -80,13 +87,25 @@ func (a *OpenAPIApi) CreateItem(c *gin.Context) {
 		ItemIconGroupId: req.ItemIconGroupId,
 		IconJson:        string(iconJson),
 		UserId:          userInfo.ID,
+		Sort:            9999,
 	}
-	if err := global.Db.Create(&item).Error; err != nil {
+	err := global.Db.WithContext(c.Request.Context()).Transaction(func(tx *gorm.DB) error {
+		if err := ensureOwnGroup(tx, userInfo.ID, item.ItemIconGroupId); err != nil {
+			return err
+		}
+		if err := tx.Create(&item).Error; err != nil {
+			return err
+		}
+		return journalItem(tx, &item)
+	})
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		apiReturn.ErrorDataNotFound(c)
+		return
+	}
+	if err != nil {
 		apiReturn.ErrorDatabase(c, err.Error())
 		return
 	}
-	// 反序列化 icon 供响应
-	json.Unmarshal([]byte(item.IconJson), &item.Icon)
 	apiReturn.SuccessData(c, item)
 }
 
@@ -119,52 +138,75 @@ func (a *OpenAPIApi) UpdateItem(c *gin.Context) {
 		return
 	}
 
-	var existing models.ItemIcon
-	if err := global.Db.First(&existing, "id = ? AND user_id = ?", id, userInfo.ID).Error; err != nil {
-		apiReturn.ErrorDataNotFound(c)
-		return
-	}
-
-	req := make(map[string]interface{})
+	// Typed pointers keep patch semantics (absent = unchanged) and reject
+	// values of the wrong type before they reach the database.
+	req := struct {
+		Title           *string                    `json:"title"`
+		Url             *string                    `json:"url"`
+		LanUrl          *string                    `json:"lanUrl"`
+		Description     *string                    `json:"description"`
+		OpenMethod      *int                       `json:"openMethod"`
+		ItemIconGroupId *int                       `json:"itemIconGroupId"`
+		Icon            *datatype.ItemIconIconInfo `json:"icon"`
+	}{}
 	if err := c.ShouldBindBodyWith(&req, binding.JSON); err != nil {
 		apiReturn.ErrorParamFomat(c, err.Error())
 		return
 	}
 
 	updates := make(map[string]interface{})
-	if v, ok := req["title"]; ok {
-		updates["title"] = v
+	if req.Title != nil {
+		updates["title"] = *req.Title
 	}
-	if v, ok := req["url"]; ok {
-		updates["url"] = v
+	if req.Url != nil {
+		updates["url"] = *req.Url
 	}
-	if v, ok := req["lanUrl"]; ok {
-		updates["lan_url"] = v
+	if req.LanUrl != nil {
+		updates["lan_url"] = *req.LanUrl
 	}
-	if v, ok := req["description"]; ok {
-		updates["description"] = v
+	if req.Description != nil {
+		updates["description"] = *req.Description
 	}
-	if v, ok := req["openMethod"]; ok {
-		updates["open_method"] = v
+	if req.OpenMethod != nil {
+		updates["open_method"] = *req.OpenMethod
 	}
-	if v, ok := req["itemIconGroupId"]; ok {
-		updates["item_icon_group_id"] = v
+	if req.ItemIconGroupId != nil {
+		updates["item_icon_group_id"] = *req.ItemIconGroupId
 	}
-	if v, ok := req["icon"]; ok {
-		iconJson, _ := json.Marshal(v)
+	if req.Icon != nil {
+		iconJson, _ := json.Marshal(req.Icon)
 		updates["icon_json"] = string(iconJson)
 	}
 
-	if len(updates) == 0 {
-		apiReturn.SuccessData(c, existing)
+	var existing models.ItemIcon
+	err = global.Db.WithContext(c.Request.Context()).Transaction(func(tx *gorm.DB) error {
+		if err := tx.First(&existing, "id = ? AND user_id = ?", id, userInfo.ID).Error; err != nil {
+			return err
+		}
+		if len(updates) == 0 {
+			return nil
+		}
+		if req.ItemIconGroupId != nil {
+			if err := ensureOwnGroup(tx, userInfo.ID, *req.ItemIconGroupId); err != nil {
+				return err
+			}
+		}
+		if err := tx.Model(&models.ItemIcon{}).Where("id = ? AND user_id = ?", id, userInfo.ID).Updates(updates).Error; err != nil {
+			return err
+		}
+		if err := tx.First(&existing, "id = ? AND user_id = ?", id, userInfo.ID).Error; err != nil {
+			return err
+		}
+		return journalItem(tx, &existing)
+	})
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		apiReturn.ErrorDataNotFound(c)
 		return
 	}
-
-	if err := global.Db.Model(&existing).Where("id = ? AND user_id = ?", id, userInfo.ID).Updates(updates).Error; err != nil {
+	if err != nil {
 		apiReturn.ErrorDatabase(c, err.Error())
 		return
 	}
-	global.Db.First(&existing, id)
 	json.Unmarshal([]byte(existing.IconJson), &existing.Icon)
 	apiReturn.SuccessData(c, existing)
 }
@@ -189,11 +231,50 @@ func (a *OpenAPIApi) CreateGroup(c *gin.Context) {
 		Icon:   req.Icon,
 		UserId: userInfo.ID,
 	}
-	if err := global.Db.Create(&group).Error; err != nil {
+	err := global.Db.WithContext(c.Request.Context()).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&group).Error; err != nil {
+			return err
+		}
+		_, err := syncstate.ContinueMutationTx(tx, syncstate.AppendRequest{
+			UserID: userInfo.ID, ResourceType: models.SyncResourceGroup,
+			ResourceID: strconv.FormatUint(uint64(group.ID), 10), Operation: models.SyncOperationUpsert,
+		}, func(revision int64) (any, error) {
+			if err := tx.Model(&models.ItemIconGroup{}).Where("id = ?", group.ID).Update("revision", revision).Error; err != nil {
+				return nil, err
+			}
+			group.Revision = revision
+			return panel.GroupChangePayload(group), nil
+		})
+		return err
+	})
+	if err != nil {
 		apiReturn.ErrorDatabase(c, err.Error())
 		return
 	}
 	apiReturn.SuccessData(c, group)
+}
+
+// ensureOwnGroup rejects group ids that belong to another account.
+func ensureOwnGroup(tx *gorm.DB, userID uint, groupID int) error {
+	var group models.ItemIconGroup
+	return tx.Select("id").First(&group, "id = ? AND user_id = ?", groupID, userID).Error
+}
+
+// journalItem records an OpenAPI item write in the sync log so other devices
+// pick it up through incremental sync, like edits made in the panel.
+func journalItem(tx *gorm.DB, item *models.ItemIcon) error {
+	_, err := syncstate.ContinueMutationTx(tx, syncstate.AppendRequest{
+		UserID: item.UserId, ResourceType: models.SyncResourceItem,
+		ResourceID: strconv.FormatUint(uint64(item.ID), 10), Operation: models.SyncOperationUpsert,
+	}, func(revision int64) (any, error) {
+		if err := tx.Model(&models.ItemIcon{}).Where("id = ?", item.ID).Update("revision", revision).Error; err != nil {
+			return nil, err
+		}
+		item.Revision = revision
+		_ = json.Unmarshal([]byte(item.IconJson), &item.Icon)
+		return panel.ItemChangePayload(*item), nil
+	})
+	return err
 }
 
 // API-02: 查询分组列表
@@ -223,7 +304,7 @@ func (a *OpenAPIApi) GetGroupDetail(c *gin.Context) {
 	}
 	// 包含分组下的卡片
 	var items []models.ItemIcon
-	global.Db.Where("item_icon_group_id = ?", id).Order("sort asc").Find(&items)
+	global.Db.Where("item_icon_group_id = ? AND user_id = ?", id, userInfo.ID).Order("sort asc").Find(&items)
 	for i := range items {
 		json.Unmarshal([]byte(items[i].IconJson), &items[i].Icon)
 	}
@@ -233,22 +314,20 @@ func (a *OpenAPIApi) GetGroupDetail(c *gin.Context) {
 	})
 }
 
-// downloadRemoteIcon 下载远程图标到本地（API-03），含 SSRF 防护。
-func downloadRemoteIcon(iconURL, savePath string) (string, error) {
-	parsed, err := url.Parse(iconURL)
-	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-		return "", fmt.Errorf("invalid icon URL")
+// downloadRemoteIcon 下载远程图标到本地（API-03）。只连接公网地址（DNS 解析与
+// 每次跳转后都会校验），只保存真正的图片，并登记到文件表便于清理。
+func downloadRemoteIcon(ctx context.Context, userID uint, iconURL string) (string, error) {
+	if _, err := safehttp.ValidateURL(iconURL); err != nil {
+		return "", err
 	}
-	// 拒绝内网地址
-	host := parsed.Hostname()
-	if ip := net.ParseIP(host); ip != nil {
-		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() {
-			return "", fmt.Errorf("icon URL not allowed")
-		}
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, iconURL, nil)
+	if err != nil {
+		return "", err
 	}
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Get(iconURL)
+	request.Header.Set("User-Agent", "Mozilla/5.0 PanelNext/1.0")
+	resp, err := remoteIconClient.Do(request)
 	if err != nil {
 		return "", err
 	}
@@ -256,24 +335,33 @@ func downloadRemoteIcon(iconURL, savePath string) (string, error) {
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("icon download returned %d", resp.StatusCode)
 	}
-
-	fileName := cmn.Md5(iconURL+time.Now().String()) + ".png"
-	filepath := savePath + fileName
-
-	out, err := os.Create(filepath)
+	const maxIconBytes = 2 << 20
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxIconBytes+1))
 	if err != nil {
 		return "", err
 	}
-	defer out.Close()
-
-	written, err := io.Copy(out, io.LimitReader(resp.Body, 2<<20)) // 2MB limit
+	if len(data) > maxIconBytes {
+		return "", fmt.Errorf("icon larger than 2 MB")
+	}
+	ext, err := siteFavicon.ImageExtension(data)
 	if err != nil {
-		os.Remove(filepath)
 		return "", err
 	}
-	if written == 0 {
+
+	savePath := global.Config.GetValueString("base", "source_path") + "/openapi/"
+	if err := os.MkdirAll(savePath, 0o755); err != nil {
+		return "", err
+	}
+	filepath := savePath + cmn.Md5(iconURL+time.Now().String()) + ext
+	if err := os.WriteFile(filepath, data, 0o644); err != nil {
+		return "", err
+	}
+	mFile := models.File{}
+	if _, err := mFile.AddFileWithType(userID, iconURL, ext, filepath, "icon"); err != nil {
 		os.Remove(filepath)
-		return "", fmt.Errorf("empty icon response")
+		return "", err
 	}
 	return filepath, nil
 }
+
+var remoteIconClient = safehttp.NewClient(10 * time.Second)
