@@ -1017,7 +1017,8 @@ async function loadDirectFromApi() {
         id: g.id ?? 0,
         title: g.title ?? '',
         icon: g.icon,
-        sort: g.sort ?? 0,
+        // Missing sort stays missing so ordering puts it last, as in bootstrap.
+        sort: g.sort,
         hoverStatus: false,
         items: itemsRes.data,
       } satisfies DashboardGroup

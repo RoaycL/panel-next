@@ -26,6 +26,14 @@ await new Promise(resolve => setImmediate(resolve))
 assert.equal(coldBroken.displayed.value, '', 'A failed first wallpaper is withdrawn')
 assert.match(coldBroken.error.value, /加载失败/)
 globalThis.wallpaperWatches.length = 0
+const raced = useLoadedWallpaper({ value: 'stale-local' })
+const racedNext = globalThis.wallpaperWatches[0]('synced-offline')
+images.get('stale-local').onerror()
+images.get('synced-offline').onerror()
+await racedNext
+await new Promise(resolve => setImmediate(resolve))
+assert.equal(raced.displayed.value, '', 'An unverified optimistic wallpaper is never kept after the latest load fails')
+globalThis.wallpaperWatches.length = 0
 const state = useLoadedWallpaper({ value: 'old' })
 images.get('old').onload()
 await new Promise(resolve => setImmediate(resolve))

@@ -17,7 +17,7 @@ function extensionManifestPlugin(): PluginOption {
       const manifest = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), 'extension/manifest.json'), 'utf8'))
       manifest.version = version
       manifest.version_name = `${version} ${versionPolicy.label}`
-      for (const fileName of ['service-worker.js', 'update-check.mjs']) {
+      for (const fileName of ['service-worker.js', 'update-check.mjs', 'boot-wallpaper.js']) {
         this.emitFile({ type: 'asset', fileName, source: fs.readFileSync(path.resolve(process.cwd(), 'extension', fileName), 'utf8') })
       }
       this.emitFile({

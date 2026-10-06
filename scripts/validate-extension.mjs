@@ -35,6 +35,7 @@ assert(manifest.host_permissions?.includes('https://api.github.com/*'), 'update 
 assert(manifest.background?.service_worker === 'service-worker.js' && manifest.background?.type === 'module', 'update checks require a module service worker')
 for (const file of ['service-worker.js', 'update-check.mjs'])
   assert(fs.existsSync(path.join(root, file)), `update worker file missing: ${file}`)
+assert(fs.existsSync(path.join(root, 'boot-wallpaper.js')), 'startup wallpaper script missing: boot-wallpaper.js')
 assert(manifest.optional_host_permissions?.includes('https://*/*'), 'extension must declare optional HTTPS host access')
 assert(manifest.optional_host_permissions?.includes('http://*/*'), 'extension must declare optional HTTP host access')
 assert(Number.parseInt(manifest.minimum_chrome_version, 10) >= 96, 'extension requires Chrome 96+ for Promise-based storage and permissions APIs')
