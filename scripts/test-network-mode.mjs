@@ -2,7 +2,8 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import ts from 'typescript'
 
-let loads = false, fetchWorks = false
+let loads = false
+let fetchWorks = false
 class FakeImage { set src(_value) { queueMicrotask(() => loads ? this.onload?.() : this.onerror?.()) } }
 globalThis.networkFixture = { Image: FakeImage, fetch: async () => { if (!fetchWorks) throw new Error('blocked'); return { type: 'opaque' } }, setTimeout: (fn, delay) => delay === 1800 ? setImmediate(fn) : 0, clearTimeout: clearImmediate }
 const source = fs.readFileSync('src/dashboard/core.ts', 'utf8')

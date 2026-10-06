@@ -93,14 +93,17 @@ export async function smartSelectItemUrl(item: Panel.ItemInfo): Promise<string> 
   if (cached === 'wan')
     return item.url
 
-  // Only a successful response or loaded image proves reachability. Fast failures,
-  // blocked private-network requests and login pages must not count as success.
+  // Any HTTP answer from the LAN address proves the host is reachable: a no-cors
+  // response is opaque, so a login or error page counts too, which is what LAN
+  // detection needs. Network errors, blocked private-network requests and the
+  // timeout count as unreachable.
   const probe = (target: string) => new Promise<boolean>((resolve) => {
     const img = new Image()
     const abort = new AbortController()
     let finished = false
+    let timer: ReturnType<typeof setTimeout> | undefined
     const finish = (reachable: boolean) => { if (finished) return; finished = true; clearTimeout(timer); abort.abort(); img.onload = null; img.onerror = null; resolve(reachable) }
-    const timer = setTimeout(() => finish(false), 1800)
+    timer = setTimeout(() => finish(false), 1800)
     img.onload = () => finish(true)
     img.onerror = () => { /* The page probe may work even without a favicon. */ }
     try {

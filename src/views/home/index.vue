@@ -478,8 +478,15 @@ function openPage(openMethod: number, url: string, title?: string) {
   switch (openMethod) {
     case 1:
       // CARD-06: 如果当前页面在 iframe 中，使用父窗口打开
-      if (window.top !== null && window.top !== window.self)
-        window.top!.location.href = url
+      if (window.top !== null && window.top !== window.self) {
+        // Same scheme check as runtime.openUrl: only http(s) targets.
+        try {
+          window.top!.location.href = runtime.resolveNavigationUrl(url)
+        }
+        catch {
+          ms.error(t('common.invalidUrl'))
+        }
+      }
       else
         runtime.openUrl(url, 'current')
       break

@@ -38,7 +38,9 @@ function stripPanel(config: Panel.panelConfig): Panel.panelConfig {
   return panel
 }
 function capture(): SettingsSnapshot {
-  const app = useAppStore(), panel = usePanelState(), runtime = getRuntime()
+  const app = useAppStore()
+  const panel = usePanelState()
+  const runtime = getRuntime()
   const widgets = JSON.parse(JSON.stringify(readExtensionWidgets()))
   widgets.searchHistory = [] // Queries are private usage data, not settings.
   widgets.pendingWidgetCleanupIds = [] // Never sync local deletion jobs.
@@ -125,7 +127,9 @@ export function flushLatestSettings(): Promise<void> {
 }
 async function flushLatestSettingsInternal() {
   if (running || !navigator.onLine) return
-  const key = scope(), runtime = getRuntime(), accountId = useAuthStore().userInfo?.id
+  const key = scope()
+  const runtime = getRuntime()
+  const accountId = useAuthStore().userInfo?.id
   if (!key || !accountId) return
   const run = async () => {
     const snapshot = readPending(key)
@@ -143,7 +147,7 @@ async function flushLatestSettingsInternal() {
       if (result.code === 1502) continue // Re-read current state before retrying.
       if (result.code !== 0) throw new Error(result.msg || '设置同步失败')
       // A delayed cached bootstrap cannot revert this accepted local choice.
-      runtime.storage.setItem(PREFIX + key + ':accepted', JSON.stringify({ revision: getSyncRevision(), snapshot }))
+      runtime.storage.setItem(`${PREFIX}${key}:accepted`, JSON.stringify({ revision: getSyncRevision(), snapshot }))
       if (runtime.storage.getItem(PREFIX + key) === bytes) runtime.storage.removeItem(PREFIX + key)
       await runtime.storage.flush?.()
       lastBytes = bytes
@@ -169,7 +173,7 @@ export function receiveSharedSettings(config: Panel.panelConfig, accountId: numb
   const runtime = getRuntime()
   let pending = readPending(key)
   try {
-    const accepted = JSON.parse(runtime.storage.getItem(PREFIX + key + ':accepted') || 'null')
+    const accepted = JSON.parse(runtime.storage.getItem(`${PREFIX}${key}:accepted`) || 'null')
     if (!pending && accepted?.snapshot && BigInt(accepted.revision) > BigInt(revision)) pending = accepted.snapshot
   }
   catch { /* Invalid receipts cannot prevent fresh cloud state. */ }
@@ -178,7 +182,8 @@ export function receiveSharedSettings(config: Panel.panelConfig, accountId: numb
   applying = true
   try {
     if (shared?.schemaVersion === 1) {
-      const panel = usePanelState(), app = useAppStore()
+      const panel = usePanelState()
+      const app = useAppStore()
       if ([0, 1, 2].includes(shared.networkMode)) panel.setNetworkMode(shared.networkMode)
       if (['auto', 'light', 'dark'].includes(shared.app?.theme)) app.setTheme(shared.app.theme)
       if (['zh-CN', 'en-US'].includes(shared.app?.language)) app.setLanguage(shared.app.language)

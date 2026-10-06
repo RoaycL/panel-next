@@ -861,6 +861,8 @@ async function applyBootstrapData(data: Sync.BootstrapResponseV1) {
     if (group && typeof payload.icon === 'string') group.icon = payload.icon
   }
   groupsReady.value = true
+  // Runs after setup, once readyPageLayoutKey (declared below) exists.
+  // eslint-disable-next-line ts/no-use-before-define
   const pageKey = readyPageLayoutKey.value
   if (pageKey)
     loadExtensionWidgetLayout(widgetPreferences.value.pageLayouts[pageKey]?.contentLayout ?? emptyPageLayout().contentLayout, pageKey)

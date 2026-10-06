@@ -28,6 +28,16 @@ export default antfu(
     ],
     rules: {
       'no-console': 'off',
+      // Test scripts run on Node and stub browser objects.
+      'accessor-pairs': 'off',
+      'no-new-func': 'off',
+      'node/prefer-global/buffer': 'off',
+    },
+  },
+  {
+    files: ['extension/**/*.{js,mjs}'],
+    languageOptions: {
+      globals: { chrome: 'readonly' },
     },
   },
 )

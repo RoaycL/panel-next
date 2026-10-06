@@ -7,3 +7,6 @@ publicHoistPattern:
   - '*prettier*'
 verifyDepsBeforeRun: warn
 enableGlobalVirtualStore: false
+overrides:
+  # GHSA-68fv-2mgg-jv7q; pulled in by the Vue compiler.
+  source-map-js: ^1.2.2
