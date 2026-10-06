@@ -87,7 +87,8 @@ func UintToStr(c uint) string {
 // 获取系统信息
 func GetSysVersionInfo() Version_Info {
 	cBytes, _ := assets.Asset("assets/version")
-	c := string(cBytes)
+	// The version file ends with a newline; keep it out of API responses.
+	c := strings.TrimSpace(string(cBytes))
 	info := strings.Split(c, "|")
 
 	return Version_Info{
