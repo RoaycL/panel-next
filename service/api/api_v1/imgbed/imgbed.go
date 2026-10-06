@@ -147,11 +147,13 @@ func (a *ImgbedApi) Upload(c *gin.Context) {
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
 	defer cancel()
-	_ = ctx
 
-	results, err := defaultClient.Upload(nil, cfg, opened, fileName, file.Header.Get("Content-Type"))
+	results, err := defaultClient.Upload(ctx, cfg, opened, fileName, file.Header.Get("Content-Type"))
 	if err != nil {
-		apiReturn.Error(c, err.Error())
+		// The upstream error can echo the image host's response body; keep it in
+		// the log and give the user a stable message.
+		global.Logger.Errorln("imgbed upload failed:", err)
+		apiReturn.Error(c, "图床上传失败，请稍后重试或联系管理员")
 		return
 	}
 

@@ -2,6 +2,7 @@ package imgbed
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -64,7 +65,7 @@ func NewClient() *Client {
 
 // Upload 上传文件到图床。
 // fileContent 是文件内容，fileName 是原始文件名，contentType 是 MIME 类型。
-func (c *Client) Upload(ctx interface{ Done() <-chan struct{} }, config Config, fileContent io.Reader, fileName, contentType string) ([]UploadResult, error) {
+func (c *Client) Upload(ctx context.Context, config Config, fileContent io.Reader, fileName, contentType string) ([]UploadResult, error) {
 	if !config.IsValid() {
 		return nil, ErrNotConfigured
 	}
@@ -84,7 +85,7 @@ func (c *Client) Upload(ctx interface{ Done() <-chan struct{} }, config Config, 
 	}
 
 	uploadURL := strings.TrimRight(config.BaseURL, "/") + "/upload?returnFormat=full"
-	request, err := http.NewRequest(http.MethodPost, uploadURL, body)
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, uploadURL, body)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}

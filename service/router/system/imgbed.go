@@ -15,5 +15,5 @@ func InitImgbedRouter(router *gin.RouterGroup) {
 	admin.POST("/imgbed/test", api.TestConfig)
 
 	upload := router.Group("", middleware.LoginInterceptor)
-	upload.POST("/imgbed/upload", api.Upload)
+	upload.POST("/imgbed/upload", limitRequestBody(maxImageUploadBytes), api.Upload)
 }

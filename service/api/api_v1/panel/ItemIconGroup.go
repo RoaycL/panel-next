@@ -82,7 +82,6 @@ func (a *ItemIconGroup) GetList(c *gin.Context) {
 
 	err := global.Db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Order("sort ,created_at").Where("user_id=?", userInfo.ID).Find(&groups).Error; err != nil {
-			apiReturn.ErrorDatabase(c, err.Error())
 			return err
 		}
 
@@ -94,13 +93,11 @@ func (a *ItemIconGroup) GetList(c *gin.Context) {
 				Icon:   "material-symbols:ad-group-outline",
 			}
 			if err := tx.Create(&defaultGroup).Error; err != nil {
-				apiReturn.ErrorDatabase(c, err.Error())
 				return err
 			}
 
 			// 并将当前账号下所有无分组的图标更新到当前组
 			if err := tx.Model(&models.ItemIcon{}).Where("user_id=?", userInfo.ID).Update("item_icon_group_id", defaultGroup.ID).Error; err != nil {
-				apiReturn.ErrorDatabase(c, err.Error())
 				return err
 			}
 

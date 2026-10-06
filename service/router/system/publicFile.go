@@ -12,7 +12,7 @@ func InitPublicFileRouter(router *gin.RouterGroup) {
 
 	admin := router.Group("", middleware.LoginInterceptor, middleware.AdminInterceptor)
 	{
-		admin.POST("/publicFile/upload", api.Upload)
+		admin.POST("/publicFile/upload", limitRequestBody(maxImageUploadBytes), api.Upload)
 		admin.POST("/publicFile/deletes", api.Deletes)
 		admin.POST("/publicFile/updateType", api.UpdateType)
 	}
