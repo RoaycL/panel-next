@@ -1,0 +1,71 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate version
+        run: node scripts/validate-version.mjs
+
+      - name: Validate and build both runtimes
+        run: pnpm run build:all
+
+      - name: Validate themes and icon cache
+        run: |
+          pnpm run validate:theme-registry
+          pnpm run test:icon-cache
+
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: service
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          # Matches the golang image used by the Dockerfile.
+          go-version: '1.21'
+          cache-dependency-path: service/go.sum
+
+      - name: Generate embedded assets
+        # assets/bindata.go is gitignored and generated the same way as build.sh.
+        run: |
+          go install github.com/go-bindata/go-bindata/...@latest
+          go-bindata -o=assets/bindata.go -pkg=assets assets/...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
