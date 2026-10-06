@@ -28,13 +28,21 @@ export function normalizeDashboardGroups(
   }))
 }
 
+/** Desktop pages follow the user's group order; ties keep the server order. */
+export function sortDashboardGroups<T extends Panel.ItemIconGroup>(groups: readonly T[]): T[] {
+  return groups
+    .map((group, index) => ({ group, index }))
+    .sort((left, right) => (left.group.sort ?? 9999) - (right.group.sort ?? 9999) || left.index - right.index)
+    .map(entry => entry.group)
+}
+
 export function createDashboardState(data: Sync.BootstrapResponseV1): DashboardState {
   return {
     revision: data.revision,
     account: { ...data.account },
     panelConfig: { ...data.panel.config },
     searchEngine: { ...data.panel.searchEngine },
-    groups: normalizeDashboardGroups(data.panel.groups),
+    groups: sortDashboardGroups(normalizeDashboardGroups(data.panel.groups)),
   }
 }
 

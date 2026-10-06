@@ -533,3 +533,28 @@ export function createExtensionRuntime(): RuntimeAdapter {
     },
   }
 }
+
+// A synchronous mirror of the displayed wallpaper. chrome.storage is async and
+// only ready after the bundle loads, so the first frame would otherwise be the
+// plain page background.
+const BOOT_WALLPAPER_KEY = 'panelNext.bootWallpaper'
+
+export function paintBootWallpaper() {
+  try {
+    const boot = JSON.parse(localStorage.getItem(BOOT_WALLPAPER_KEY) || 'null') as { url?: unknown, mask?: unknown } | null
+    if (typeof boot?.url !== 'string' || !boot.url) return
+    const mask = typeof boot.mask === 'number' && boot.mask >= 0 && boot.mask <= 1 ? boot.mask : 0
+    const root = document.documentElement
+    root.style.background = `linear-gradient(rgba(0,0,0,${mask}),rgba(0,0,0,${mask})) center / cover no-repeat fixed, url(${JSON.stringify(boot.url)}) center / cover no-repeat fixed, #101012`
+    root.dataset.bootWallpaper = ''
+  }
+  catch { /* A missing mirror only costs the early paint. */ }
+}
+
+export function rememberBootWallpaper(url: string, mask: number) {
+  try {
+    if (url) localStorage.setItem(BOOT_WALLPAPER_KEY, JSON.stringify({ url, mask }))
+    else localStorage.removeItem(BOOT_WALLPAPER_KEY)
+  }
+  catch { /* Quota or privacy settings only disable the early paint. */ }
+}

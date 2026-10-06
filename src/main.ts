@@ -8,12 +8,14 @@ import { getRuntime } from './runtime'
 import 'virtual:svg-icons-register' // svg图标注册
 import { initializePackages } from '@/packages/manager'
 import { initializeExtensionUpdates } from '@/runtime/extensionUpdates'
-import { canReadExtensionImage } from '@/runtime/extension'
+import { canReadExtensionImage, paintBootWallpaper } from '@/runtime/extension'
 import { configureIconCachePermission } from '@/icons/localImageCache'
 import { installModalFocusGuard } from '@/plugins/modalFocus'
 import { initializeSharedSettings } from '@/runtime/sharedSettings'
 
 async function bootstrap() {
+  // Paint the last wallpaper before the async storage preload and mount.
+  if (document.body.dataset.panelRuntime === 'extension') paintBootWallpaper()
   const runtime = getRuntime()
   await runtime.ready()
   if (runtime.kind === 'extension') configureIconCachePermission(canReadExtensionImage)

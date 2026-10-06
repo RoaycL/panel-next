@@ -16,7 +16,7 @@ if (transpiled.diagnostics?.length) {
     .join('\n'))
 }
 const encoded = Buffer.from(transpiled.outputText).toString('base64')
-const { createDashboardState, createItemSortRequest, filterDashboardGroups, isDesktopGroup, selectItemUrl }
+const { createDashboardState, createItemSortRequest, filterDashboardGroups, isDesktopGroup, selectItemUrl, sortDashboardGroups }
   = await import(`data:text/javascript;base64,${encoded}`)
 
 const bootstrap = {
@@ -91,6 +91,19 @@ assert.match(extensionView, /if \(authStore\.visitMode !== VisitMode\.VISIT_MODE
 assert.match(extensionView, /type="button" class="rail-avatar"[\s\S]*@click="handleAvatarClick"/)
 assert.match(extensionView, /v-for="group in groupTabs"/)
 assert.match(extensionView, /function openGroupManager\(\)[\s\S]*VisitMode\.VISIT_MODE_LOGIN/)
-assert.match(extensionView, /if \(!authStore\.token\) \{[\s\S]*VisitMode\.VISIT_MODE_PUBLIC[\s\S]*groups\.value = defaultPresetGroups/)
+assert.match(extensionView, /if \(!authStore\.token\) \{[\s\S]*VisitMode\.VISIT_MODE_PUBLIC[\s\S]*showPresetGroups\(\)/)
+
+const reordered = createDashboardState({ ...bootstrap, panel: { ...bootstrap.panel, groups: [
+  { ...bootstrap.panel.groups[0], id: 1, title: 'First created', sort: 3 },
+  { ...bootstrap.panel.groups[0], id: 2, title: 'Moved to top', sort: 1 },
+  { ...bootstrap.panel.groups[0], id: 3, title: 'Tie keeps order', sort: 3 },
+] } })
+assert.deepEqual(reordered.groups.map(group => group.id), [2, 1, 3], 'Pages follow group sort, ties keep server order')
+assert.deepEqual(sortDashboardGroups([{ id: 5 }, { id: 6, sort: 1 }]).map(group => group.id), [6, 5])
+// The guest preset uses id 1, which is often an account's first-created group.
+assert.match(extensionView, /if \(followFirstGroup \|\| !tabs\.some\(tab => tab\.id === activeTabId\.value\)\)\s*activeTabId\.value = tabs\[0\]\.id/)
+assert.match(extensionView, /function selectGroup[\s\S]*?followFirstGroup = false/)
+assert.match(extensionView, /function showPresetGroups\(\) \{\s*followFirstGroup = true/)
+assert.doesNotMatch(extensionView, /v-model:page-id="activeTabId"/, 'Picking a page in the add center is a user selection')
 
 console.log('Validated shared dashboard state, compact group rail, guest interactions, sorting, and URL selection')

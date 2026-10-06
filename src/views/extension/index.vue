@@ -48,7 +48,8 @@ import { getBootstrap, waitForSyncChange } from '@/api/sync'
 import { getList as getGroupList } from '@/api/panel/itemIconGroup'
 import { deletes as deleteItems, getListByGroupId, saveSort as saveItemSort } from '@/api/panel/itemIcon'
 import type { DashboardGroup } from '@/dashboard/core'
-import { createDashboardState, createItemSortRequest, isDesktopGroup, resolveItemUrl } from '@/dashboard/core'
+import { createDashboardState, createItemSortRequest, isDesktopGroup, resolveItemUrl, sortDashboardGroups } from '@/dashboard/core'
+import { rememberBootWallpaper } from '@/runtime/extension'
 import SearchHistoryPanel from '@/components/common/SearchHistoryPanel.vue'
 import { addSearchHistory } from '@/runtime/searchHistory'
 import { VueDraggable } from 'vue-draggable-plus'
@@ -79,6 +80,9 @@ const requestedWallpaper = computed(() => {
 })
 const { displayed: activeWallpaper, error: wallpaperLoadError } = useLoadedWallpaper(requestedWallpaper)
 watch(wallpaperLoadError, error => { if (error) ms.warning(error) })
+watch(() => [activeWallpaper.value, panelState.panelConfig.backgroundMaskNumber ?? 0.35] as const, ([url, mask]) => {
+  rememberBootWallpaper(url, mask)
+}, { immediate: true })
 const authStore = useAuthStore()
 const userStore = useUserStore()
 const runtime = getRuntime()
@@ -808,6 +812,12 @@ const extensionSyncPresentation = computed(() => {
   return states[extensionSyncStatus.value]
 })
 const groups = ref<DashboardGroup[]>(defaultPresetGroups)
+// Until the user picks a page, startup and sync always land on the first group.
+let followFirstGroup = true
+function showPresetGroups() {
+  followFirstGroup = true
+  groups.value = defaultPresetGroups.map(group => ({ ...group, items: [...(group.items ?? [])] }))
+}
 const groupsReady = ref(!authStore.token)
 const bookmarkSearchResults = computed<BookmarkSearchResult[]>(() => {
   const query = bookmarkSearchQuery.value.trim().toLowerCase()
@@ -874,7 +884,7 @@ async function refreshBootstrap() {
   if (!authStore.token) {
     authStore.setVisitMode(VisitMode.VISIT_MODE_PUBLIC)
     extensionSyncStatus.value = navigator.onLine ? 'idle' : 'offline'
-    groups.value = defaultPresetGroups.map(group => ({ ...group, items: [...(group.items ?? [])] }))
+    showPresetGroups()
     groupsReady.value = true
     return
   }
@@ -888,7 +898,7 @@ async function refreshBootstrap() {
     if (authStore.authMode === 'device' && authStore.token && (!Number.isFinite(expiry) || expiry - Date.now() < 60_000 || needsUpgrade))
       await authStore.refreshSession()
     if (!authStore.token) {
-      groups.value = defaultPresetGroups.map(group => ({ ...group, items: [...(group.items ?? [])] }))
+      showPresetGroups()
       groupsReady.value = true
       extensionSyncStatus.value = 'idle'
       return
@@ -911,7 +921,7 @@ async function refreshBootstrap() {
     // 降级使用普通 API 获取
     if (!authStore.token) {
       authStore.setVisitMode(VisitMode.VISIT_MODE_PUBLIC)
-      groups.value = defaultPresetGroups.map(group => ({ ...group, items: [...(group.items ?? [])] }))
+      showPresetGroups()
       groupsReady.value = true
       extensionSyncStatus.value = navigator.onLine ? 'idle' : 'offline'
       return
@@ -1014,7 +1024,7 @@ async function loadDirectFromApi() {
   }))
   if (results.some(group => group === null))
     return false
-  groups.value = results as DashboardGroup[]
+  groups.value = sortDashboardGroups(results as DashboardGroup[])
   groupsReady.value = true
   return true
 }
@@ -1222,7 +1232,9 @@ watch(groupTabs, (tabs) => {
     activeTabId.value = null
     return
   }
-  if (!tabs.some(tab => tab.id === activeTabId.value))
+  // The preset page shares id 1 with many accounts' first-created group, so an
+  // existing id alone does not mean the user chose it.
+  if (followFirstGroup || !tabs.some(tab => tab.id === activeTabId.value))
     activeTabId.value = tabs[0].id
 }, { immediate: true })
 
@@ -1264,6 +1276,7 @@ function selectGroup(id: number, direction?: 'next' | 'previous') {
   const currentIndex = groupTabs.value.findIndex(group => group.id === activeTabId.value)
   const nextIndex = groupTabs.value.findIndex(group => group.id === id)
   groupSlideDirection.value = direction ?? (nextIndex >= currentIndex ? 'next' : 'previous')
+  followFirstGroup = false
   activeTabId.value = id
 }
 
@@ -2382,7 +2395,7 @@ onUnmounted(() => {
       </div>
     </NModal>
 
-    <IconGalleryModal v-model:show="showIconGallery" v-model:page-id="activeTabId" :pages="groupTabs" :initial-section="addCenterSection" :can-add="authStore.visitMode === VisitMode.VISIT_MODE_LOGIN && Boolean(authStore.token)" :added-counts="extensionWidgetAddedCounts" :busy="addingExtensionWidget" @add-widget="addExtensionWidget" @done="handleEditSuccess" @login="goToIconLogin" />
+    <IconGalleryModal v-model:show="showIconGallery" :page-id="activeTabId" :pages="groupTabs" :initial-section="addCenterSection" :can-add="authStore.visitMode === VisitMode.VISIT_MODE_LOGIN && Boolean(authStore.token)" :added-counts="extensionWidgetAddedCounts" :busy="addingExtensionWidget" @update:page-id="selectGroup" @add-widget="addExtensionWidget" @done="handleEditSuccess" @login="goToIconLogin" />
 
     <WidgetSettingsModal v-model:show="extensionWidgetSettingsVisible" :instance="extensionWidgetSettingsInstance" @save="applyExtensionWidgetSettings" />
 
