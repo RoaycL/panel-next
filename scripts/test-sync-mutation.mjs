@@ -128,8 +128,13 @@ const offline = mutationPost('/panel/itemIcon/edit', { id: 7, offline: true })
 await new Promise(resolve => setTimeout(resolve, 20))
 const replay = mutationPost('/panel/itemIcon/edit', { id: 8, title: 'replayed' }, { queueOnFailure: false })
 assert.equal((await Promise.race([replay, new Promise(resolve => setTimeout(() => resolve({ code: 'stuck' }), 500))])).code, 0, 'A replay write is not stuck behind a write waiting for the queue lock')
+let laterSent = false
+const later = mutationPost('/panel/itemIcon/edit', { id: 9, title: 'newer' }).then((result) => { laterSent = true; return result })
+await new Promise(resolve => setTimeout(resolve, 20))
+assert.equal(laterSent, false, 'A newer write waits until the older one is saved to the offline queue')
 releaseLock()
 assert.equal((await offline).queued, true)
+assert.equal((await later).code, 0)
 assert.equal(enqueued, 1)
 
 console.log('Sync revision is monotonic per account; writes are serialized and only same-resource changes conflict.')

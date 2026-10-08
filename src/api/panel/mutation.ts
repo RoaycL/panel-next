@@ -135,23 +135,39 @@ type SendOutcome<T> =
   | { kind: 'done', response: Response<T> }
   | { kind: 'queue', baseRevision: Sync.Revision | null, conflict: boolean, response?: Response<T>, error?: unknown }
 
-let mutationTail: Promise<unknown> = Promise.resolve()
+let sendTail: Promise<unknown> = Promise.resolve()
+let durableTail: Promise<unknown> = Promise.resolve()
 
 /**
  * Writes from one page are sent one at a time. Two writes in flight with the
  * same expected revision would make the second one look like a change from
- * another device. Only the request itself runs in that line: saving to the
- * offline queue happens after it, so a replay holding the queue lock can
- * never wait behind a write that waits for the same lock.
+ * another device.
+ *
+ * A user write also holds its place until a failed request is saved to the
+ * offline queue, so an older intent can never be queued after a newer write.
+ * Writes that never queue (offline replay, the settings flush) only wait for
+ * the request line: replay holds the queue lock, and waiting for another
+ * write's queue save would deadlock with it.
  */
 export async function mutationPost<T>(url: string, data: unknown, options: MutationOptions = {}): Promise<Response<T>> {
   const endActivity = beginSyncActivity()
   const scope = mutationScope()
-  try {
-    const step = mutationTail.then(() => sendMutation<T>(url, data, options, scope))
-    mutationTail = step.catch(() => undefined)
+  const run = async () => {
+    const step = sendTail.then(() => sendMutation<T>(url, data, options, scope))
+    sendTail = step.catch(() => undefined)
     const outcome = await step
-    const response = outcome.kind === 'done' ? outcome.response : await settleQueuedMutation<T>(url, data, options, outcome)
+    return outcome.kind === 'done' ? outcome.response : await settleQueuedMutation<T>(url, data, options, outcome)
+  }
+  try {
+    let response: Response<T>
+    if (options.queueOnFailure !== false) {
+      const durable = durableTail.then(run)
+      durableTail = durable.catch(() => undefined)
+      response = await durable
+    }
+    else {
+      response = await run()
+    }
     if (response.code === 0)
       clearSyncFailure()
     else
