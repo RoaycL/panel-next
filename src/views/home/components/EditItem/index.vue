@@ -16,6 +16,7 @@ interface Props {
   itemInfo: Panel.Info | null
   itemGroupId?: number
   embedded?: boolean
+  title?: string
 }
 
 const props = defineProps<Props>()
@@ -212,12 +213,12 @@ const frameProps = computed(() => props.embedded
       to: modalTo,
       preset: 'card' as const,
       size: 'small' as const,
-      style: 'width: min(620px, calc(100vw - 24px)); max-height: min(720px, calc(100vh - 32px)); display: flex; flex-direction: column; overflow: hidden;',
+      style: 'width: min(680px, calc(100vw - 24px)); max-height: min(760px, calc(100vh - 32px)); display: flex; flex-direction: column; overflow: hidden;',
       headerStyle: 'padding: 14px 20px 12px; border-bottom: 1px solid rgba(255,255,255,.08); flex-shrink: 0;',
-      contentStyle: 'padding: 16px 20px; flex: 1 1 0%; min-height: 0; overflow-y: auto; overscroll-behavior: contain;',
+      contentStyle: 'padding: 14px 20px; flex: 1 1 0%; min-height: 0; overflow-y: auto; overscroll-behavior: contain;',
       footerStyle: 'padding: 12px 20px 14px; border-top: 1px solid rgba(255,255,255,.08); flex-shrink: 0;',
       bordered: false,
-      title: props.itemInfo?.id ? t('iconItem.edit') : t('iconItem.add'),
+      title: props.title || (props.itemInfo?.id ? t('iconItem.edit') : t('iconItem.add')),
     })
 
 async function getGroupListOptions() {
@@ -263,14 +264,14 @@ async function getGroupListOptions() {
     <div class="edit-item-content" :class="{ 'custom-icon-layout': embedded }">
       <NForm ref="formRef" :model="model" :rules="rules" size="small">
         <!-- 基础信息 (分组 & 标题) -->
-        <div class="form-glass-card mb-3.5">
+        <div class="form-glass-card mb-3">
           <div class="card-section-title">
             {{ t('common.basicInfo') }}
           </div>
-          <NFormItem v-if="embedded" path="url" :label="$t('iconItem.url')" :show-feedback="true">
+          <NFormItem path="url" :label="$t('iconItem.url')" :show-feedback="embedded">
             <NInputGroup>
               <NInput v-model:value="model.url" type="text" :maxlength="1000" placeholder="https://example.com" />
-              <NButton :disabled="!model.url" :loading="getIconLoading[0]" secondary @click="getIconByUrl(model.url, 0)">
+              <NButton :disabled="!model.url" :loading="getIconLoading[0]" :type="embedded ? undefined : 'primary'" secondary @click="getIconByUrl(model.url, 0)">
                 {{ $t('iconItem.getIcon') }}
               </NButton>
             </NInputGroup>
@@ -290,7 +291,7 @@ async function getGroupListOptions() {
         </div>
 
         <!-- 图标定制区 -->
-        <div class="form-glass-card mb-3.5">
+        <div class="form-glass-card mb-3">
           <div class="card-section-title">
             {{ $t('common.icon') }}
           </div>
@@ -299,42 +300,20 @@ async function getGroupListOptions() {
           </div>
         </div>
 
-        <!-- 链接配置区 -->
-        <div v-if="!embedded" class="form-glass-card mb-3.5">
-          <div class="card-section-title">
-            {{ t('iconItem.url') }}
-          </div>
-          <div class="flex flex-col gap-2.5 mt-2">
-            <NFormItem path="url" :label="$t('iconItem.url')" :show-feedback="false">
-              <NInputGroup>
-                <NInput v-model:value="model.url" type="text" :maxlength="1000" placeholder="外网链接 (如 https://...)" />
-                <NButton :disabled="!model.url" :loading="getIconLoading[0]" type="primary" secondary @click="getIconByUrl(model.url, 0)">
-                  {{ $t('iconItem.getIcon') }}
-                </NButton>
-              </NInputGroup>
-            </NFormItem>
-            <NFormItem v-if="!embedded" path="lanUrl" :label="$t('iconItem.lanUrl')" :show-feedback="false">
-              <NInputGroup>
-                <NInput v-model:value="model.lanUrl" type="text" :maxlength="1000" :placeholder="$t('iconItem.lanUrlInputPlaceholder')" />
-                <NButton :disabled="!model.lanUrl" :loading="getIconLoading[1]" type="primary" secondary @click="getIconByUrl(model.lanUrl || '', 1)">
-                  {{ $t('iconItem.getIcon') }}
-                </NButton>
-              </NInputGroup>
-            </NFormItem>
-          </div>
-        </div>
-
         <!-- 详细选项区 -->
-        <component :is="embedded ? 'details' : 'div'" class="form-glass-card edit-item-advanced">
-          <summary v-if="embedded" class="card-section-title">
-            {{ t('iconGallery.advanced') }}
+        <!-- 内网地址、描述和打开方式不常改，默认收起，让常用项一屏放下。 -->
+        <details class="form-glass-card edit-item-advanced">
+          <summary class="card-section-title">
+            {{ embedded ? t('iconGallery.advanced') : t('iconItem.otherSettings') }}
           </summary>
-          <div v-if="!embedded" class="card-section-title">
-            {{ t('iconItem.otherSettings') }}
-          </div>
           <div class="flex flex-col gap-2.5 mt-2">
-            <NFormItem v-if="embedded" path="lanUrl" :label="$t('iconItem.lanUrl')" :show-feedback="false">
-              <NInput v-model:value="model.lanUrl" :maxlength="1000" :placeholder="$t('iconItem.lanUrlInputPlaceholder')" />
+            <NFormItem path="lanUrl" :label="$t('iconItem.lanUrl')" :show-feedback="false">
+              <NInputGroup>
+                <NInput v-model:value="model.lanUrl" :maxlength="1000" :placeholder="$t('iconItem.lanUrlInputPlaceholder')" />
+                <NButton v-if="!embedded" :disabled="!model.lanUrl" :loading="getIconLoading[1]" type="primary" secondary @click="getIconByUrl(model.lanUrl || '', 1)">
+                  {{ $t('iconItem.getIcon') }}
+                </NButton>
+              </NInputGroup>
             </NFormItem>
             <NFormItem path="description" :label="$t('common.description')" :show-feedback="false">
               <NInput v-model:value="model.description" type="text" show-count :maxlength="100" placeholder="项目简短描述" />
@@ -343,7 +322,7 @@ async function getGroupListOptions() {
               <NSelect v-model:value="model.openMethod" :options="options" />
             </NFormItem>
           </div>
-        </component>
+        </details>
       </NForm>
       <aside v-if="embedded" class="custom-icon-preview" aria-label="图标实时预览">
         <span class="custom-preview-label">实时预览</span>

@@ -134,6 +134,8 @@ const backgroundColor = computed(() => {
     return preset.value.color
   return generatedColor.value
 })
+// Icons render as their source image unless the item opts into the frosted tile.
+const glassSurface = computed(() => props.itemIcon?.surface === 'glass' && !props.forceBackground)
 const transparentBackground = computed(() => ['transparent', '#00000000'].includes(backgroundColor.value.toLowerCase()))
 const foregroundColor = computed(() => {
   const color = backgroundColor.value.toLowerCase()
@@ -151,7 +153,7 @@ const iconScale = computed(() => normalizeIconScale(props.itemIcon?.scale))
         :class="{
           'item-icon-surface-transparent': transparentBackground || (hasImage && visibleAppearance.transparent),
           'item-icon-surface-image': hasImage,
-          'item-icon-surface-glass': hasImage && !forceBackground,
+          'item-icon-surface-glass': glassSurface,
           'item-icon-image-transparent': hasImage && visibleAppearance.transparent,
           'item-icon-image-dark-mark': hasImage && visibleAppearance.transparent && visibleAppearance.darkMonochrome,
         }"
@@ -188,6 +190,9 @@ const iconScale = computed(() => normalizeIconScale(props.itemIcon?.scale))
   backdrop-filter: var(--pn-glass-control-filter, blur(18px) saturate(115%));
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .38), inset 0 1px 0 rgba(255, 255, 255, .28), 0 3px 10px rgba(0, 0, 0, .08);
 }
+/* Text and glyph icons keep contrast on the light frosted tile. */
+.item-icon-surface-glass:not(.item-icon-surface-image) { color: #1f2937 !important; }
+html.dark .item-icon-surface-glass:not(.item-icon-surface-image) { color: #fff !important; }
 html.dark .item-icon-surface-glass {
   background: linear-gradient(145deg, rgba(255, 255, 255, .07), transparent 65%), rgba(24, 24, 28, .38) !important;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14), inset 0 1px 0 rgba(255, 255, 255, .1), 0 3px 10px rgba(0, 0, 0, .12);

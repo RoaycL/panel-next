@@ -37,3 +37,34 @@ func TestItemIconScaleRoundTrip(t *testing.T) {
 		t.Fatal("zero scale must not be sent to clients")
 	}
 }
+
+func TestItemIconSurfaceRoundTrip(t *testing.T) {
+	var saved ItemIconIconInfo
+	if err := json.Unmarshal([]byte(`{"itemType":2,"src":"/uploads/a.png","surface":"glass"}`), &saved); err != nil {
+		t.Fatal(err)
+	}
+	if saved.Surface != "glass" {
+		t.Fatalf("lost surface: %q", saved.Surface)
+	}
+	encoded, err := json.Marshal(ItemIconIconInfo{ItemType: 2, Src: "/uploads/a.png"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]interface{}
+	if err := json.Unmarshal(encoded, &fields); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := fields["surface"]; exists {
+		t.Fatal("empty surface must not be sent to clients")
+	}
+}
+
+func TestItemIconSurfaceDropsUnknownValues(t *testing.T) {
+	var icon ItemIconIconInfo
+	if err := json.Unmarshal([]byte(`{"itemType":2,"src":"/uploads/a.png","surface":"neon","scale":1.5}`), &icon); err != nil {
+		t.Fatal(err)
+	}
+	if icon.Surface != "" || icon.Scale != 1.5 || icon.Src != "/uploads/a.png" {
+		t.Fatalf("unexpected icon: %+v", icon)
+	}
+}
