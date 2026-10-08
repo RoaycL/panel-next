@@ -1,8 +1,6 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
-const home = fs.readFileSync(new URL('../src/views/home/index.vue', import.meta.url), 'utf8')
-const starter = fs.readFileSync(new URL('../src/views/home/components/AppStarter/index.vue', import.meta.url), 'utf8')
 const theme = fs.readFileSync(new URL('../src/hooks/useTheme.ts', import.meta.url), 'utf8')
 const login = fs.readFileSync(new URL('../src/views/login/index.vue', import.meta.url), 'utf8')
 const editItem = fs.readFileSync(new URL('../src/views/home/components/EditItem/index.vue', import.meta.url), 'utf8')
@@ -40,22 +38,14 @@ function bundledIconNames(source) {
     .map(match => match[1].replaceAll(':', '-'))
 }
 
-for (const rule of [
-  /\.sun-main\s*\{[^}]*overflow:\s*hidden/,
-  /\.runtime-status-bar\s*\{[^}]*flex-wrap:\s*wrap/,
-  /@media \(max-width: 640px\)/,
-  /font-size:\s*clamp\(/,
-  /max-width:\s*calc\(100% - 20px\)/,
-]) {
-  assert.match(home, rule)
-}
-assert.match(starter, /isSmallScreen/)
-assert.match(starter, /screenWidth\.value < 768/)
-assert.match(starter, /dark:/)
+// Web and extension share one dashboard; phones page through groups by swiping.
+assert.match(extension, /@touchstart\.passive="handleGroupTouchStart"/)
+assert.match(extension, /@media \(max-width: 720px\)/)
+assert.match(extension, /font-size: clamp\(/)
 assert.match(theme, /document\.documentElement\.classList\.(?:add|remove)\('dark'\)/)
 assert.match(theme, /useOsTheme/)
 assert.doesNotMatch(theme, /runtime\.kind === 'extension'/)
-assert.match(home, /<ThemeIcon/g)
+assert.match(extension, /<ThemeIcon/g)
 assert.match(login, /width:\s*min\(440px, 100%\)/)
 assert.ok(!/min-width:\s*400px/.test(login), 'login card must not overflow narrow extension windows')
 assert.match(editItem, /width: min\(680px, calc\(100vw - 24px\)\)/)
@@ -147,7 +137,6 @@ assert.match(extension, /runtime\.resolveUrl\(authStore\.userInfo\?\.headImage/)
 assert.match(extensionSettings, /label: '个人中心'/)
 assert.match(extensionSettings, /<UserInfoApp embedded \/>/)
 assert.doesNotMatch(extensionSettings, /UserSessionsApp|DockerManagerApp|多端设备会话|key: 'docker'/)
-assert.doesNotMatch(starter, /componentName: '(UserSessions|DockerManager)'/)
 assert.match(extensionSettings, /class="hub-brand"/)
 assert.doesNotMatch(extensionSettings, /class="feature-banner/, 'control center must use the compact product header, not the retired image banner')
 assert.doesNotMatch(extensionSettings, /个人资料与头像/)
@@ -208,8 +197,7 @@ for (const name of ['About', 'BackupRestore', 'ImportExport', 'ItemGroupManage',
 }
 for (const className of ['pn-app-card', 'pn-app-panel', 'pn-app-heading', 'pn-app-actions', 'pn-app-empty'])
   assert.ok(managementStyles.includes(`.${className}`), `missing shared management style ${className}`)
-assert.match(starter, /to="\.pn-theme-root"/, 'web management modal must inherit theme tokens')
-assert.match(starter, /app-starter-sidebar-scrim/, 'mobile navigation must be an overlay, not squeeze page content')
+assert.match(extensionSettings, /to="\.pn-theme-root"/, 'management modal must inherit theme tokens')
 assert.match(roundCardModal, /\?\? '\.pn-theme-root'/, 'nested management dialogs must inherit theme tokens')
 assert.match(extensionEntry, /data-panel-runtime="extension"/, 'acrylic styles must be isolated to the extension')
 assert.match(managementStyles, /@import '\.\/extensionGlass.less'/)

@@ -1,8 +1,6 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
-const home = fs.readFileSync(new URL('../src/views/home/index.vue', import.meta.url), 'utf8')
-const barrel = fs.readFileSync(new URL('../src/views/home/components/index.ts', import.meta.url), 'utf8')
 const loader = fs.readFileSync(new URL('../src/components/common/AppLoader/index.vue', import.meta.url), 'utf8')
 const editor = fs.readFileSync(new URL('../src/views/home/components/EditItem/index.vue', import.meta.url), 'utf8')
 const app = fs.readFileSync(new URL('../src/App.vue', import.meta.url), 'utf8')
@@ -10,11 +8,8 @@ const extension = fs.readFileSync(new URL('../src/views/extension/index.vue', im
 const themeBarrel = fs.readFileSync(new URL('../src/themes/index.ts', import.meta.url), 'utf8')
 const crypto = fs.readFileSync(new URL('../src/utils/crypto/index.ts', import.meta.url), 'utf8')
 
-assert.doesNotMatch(barrel, /AppStarter|EditItem/)
-assert.match(home, /defineAsyncComponent\(\(\) => import\('\.\/components\/AppStarter\/index\.vue'\)\)/)
-assert.match(home, /defineAsyncComponent\(\(\) => import\('\.\/components\/EditItem\/index\.vue'\)\)/)
-assert.match(home, /<AppStarter v-if="settingModalShow"/)
-assert.match(home, /<EditItem v-if="editItemInfoShow"/)
+assert.match(extension, /defineAsyncComponent\(\(\) => import\('\.\/components\/UserHubModal\.vue'\)\)/)
+assert.match(extension, /defineAsyncComponent\(\(\) => import\('@\/views\/home\/components\/EditItem\/index\.vue'\)\)/)
 assert.match(loader, /import\(`\.\.\/\.\.\/apps\/\$\{props\.componentName\}\/index\.vue`\)/)
 assert.match(editor, /watch\(\[\(\) => props\.visible, \(\) => props\.itemInfo\],[\s\S]*\{ immediate: true \}\)/)
 assert.doesNotMatch(themeBarrel, /\.vue['"]/)

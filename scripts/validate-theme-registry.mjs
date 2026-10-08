@@ -400,9 +400,6 @@ assert.doesNotMatch(modalSource.slice(conflictBranchStart, conflictBranchEnd), /
 const extensionView = readSource('../src/views/extension/index.vue')
 assert.match(extensionView, /readExtensionAppearance/, 'extension reads local appearance')
 
-const appIcon = readSource('../src/views/home/components/AppIcon/index.vue')
-assert.match(appIcon, /iconTextColor/, 'user-configured icon text color (legacy field) still applied')
-assert.match(appIcon, /itemInfo\?\.icon/, 'bookmark visuals remain user-data driven')
 const themeIconSource = readSource('../src/themes/ThemeIcon.vue')
 assert.match(themeIconSource, /DEFAULT_ICON_SET\[props\.name\]/, 'missing semantic icon falls back to default pack')
 
@@ -1182,7 +1179,6 @@ assert.ok(registry.listIconPacks().some(pack => pack.id === 'acme.icons'))
   // （prepare 幂等、saveExtensionAppearance 字节去重回声抑制）共同锁定双端边界。
   const storeSource = stripAllImports(readSource('../src/store/modules/panel/index.ts'))
   const extensionView = stripAllImports(readSource('../src/views/extension/index.vue'))
-  const homeView = stripAllImports(readSource('../src/views/home/index.vue'))
 
   // 1) store 是唯一 prepare 入口：applyPanelConfig 内部恰好一次 preparePanelAppearance。
   const prepareCalls = (storeSource.match(/preparePanelAppearance\s*\(/g) || []).length
@@ -1196,11 +1192,10 @@ assert.ok(registry.listIconPacks().some(pack => pack.id === 'acme.icons'))
   // 3) extension 端不得把面板配置写回云端 userConfig/set。
   assert.doesNotMatch(extensionView, /setUserConfig\s*\(/, 'extension view never writes panel back to cloud')
 
-  // 4) web home 端：applyPanelConfig 的回写开关由 runtime.kind 门控（web 恒为 false）。
-  //    home/index.vue 只打包进 web 运行时，extension bundle 通过 __PANEL_RUNTIME__ 被摇树移除，
+  // 4) 网页端复用同一首页：applyPanelConfig 的回写开关在 web 恒为 false，
   //    因此 web 端不会触碰 EXTENSION_APPEARANCE_KEY。
-  assert.match(homeView, /writeBack\s*:\s*runtime\.kind\s*===\s*'extension'/, 'home writeBack gated to extension runtime')
-  assert.doesNotMatch(homeView, /saveExtensionAppearance\s*\(/, 'home no longer imports saveExtensionAppearance')
+  assert.match(extensionView, /surface:\s*runtime\.kind,[^}]*writeBack:\s*!isWebRuntime/, 'shared dashboard writeBack gated to extension runtime')
+  assert.doesNotMatch(extensionView, /saveExtensionAppearance\s*\(/, 'dashboard never calls saveExtensionAppearance directly')
 }
 
 /* ---- B9c2: store.applyPanelConfig 行为 —— 真实 Pinia 挂载 + 可等待 writeBack + flush 失败 ---- */
