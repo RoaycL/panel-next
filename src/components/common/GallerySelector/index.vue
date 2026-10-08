@@ -247,13 +247,23 @@ async function fetchWallhaven() {
 const previewIndex = ref(-1)
 const previewItem = computed(() => wallhavenList.value[previewIndex.value])
 const previewRawLoaded = ref(false)
+const previewRawFailed = ref(false)
+const previewAttempt = ref(0)
+const previewDialog = ref<HTMLElement | null>(null)
 const showPreview = computed({
   get: () => !!previewItem.value,
   set: value => { if (!value) previewIndex.value = -1 },
 })
 function openPreview(index: number) {
   previewRawLoaded.value = false
+  previewRawFailed.value = false
   previewIndex.value = index
+  // 关闭了 NModal 自动聚焦，手动聚焦对话框，方向键才能直接切换
+  void nextTick(() => previewDialog.value?.focus())
+}
+function retryPreviewRaw() {
+  previewRawFailed.value = false
+  previewAttempt.value++
 }
 function stepPreview(delta: number) {
   const next = previewIndex.value + delta
@@ -544,21 +554,18 @@ onMounted(() => {
         <div
           v-for="(item, index) in wallhavenList"
           :key="item.id"
-          role="button"
-          tabindex="0"
-          :aria-label="`预览壁纸：Wallhaven ${item.id}`"
           class="wallhaven-card group relative rounded-xl overflow-hidden border border-slate-200 dark:border-zinc-800 hover:border-emerald-500 cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 bg-zinc-900"
           @click="openPreview(index)"
-          @keydown.enter.self.prevent="openPreview(index)"
-          @keydown.space.self.prevent="openPreview(index)"
         >
-          <!-- 缩略图 -->
-          <img
-            :src="item.thumbUrl"
-            :alt="item.id"
-            loading="lazy"
-            class="wallhaven-thumbnail transition-transform duration-500 group-hover:scale-105"
-          >
+          <!-- 缩略图：独立按钮承担键盘/读屏的「预览」入口，点击冒泡到卡片打开预览 -->
+          <button type="button" class="wallhaven-preview-trigger" :aria-label="`预览壁纸：Wallhaven ${item.id}`">
+            <img
+              :src="item.thumbUrl"
+              :alt="item.id"
+              loading="lazy"
+              class="wallhaven-thumbnail transition-transform duration-500 group-hover:scale-105"
+            >
+          </button>
 
           <!-- 分辨率与分类浮层徽标 -->
           <button v-if="isWallpaperPicker" type="button" class="favorite-button" :class="{ 'is-favorite': isFavorite(item.rawUrl) }" :aria-pressed="isFavorite(item.rawUrl)" :aria-label="`${isFavorite(item.rawUrl) ? '取消喜欢' : '喜欢'}：Wallhaven ${item.id}`" :title="isFavorite(item.rawUrl) ? '取消喜欢' : '加入我的喜欢'" :disabled="savingFavorite" @click.stop="toggleFavorite({ url: item.rawUrl, thumbnail: item.thumbUrl || item.rawUrl, title: `Wallhaven ${item.id}`, source: 'wallhaven' })">
@@ -602,11 +609,12 @@ onMounted(() => {
     </div>
 
     <NModal v-model:show="showPreview" :auto-focus="false">
-      <div v-if="previewItem" class="wallhaven-preview" role="dialog" aria-modal="true" :aria-label="`壁纸预览：Wallhaven ${previewItem.id}`" tabindex="-1" @keydown="handlePreviewKeydown">
+      <div v-if="previewItem" ref="previewDialog" class="wallhaven-preview" role="dialog" aria-modal="true" :aria-label="`壁纸预览：Wallhaven ${previewItem.id}`" tabindex="-1" @keydown="handlePreviewKeydown">
         <div class="wallhaven-preview-stage">
           <img v-if="!previewRawLoaded" :src="previewItem.thumbUrl" alt="" aria-hidden="true" class="wallhaven-preview-image is-thumb">
-          <img :key="previewItem.rawUrl" :src="previewItem.rawUrl" :alt="`Wallhaven ${previewItem.id}`" class="wallhaven-preview-image" :class="{ 'is-loaded': previewRawLoaded }" @load="previewRawLoaded = true">
-          <span v-if="!previewRawLoaded" class="wallhaven-preview-loading">正在加载原图…</span>
+          <img v-if="!previewRawFailed" :key="`${previewItem.rawUrl}#${previewAttempt}`" :src="previewItem.rawUrl" :alt="`Wallhaven ${previewItem.id}`" class="wallhaven-preview-image" :class="{ 'is-loaded': previewRawLoaded }" @load="previewRawLoaded = true" @error="previewRawFailed = true">
+          <span v-if="previewRawFailed" class="wallhaven-preview-loading" role="alert">原图加载失败，当前显示的是缩略图 <button type="button" class="wallhaven-preview-retry" @click="retryPreviewRaw">重试</button></span>
+          <span v-else-if="!previewRawLoaded" class="wallhaven-preview-loading">正在加载原图…</span>
           <button type="button" class="wallhaven-preview-nav is-prev" aria-label="上一张" :disabled="previewIndex <= 0" @click="stepPreview(-1)">
             <SvgIcon icon="material-symbols:chevron-left-rounded" />
           </button>
@@ -687,7 +695,8 @@ onMounted(() => {
 .quick-tags { gap: 8px; }
 .wallhaven-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 18px; align-content: start; }
 .wallhaven-thumbnail { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; }
-.wallhaven-card:focus-visible { outline: 2px solid var(--pn-color-accent); outline-offset: 2px; }
+.wallhaven-preview-trigger { display: block; width: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; }
+.wallhaven-preview-trigger:focus-visible { outline: 2px solid var(--pn-color-accent); outline-offset: -2px; }
 .wallhaven-preview { display: flex; width: min(1100px, calc(100vw - 32px)); max-height: calc(100vh - 48px); flex-direction: column; overflow: hidden; border: 1px solid rgb(255 255 255 / 12%); border-radius: 16px; background: #0b0b0f; color: #f4f4f5; outline: none; box-shadow: 0 24px 80px rgb(0 0 0 / 55%); }
 .wallhaven-preview-stage { position: relative; display: grid; min-height: 240px; place-items: center; background: #000; }
 .wallhaven-preview-image { grid-area: 1 / 1; display: block; max-width: 100%; max-height: calc(100vh - 140px); object-fit: contain; opacity: 0; transition: opacity .3s ease; }
@@ -703,6 +712,7 @@ onMounted(() => {
 .wallhaven-preview-close { top: 12px; right: 12px; }
 .wallhaven-preview-nav:focus-visible, .wallhaven-preview-close:focus-visible { outline: 2px solid var(--pn-color-accent); }
 .wallhaven-preview-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; }
+.wallhaven-preview-retry { margin-left: 8px; padding: 1px 10px; border: 1px solid rgb(255 255 255 / 40%); border-radius: 999px; color: white; cursor: pointer; }
 .wallhaven-preview-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; font-size: 13px; color: #d4d4d8; }
 .wallhaven-preview-meta strong { color: #34d399; }
 .wallhaven-preview-meta span { display: inline-flex; align-items: center; gap: 4px; }
