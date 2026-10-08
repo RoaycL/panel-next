@@ -54,10 +54,10 @@ async function save() {
         <span class="group-order-handle" title="拖动排序" aria-hidden="true">⠿</span>
         <GroupIcon :icon="group.icon" :title="group.title" :size="24" />
         <span class="group-order-title">{{ group.title || '未命名分组' }}</span>
-        <button type="button" :aria-label="`上移${group.title}`" :disabled="saving || index === 0" @click="move(index, -1)">
+        <button type="button" class="group-order-move" :aria-label="`上移${group.title}`" :disabled="saving || index === 0" @click="move(index, -1)">
           ↑
         </button>
-        <button type="button" :aria-label="`下移${group.title}`" :disabled="saving || index === draft.length - 1" @click="move(index, 1)">
+        <button type="button" class="group-order-move" :aria-label="`下移${group.title}`" :disabled="saving || index === draft.length - 1" @click="move(index, 1)">
           ↓
         </button>
       </div>
@@ -83,9 +83,9 @@ p { margin: 12px 0; line-height: 1.6; }
 .group-order-row { display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 48px; padding: 6px 10px; border: 1px solid var(--pn-glass-border); border-radius: 12px; background: var(--pn-glass-control); }
 .group-order-handle { cursor: grab; touch-action: none; color: var(--pn-color-text-muted); font-size: 22px; flex: none; }
 .group-order-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--pn-color-text-primary); font-size: 13px; }
-button { flex: none; width: 30px; height: 30px; border: 1px solid var(--pn-glass-border); border-radius: 8px; background: var(--pn-glass-control); color: var(--pn-color-text-primary); cursor: pointer; }
-button:disabled { opacity: .35; cursor: not-allowed; }
-button:focus-visible, summary:focus-visible { outline: 2px solid var(--pn-color-accent); outline-offset: 2px; }
+.group-order-move { flex: none; width: 30px; height: 30px; border: 1px solid var(--pn-glass-border); border-radius: 8px; background: var(--pn-glass-control); color: var(--pn-color-text-primary); cursor: pointer; }
+.group-order-move:disabled { opacity: .35; cursor: not-allowed; }
+.group-order-move:focus-visible, summary:focus-visible { outline: 2px solid var(--pn-color-accent); outline-offset: 2px; }
 .group-order-ghost { opacity: .4; }
 .group-order-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 </style>
