@@ -40,6 +40,7 @@ import { receiveSharedSettings, stageWidgetSettings } from '@/runtime/sharedSett
 import ThemeIcon from '@/themes/ThemeIcon.vue'
 import { BOOTSTRAP_SNAPSHOT_KEY_PREFIX, readBootstrapSnapshot, refreshBootstrapSnapshot } from '@/sync/bootstrapCache'
 import { onSyncConflict, setSyncRevision } from '@/sync/revision'
+import { beginSyncActivity } from '@/sync/activity'
 import { replayOfflineQueue } from '@/sync/offlineReplay'
 import { getPendingMutationCount, OFFLINE_QUEUE_KEY_PREFIX, onOfflineQueueChanged, readOfflineQueue } from '@/sync/offlineQueue'
 import GroupIcon from '@/components/common/GroupIcon/index.vue'
@@ -129,10 +130,8 @@ async function triggerOfflineReplay() {
     })
   })
   refreshPendingMutationsCount()
-  if (result.succeeded > 0) {
-    ms.success(`已成功同步 ${result.succeeded} 项离线修改`)
+  if (result.succeeded > 0)
     void refreshBootstrap()
-  }
   if (result.interrupted && result.error && navigator.onLine)
     ms.warning(`同步已暂停：${result.error}`)
 }
@@ -590,10 +589,8 @@ async function handleWallpaperSelect(url: string) {
     try {
       const result = await saveAndSyncExtensionWallpaper(panelState.panelConfig)
       showWallpaperModal.value = false
-      if (result.status === 'synced') ms.success('壁纸已保存并同步')
-      else if (result.status === 'local') ms.success('壁纸已保存在本机，登录后可同步')
-      else if (result.status === 'queued') ms.warning(result.message || '壁纸已保存，恢复连接后自动同步')
-      else ms.warning(result.message || '壁纸已保存在本机，但云端同步失败，请重试')
+      // Syncing is silent; the top-right indicator shows progress.
+      if (result.status === 'failed') ms.warning(result.message || '壁纸已保存在本机，但云端同步失败，请重试')
       if (result.status === 'synced') void refreshBootstrap()
     }
     catch (error) {
@@ -892,6 +889,7 @@ async function refreshBootstrap() {
   }
   isRefreshing = true
   extensionSyncStatus.value = 'syncing'
+  const endSyncActivity = beginSyncActivity()
   try {
     // Authentication is background work: cached content has already painted.
     await authStore.upgradeLegacyExtensionSession()
@@ -938,6 +936,7 @@ async function refreshBootstrap() {
   }
   finally {
     isRefreshing = false
+    endSyncActivity()
   }
 }
 
@@ -2014,7 +2013,7 @@ onUnmounted(() => {
           <span class="workspace-brand-mark" aria-hidden="true"><ThemeIcon name="dashboard" /></span><span>Panel <b>Next</b></span>
         </button>
         <div
-          v-if="['cached', 'offline', 'error'].includes(extensionSyncStatus) || pendingMutationsCount > 0"
+          v-if="['offline', 'error'].includes(extensionSyncStatus) || pendingMutationsCount > 0"
           class="sync-status-banner"
           :class="`is-${extensionSyncPresentation.tone}`"
           role="status"

@@ -35,7 +35,7 @@
     "1301": "Upload failed, unsupported file format",
     "1400": "Parameter format error",
     "1501": "Sync state changed; refreshing the full snapshot",
-    "1502": "This dashboard changed on another device. The latest version is being loaded."
+    "1502": "The dashboard was updated elsewhere. The latest version is loaded; please try again."
   },
   "appLauncher": {
     "title": "Control Center",

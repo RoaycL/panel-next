@@ -123,9 +123,8 @@ async function editApi(keepOpen = false) {
       if (!keepOpen)
         show.value = false
       model.value = { ...newItemModel(), itemIconGroupId: props.itemGroupId ?? model.value.itemIconGroupId }
-      if (queued)
-        ms.info(conflict ? t('iconItem.queuedWithConflict') : t('iconItem.queuedOffline'))
-      else
+      // Queued edits sync silently; a real conflict opens the resolver.
+      if (!queued)
         ms.success(t('common.saveSuccess'))
       emit('done', data || payload, { queued: Boolean(queued), conflict: Boolean(conflict), keepOpen })
     }

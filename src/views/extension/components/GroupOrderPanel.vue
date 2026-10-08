@@ -37,8 +37,7 @@ async function save() {
     if (!auth.token || auth.userInfo?.id !== accountId || runtime.getServerOrigin() !== origin)
       throw new Error('账号或服务器已切换，请刷新页面')
     emit('saved', ids, { queued: Boolean(result.queued) })
-    if (result.queued) message.info(result.conflict ? '分组排序已进入待同步队列，请处理云端冲突' : '分组排序已保存，联网后同步')
-    else message.success('分组排序已保存并同步')
+    message.success('分组排序已保存')
   }
   catch (error) { message.error(error instanceof Error ? error.message : '保存排序失败，请重试') }
   finally { saving.value = false }

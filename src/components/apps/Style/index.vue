@@ -109,10 +109,8 @@ async function uploadCloud() {
         if (wallpaperChanged) {
           const result = await saveAndSyncExtensionWallpaper(attempted)
           wallpaperSyncFailed = result.status === 'failed'
-          if (result.status === 'synced') ms.success('壁纸已保存并同步')
-          else if (result.status === 'queued') ms.warning(result.message || '壁纸已保存，恢复连接后自动同步')
-          else if (result.status === 'failed') ms.warning(result.message || '壁纸已保存在本机，但云端同步失败，请重试')
-          else ms.success('壁纸已保存在本机，登录后可同步')
+          // Syncing is silent; only a failed upload needs the user's attention.
+          if (result.status === 'failed') ms.warning(result.message || '壁纸已保存在本机，但云端同步失败，请重试')
         }
         else {
           await saveExtensionAppearance(attempted)

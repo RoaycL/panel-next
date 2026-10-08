@@ -5,6 +5,7 @@ import { computed, defineAsyncComponent, h, nextTick, onMounted, onUnmounted, re
 import { AppIcon } from './components'
 import { SystemMonitor } from '@/components/deskModule'
 import { ConflictResolverModal } from '@/components/common'
+import SyncIndicator from '@/components/common/SyncIndicator/index.vue'
 import { deletes, getListByGroupId, saveSort } from '@/api/panel/itemIcon'
 import { getList as getGroupList } from '@/api/panel/itemIconGroup'
 import { set as setUserConfig } from '@/api/panel/userConfig'
@@ -146,7 +147,6 @@ async function triggerOfflineReplay() {
     })
   })
   if (result.succeeded > 0) {
-    ms.success(`已成功同步 ${result.succeeded} 项离线修改`)
     if (runtime.kind === 'extension')
       void refreshExtensionBootstrap()
     else
@@ -1059,6 +1059,7 @@ function addCatalogWidget(type: string) {
     />
     <div class="mask" :style="{ backgroundColor: `rgba(0,0,0,${panelState.panelConfig.backgroundMaskNumber})` }" />
     <div class="runtime-status-bar" role="status" :aria-label="t('panelHome.statusOverview')">
+      <SyncIndicator v-if="layout === 'web'" inline />
       <span class="status-chip">{{ runtimeLabel }}</span>
       <span class="status-chip" :class="browserOnline ? 'status-online' : 'status-offline'">
         <span class="status-dot" />{{ networkLabel }}
