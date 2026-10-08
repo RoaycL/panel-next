@@ -703,16 +703,6 @@ function dismissSearchHistory() {
   searchInputRef.value?.focus()
   searchHistoryDismissed.value = true
 }
-const bookmarkSearchOpen = ref(false)
-const bookmarkSearchQuery = ref('')
-const bookmarkSearchInputRef = ref<HTMLInputElement | null>(null)
-
-interface BookmarkSearchResult {
-  key: string
-  groupTitle: string
-  card: Panel.ItemInfo
-}
-
 const engineDropdownOptions = computed(() => {
   return searchEngines.map(e => ({
     label: e.title,
@@ -761,22 +751,6 @@ function handleSearchSubmit() {
   runtime.openUrl(targetUrl, widgetPreferences.value.searchOpenMode)
 }
 
-function toggleBookmarkSearch() {
-  bookmarkSearchOpen.value = !bookmarkSearchOpen.value
-  if (bookmarkSearchOpen.value)
-    void nextTick(() => bookmarkSearchInputRef.value?.focus())
-}
-
-function closeBookmarkSearch() {
-  bookmarkSearchOpen.value = false
-  bookmarkSearchQuery.value = ''
-}
-
-function openBookmarkSearchResult(card: Panel.ItemInfo) {
-  closeBookmarkSearch()
-  handleCardClick(card)
-}
-
 const featuredSiteIds = new Set(['baidu', 'google', 'bing', 'github', 'bilibili', 'youtube', 'chatgpt', 'cloudflare', 'docker', 'v2ex', 'claude', 'deepseek'])
 const defaultPresetGroups: DashboardGroup[] = [
   {
@@ -819,21 +793,6 @@ function showPresetGroups() {
   groups.value = defaultPresetGroups.map(group => ({ ...group, items: [...(group.items ?? [])] }))
 }
 const groupsReady = ref(!authStore.token)
-const bookmarkSearchResults = computed<BookmarkSearchResult[]>(() => {
-  const query = bookmarkSearchQuery.value.trim().toLowerCase()
-  if (!query)
-    return []
-  return groups.value.flatMap(group => (group.items ?? [])
-    .filter(card => card.title?.toLowerCase().includes(query)
-      || card.description?.toLowerCase().includes(query)
-      || card.url?.toLowerCase().includes(query))
-    .map(card => ({
-      key: `${group.id}:${card.id ?? card.title}`,
-      groupTitle: group.title || '未命名分组',
-      card,
-    })))
-    .slice(0, 12)
-})
 let isRefreshing = false
 
 async function applyBootstrapData(data: Sync.BootstrapResponseV1) {
@@ -2094,18 +2053,6 @@ onUnmounted(() => {
             <SvgIcon icon="material-symbols:close-rounded" class="w-4 h-4" />
           </button>
 
-          <button
-            type="button"
-            class="bookmark-search-trigger"
-            :class="{ active: bookmarkSearchOpen }"
-            title="搜索书签"
-            aria-label="搜索书签"
-            :aria-expanded="bookmarkSearchOpen"
-            @click="toggleBookmarkSearch"
-          >
-            <SvgIcon icon="material-symbols:folder-outline" class="w-4 h-4" />
-          </button>
-
           <!-- 回车搜索图标按钮 -->
           <button
             type="button"
@@ -2122,55 +2069,12 @@ onUnmounted(() => {
           ref="searchHistoryPanelRef"
           :entries="widgetPreferences.searchHistory"
           :query="searchQuery"
-          :visible="widgetPreferences.searchHistoryEnabled && isSearchFocused && !searchHistoryDismissed && !bookmarkSearchOpen"
+          :visible="widgetPreferences.searchHistoryEnabled && isSearchFocused && !searchHistoryDismissed"
           @select="selectSearchHistory"
           @remove="widgetPreferences.searchHistory = widgetPreferences.searchHistory.filter(item => item !== $event)"
           @clear="clearSearchHistory"
           @close="dismissSearchHistory"
         />
-        <Transition name="bookmark-search-panel">
-          <section v-if="bookmarkSearchOpen" class="bookmark-search-panel" aria-label="搜索书签">
-            <header class="bookmark-search-header">
-              <div>
-                <b>搜索书签</b>
-                <small>跨全部分组查找，不影响主页图标</small>
-              </div>
-              <button type="button" aria-label="关闭书签搜索" @click="closeBookmarkSearch">
-                <SvgIcon icon="material-symbols:close-rounded" />
-              </button>
-            </header>
-            <div class="bookmark-search-input-wrap">
-              <SvgIcon icon="material-symbols:search-rounded" />
-              <input
-                ref="bookmarkSearchInputRef"
-                v-model="bookmarkSearchQuery"
-                type="search"
-                placeholder="输入书签名称、描述或网址"
-                @keydown.esc="closeBookmarkSearch"
-              >
-            </div>
-            <div v-if="bookmarkSearchResults.length" class="bookmark-search-results">
-              <button
-                v-for="result in bookmarkSearchResults"
-                :key="result.key"
-                type="button"
-                @click="openBookmarkSearchResult(result.card)"
-              >
-                <span class="bookmark-result-icon">
-                  <ItemIcon :item-icon="result.card.icon" :size="28" :fallback-text="result.card.title" :site-url="result.card.url" />
-                </span>
-                <span class="bookmark-result-copy">
-                  <b>{{ result.card.title }}</b>
-                  <small>{{ result.groupTitle }} · {{ result.card.description || result.card.url }}</small>
-                </span>
-                <SvgIcon icon="mdi:open-in-new" class="bookmark-result-open" />
-              </button>
-            </div>
-            <div v-else class="bookmark-search-empty">
-              {{ bookmarkSearchQuery.trim() ? '没有找到匹配的书签' : '输入关键词开始查找' }}
-            </div>
-          </section>
-        </Transition>
       </section>
 
       <section class="dashboard-canvas-section w-full max-w-[1120px]">
@@ -3260,92 +3164,9 @@ onUnmounted(() => {
 .extension-search-input { color: var(--ext-text); }
 .extension-search-input::placeholder { color: var(--ext-text-soft); }
 .engine-select-btn { color: var(--ext-text-muted); border-radius: 10px !important; }
-.engine-select-btn:hover, .clear-btn:hover, .bookmark-search-trigger:hover { background: var(--ext-surface-raised) !important; }
-.bookmark-search-trigger {
-  display: grid;
-  width: 34px;
-  height: 34px;
-  flex: none;
-  place-items: center;
-  margin-right: 4px;
-  padding: 0;
-  border: 0;
-  border-radius: 10px;
-  color: var(--ext-text-muted);
-  background: transparent;
-  cursor: pointer;
-}
-.bookmark-search-trigger.active { color: var(--ext-accent); background: var(--ext-accent-soft); }
+.engine-select-btn:hover, .clear-btn:hover { background: var(--ext-surface-raised) !important; }
 .search-submit-btn { background: var(--ext-accent) !important; box-shadow: none !important; }
 
-.bookmark-search-panel {
-  position: absolute;
-  z-index: 42;
-  top: calc(100% + 10px);
-  left: 0;
-  width: 100%;
-  padding: 14px;
-  border: 1px solid var(--ext-border);
-  border-radius: 18px;
-  color: var(--ext-text);
-  background: var(--ext-surface);
-  box-shadow: 0 18px 48px var(--ext-shadow);
-}
-.bookmark-search-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 11px; }
-.bookmark-search-header > div { display: flex; flex-direction: column; }
-.bookmark-search-header b { color: var(--ext-text); font-size: 12px; }
-.bookmark-search-header small { margin-top: 2px; color: var(--ext-text-soft); font-size: 10px; }
-.bookmark-search-header > button {
-  display: grid;
-  width: 28px;
-  height: 28px;
-  place-items: center;
-  padding: 0;
-  border: 1px solid var(--ext-border);
-  border-radius: 9px;
-  color: var(--ext-text-muted);
-  background: var(--ext-surface-raised);
-  cursor: pointer;
-}
-.bookmark-search-input-wrap {
-  display: flex;
-  min-height: 40px;
-  align-items: center;
-  gap: 8px;
-  padding: 0 12px;
-  border: 1px solid var(--ext-border);
-  border-radius: 12px;
-  color: var(--ext-text-muted);
-  background: var(--ext-surface-raised);
-}
-.bookmark-search-input-wrap:focus-within { border-color: var(--ext-accent); box-shadow: 0 0 0 3px var(--ext-accent-soft); }
-.bookmark-search-input-wrap input { width: 100%; min-width: 0; border: 0; outline: 0; color: var(--ext-text); background: transparent; font-size: 12px; }
-.bookmark-search-input-wrap input::placeholder { color: var(--ext-text-soft); }
-.bookmark-search-results { display: flex; max-height: 300px; flex-direction: column; gap: 4px; overflow-y: auto; margin-top: 10px; overscroll-behavior: contain; }
-.bookmark-search-results > button {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 18px;
-  align-items: center;
-  gap: 9px;
-  width: 100%;
-  padding: 8px 9px;
-  border: 0;
-  border-radius: 11px;
-  color: var(--ext-text);
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-}
-.bookmark-search-results > button:hover { background: var(--ext-accent-soft); }
-.bookmark-result-icon { display: grid; width: 34px; height: 34px; place-items: center; overflow: hidden; border-radius: 9px; background: var(--ext-surface-raised); }
-.bookmark-result-copy { display: flex; min-width: 0; flex-direction: column; }
-.bookmark-result-copy b, .bookmark-result-copy small { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.bookmark-result-copy b { font-size: 11px; }
-.bookmark-result-copy small { margin-top: 2px; color: var(--ext-text-soft); font-size: 9px; }
-.bookmark-result-open { color: var(--ext-text-soft); font-size: 13px; }
-.bookmark-search-empty { padding: 22px 10px 12px; color: var(--ext-text-soft); font-size: 11px; text-align: center; }
-.bookmark-search-panel-enter-active, .bookmark-search-panel-leave-active { transition: opacity 150ms ease, transform 150ms ease; }
-.bookmark-search-panel-enter-from, .bookmark-search-panel-leave-to { opacity: 0; transform: translateY(-5px); }
 
 .active-group-meta { margin: 0 3px 10px; color: var(--ext-text); text-shadow: none; }
 .active-group-meta > span { font-size: 18px; font-weight: 600; letter-spacing: .02em; }
@@ -3654,7 +3475,7 @@ onUnmounted(() => {
 .card-icon-box { transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease; }
 .dashboard-add-icon-symbol svg { background: transparent; color: var(--ext-text-soft); width: 32px; height: 32px; padding: 4px; }
 .workspace-footer { display: flex; align-items: center; justify-content: space-between; flex: none; gap: 16px; width: min(100%, 1080px); margin-top: auto; padding-top: 40px; color: var(--ext-text-soft); font-size: 11px; letter-spacing: .04em; }
-.modal-secondary-action:focus-visible, .search-submit-btn:focus-visible, .engine-select-btn:focus-visible, .bookmark-search-trigger:focus-visible { outline: 2px solid var(--ext-accent); outline-offset: 3px; }
+.modal-secondary-action:focus-visible, .search-submit-btn:focus-visible, .engine-select-btn:focus-visible { outline: 2px solid var(--ext-accent); outline-offset: 3px; }
 .main-content { scrollbar-width: thin; scrollbar-color: var(--ext-border) transparent; }
 
 /* Wallpaper changes the canvas contrast, never the contrast inside controls. */
@@ -3697,7 +3518,7 @@ onUnmounted(() => {
 }
 
 /* Blur only independent surfaces, not every child, to avoid stacked GPU layers. */
-.side-rail, .search-bar-capsule, .bookmark-search-panel,
+.side-rail, .search-bar-capsule,
 .sync-status-banner, .extension-widget-toolbar, .extension-widget-editor,
 .extension-context-menu, .wheel-switch-hint, .speed-card.is-expanded {
   -webkit-backdrop-filter: var(--pn-glass-filter);
