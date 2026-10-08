@@ -688,6 +688,14 @@ const isSearchFocused = ref(false)
 const searchInputRef = ref<HTMLInputElement | null>(null)
 const searchHistoryPanelRef = ref<InstanceType<typeof SearchHistoryPanel> | null>(null)
 const searchHistoryDismissed = ref(false)
+// Only the text field opens history; the engine picker and its menu share the
+// section's focus but must not pop the history panel over the engine list.
+function handleSearchFocusIn(event: FocusEvent) {
+  if (!(event.target as HTMLElement | null)?.closest('.engine-select-btn')) isSearchFocused.value = true
+}
+function handleEngineMenuShow(show: boolean) {
+  if (show) isSearchFocused.value = false
+}
 function handleSearchFocusOut(event: FocusEvent) {
   if (!(event.currentTarget as HTMLElement).contains(event.relatedTarget as Node | null)) isSearchFocused.value = false
 }
@@ -704,9 +712,10 @@ const engineDropdownOptions = computed(() => {
   return searchEngines.map(e => ({
     label: e.title,
     key: e.id,
-    icon: () => e.iconSrc
-      ? h('img', { src: e.iconSrc, class: 'w-4 h-4' })
-      : h(SvgIcon, { icon: e.icon, class: 'w-4 h-4 text-slate-700 dark:text-slate-200' }),
+    // A flex box keeps the bitmap and sprite icons on the label's center line.
+    icon: () => h('span', { class: 'engine-option-icon' }, e.iconSrc
+      ? h('img', { src: e.iconSrc, alt: '' })
+      : h(SvgIcon, { icon: e.icon, class: 'text-slate-700 dark:text-slate-200' })),
   }))
 })
 
@@ -2022,13 +2031,13 @@ onUnmounted(() => {
       </section>
 
       <!-- 主搜索栏只负责联网搜索与网址直达；书签搜索使用独立面板。 -->
-      <section v-if="widgetPreferences.search" class="search-section w-full max-w-[600px] mb-8" @focusin="isSearchFocused = true" @focusout="handleSearchFocusOut">
+      <section v-if="widgetPreferences.search" class="search-section w-full max-w-[600px] mb-8" @focusin="handleSearchFocusIn" @focusout="handleSearchFocusOut">
         <div
           class="search-bar-capsule flex items-center backdrop-blur-xl px-3 py-2 shadow-lg transition-all duration-300"
           :class="{ 'is-focused': isSearchFocused }"
         >
           <!-- 搜索引擎下拉切换 -->
-          <NDropdown :options="engineDropdownOptions" trigger="click" @select="handleSelectEngine">
+          <NDropdown :options="engineDropdownOptions" trigger="click" @update:show="handleEngineMenuShow" @select="handleSelectEngine">
             <button
               type="button"
               class="engine-select-btn flex items-center space-x-1 pl-2 pr-2 py-1 rounded-full hover:bg-white/20 dark:hover:bg-white/10 transition-colors"
@@ -2075,8 +2084,9 @@ onUnmounted(() => {
           <!-- 回车搜索图标按钮 -->
           <button
             type="button"
-            class="search-submit-btn p-2 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white shadow-md transition-transform active:scale-95"
+            class="search-submit-btn transition-colors"
             title="搜索"
+            aria-label="搜索"
             @click="handleSearchSubmit"
           >
             <SvgIcon icon="material-symbols:search-rounded" class="w-4 h-4" />
@@ -3097,12 +3107,13 @@ onUnmounted(() => {
 .rail-group-add { color: var(--ext-text); }
 .rail-group-add .rail-icon { color: var(--pn-sidebar-active-text-color, var(--ext-text)); }
 
-.clock-hero { margin-top: clamp(28px, 5vh, 64px); margin-bottom: 30px; color: var(--ext-text); }
-.time-display { font-family: "Aptos Display", "Segoe UI Variable", sans-serif; font-variant-numeric: tabular-nums; letter-spacing: -.055em; line-height: 1.12; }
-.time-display > span:first-child { font-size: clamp(64px, 8vw, 108px) !important; font-weight: 300 !important; }
-.clock-seconds { margin-left: 12px; color: var(--ext-text-soft); font-size: 22px !important; font-weight: 400; letter-spacing: 0; }
+/* Clock, search and canvas sit close together near the top, like iTab's new tab. */
+.clock-hero { margin-top: clamp(0px, 1.5vh, 16px); margin-bottom: 22px !important; color: var(--ext-text); }
+.time-display { font-family: "Aptos Display", "Segoe UI Variable", sans-serif; font-variant-numeric: tabular-nums; letter-spacing: -.04em; line-height: 1; }
+.time-display > span:first-child { font-size: clamp(52px, 5.4vw, 80px) !important; font-weight: 300 !important; }
+.clock-seconds { margin-left: 8px; color: var(--ext-text-soft); font-size: 18px !important; font-weight: 400; letter-spacing: 0; }
 .clock-period { margin-left: 8px; color: var(--ext-text-muted); font-size: 12px; font-weight: 650; letter-spacing: 0; }
-.date-display { margin-top: 14px; color: var(--ext-text-muted); font-size: 13px !important; letter-spacing: .08em; }
+.date-display { margin-top: 8px; color: var(--ext-text-muted); font-size: 13px !important; letter-spacing: .08em; }
 .clock-hero.text-shadow-md { text-shadow: none; }
 
 .sync-status-banner {
@@ -3127,12 +3138,12 @@ onUnmounted(() => {
 .sync-status-banner.is-error { border-color: var(--ext-danger); }
 .sync-status-banner.is-error > svg { color: var(--ext-danger); }
 
-.search-section { position: relative; z-index: 35; max-width: 640px; margin-bottom: 56px !important; }
+.search-section { position: relative; z-index: 35; max-width: 580px; margin-bottom: 28px !important; }
 .search-bar-capsule {
-  min-height: 60px;
-  padding: 5px 8px 5px 10px !important;
+  min-height: 46px;
+  padding: 3px 5px 3px 8px !important;
   border: 1px solid var(--ext-border);
-  border-radius: 20px;
+  border-radius: var(--pn-search-radius, 999px);
   color: var(--ext-text);
   background: var(--ext-surface);
   box-shadow: var(--ext-elevation);
@@ -3143,7 +3154,6 @@ onUnmounted(() => {
 .extension-search-input::placeholder { color: var(--ext-text-soft); }
 .engine-select-btn { color: var(--ext-text-muted); border-radius: 10px !important; }
 .engine-select-btn:hover, .clear-btn:hover { background: var(--ext-surface-raised) !important; }
-.search-submit-btn { background: var(--ext-accent) !important; box-shadow: none !important; }
 
 
 .active-group-meta { margin: 0 3px 10px; color: var(--ext-text); text-shadow: none; }
@@ -3298,8 +3308,8 @@ onUnmounted(() => {
   .group-slide-next-leave-to, .group-slide-previous-enter-from { transform: none; filter: none; }
 }
 .dashboard-canvas-header {
-  min-height: 42px;
-  margin-bottom: 24px;
+  min-height: 34px;
+  margin-bottom: 8px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -3317,10 +3327,10 @@ onUnmounted(() => {
   gap: 7px;
 }
 .extension-dashboard-grid {
-  --widget-grid-row-height: 100px;
+  --widget-grid-row-height: 90px;
   --dashboard-columns: 12;
   --dashboard-column-width: calc((100cqw - (var(--dashboard-columns) - 1) * 12px) / var(--dashboard-columns));
-  --dashboard-icon-size: min(64px, var(--dashboard-column-width));
+  --dashboard-icon-size: min(60px, var(--dashboard-column-width));
   --dashboard-icon-inset: max(0px, (var(--dashboard-column-width) - var(--dashboard-icon-size)) / 2);
   --dashboard-caption-space: calc(var(--widget-grid-row-height) - var(--dashboard-icon-size));
   container-type: inline-size;
@@ -3330,6 +3340,7 @@ onUnmounted(() => {
   grid-auto-flow: dense;
   grid-auto-rows: var(--widget-grid-row-height);
   gap: 12px;
+  row-gap: 10px;
   width: 100%;
   min-height: var(--widget-grid-row-height);
   padding: 5px 0 18px;
@@ -3438,10 +3449,14 @@ onUnmounted(() => {
 .workspace-brand-mark { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--ext-border); border-radius: 9px; color: var(--ext-accent); background: var(--ext-surface); transition: border-color 150ms ease, background-color 150ms ease; }
 .workspace-brand-mark svg { width: 17px; height: 17px; }
 .clock-eyebrow { margin: 0 0 18px; color: var(--ext-text-soft); font-size: 12px; letter-spacing: .22em; }
-.extension-search-input { min-width: 0; width: 0; height: 40px; padding-block: 0 !important; border: 0 !important; border-radius: 0 !important; outline: 0 !important; box-shadow: none !important; appearance: none; -webkit-appearance: none; background: transparent !important; font: inherit; font-size: 15px; color: var(--ext-text); }
-.search-submit-btn { display: grid; place-items: center; width: 40px; height: 40px; flex: none; border-radius: 13px; color: var(--pn-color-surface); }
-.search-submit-btn:hover { filter: brightness(.93); }
-.engine-select-btn { min-height: 40px; }
+.extension-search-input { min-width: 0; width: 0; height: 38px; padding-block: 0 !important; border: 0 !important; border-radius: 0 !important; outline: 0 !important; box-shadow: none !important; appearance: none; -webkit-appearance: none; background: transparent !important; font: inherit; font-size: 14px; color: var(--ext-text); }
+/* A quiet magnifier instead of a filled block: Enter is the main way to search. */
+.search-submit-btn { display: grid; place-items: center; width: 36px; height: 36px; flex: none; padding: 0; border: 0; border-radius: 50%; color: var(--ext-text-muted); background: transparent; cursor: pointer; }
+.search-submit-btn:hover { color: var(--ext-text); background: var(--ext-surface-raised); }
+.search-submit-btn :deep(svg) { width: 20px; height: 20px; }
+.engine-select-btn { min-height: 34px; }
+:global(.engine-option-icon) { display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; }
+:global(.engine-option-icon > img), :global(.engine-option-icon > svg) { display: block; width: 16px; height: 16px; object-fit: contain; }
 .dashboard-canvas-header .extension-widget-toolbar { gap: 6px; padding: 0; border: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
 .extension-widget-toolbar .modal-secondary-action { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 34px; padding: 6px 11px; border: 1px solid var(--ext-border); border-radius: 10px; background: var(--ext-surface); color: var(--ext-text-muted); font-size: 12px; font-weight: 500; box-shadow: none; }
 .extension-widget-toolbar .modal-secondary-action:hover { color: var(--ext-accent); border-color: var(--ext-accent); }
