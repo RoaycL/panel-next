@@ -105,9 +105,15 @@ onUnmounted(() => {
         <span v-if="formatScore(item.score)" class="trending-score">{{ formatScore(item.score) }}</span>
       </li>
     </ol>
+    <div v-else-if="failed" class="trending-placeholder is-failed" role="status">
+      <span>{{ t('trending.unavailable') }}</span>
+      <button type="button" :disabled="loading" @click="refresh">
+        {{ t('common.retry') }}
+      </button>
+    </div>
     <div v-else class="trending-placeholder">
-      <span aria-hidden="true">{{ failed ? '⚠️' : '🔥' }}</span>
-      <span>{{ failed ? t('trending.unavailable') : t('trending.loading') }}</span>
+      <span aria-hidden="true">🔥</span>
+      <span>{{ t('trending.loading') }}</span>
     </div>
   </section>
 </template>
@@ -138,7 +144,7 @@ onUnmounted(() => {
   flex: none;
 }
 
-.trending-brand { flex: none; width: 24px; height: 24px; object-fit: contain; border-radius: 7px; }
+.trending-brand { flex: none; width: 22px; height: 22px; object-fit: contain; border-radius: 7px; }
 .trending-brand-letter { display: grid; place-items: center; background: #ff6600; color: white; font-size: 14px; font-weight: 600; }
 
 .trending-sources { display: flex; flex: none; gap: 4px; min-width: 0; overflow-x: auto; margin: 0 0 8px; padding: 3px; border-radius: 9px; background: var(--pn-widget-retry-background, rgb(255 255 255 / 6%)); }
@@ -149,7 +155,7 @@ onUnmounted(() => {
   margin: 0;
   font-size: 14px;
   font-weight: 700;
-  line-height: 1.2;
+  line-height: 20px;
 }
 
 .trending-stale {
@@ -265,4 +271,8 @@ onUnmounted(() => {
 }
 
 .trending-refresh:focus-visible, .trending-sources button:focus-visible, .trending-item:focus-visible { outline: 2px solid var(--pn-widget-text-color); outline-offset: 2px; }
+.trending-placeholder.is-failed { flex-direction: column; gap: 8px; color: var(--pn-widget-muted-text, rgb(255 255 255 / 72%)); }
+.trending-placeholder.is-failed button { padding: 4px 14px; border: 1px solid var(--pn-widget-border, rgb(255 255 255 / 16%)); border-radius: 999px; color: var(--pn-widget-text-color, white); background: var(--pn-widget-retry-background, rgb(255 255 255 / 8%)); cursor: pointer; font: inherit; font-size: 12px; }
+.trending-placeholder.is-failed button:hover:not(:disabled) { border-color: var(--pn-color-accent, #2eb8f0); }
+.trending-placeholder.is-failed button:disabled { cursor: wait; opacity: .5; }
 </style>

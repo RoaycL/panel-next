@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { NModal, NSelect } from 'naive-ui'
+import { NModal, NSelect, useMessage } from 'naive-ui'
+import { edit as editItem } from '@/api/panel/itemIcon'
 import SvgIcon from '@/components/common/SvgIcon/index.vue'
 import ItemIcon from '@/components/common/ItemIcon/index.vue'
 import { ICON_PRESETS, createPresetIcon } from '@/icons/presets'
@@ -14,6 +15,7 @@ const props = defineProps<{
   initialSection?: 'sites' | 'widgets'
   canAdd: boolean
   addedCounts?: Record<string, number>
+  existingUrls?: string[]
   busy?: boolean
 }>()
 const emit = defineEmits<{
@@ -28,6 +30,7 @@ const EditItem = defineAsyncComponent(() => import('@/views/home/components/Edit
 type Section = 'widgets' | 'sites' | 'custom'
 type Category = 'all' | IconPresetCategory
 const { t } = useI18n()
+const ms = useMessage()
 const editingBusy = ref(false)
 const busy = computed(() => props.busy || editingBusy.value)
 const visible = computed({ get: () => props.show, set: (value) => { if (!busy.value) emit('update:show', value) } })
@@ -72,6 +75,43 @@ function done(item: Panel.Info, meta: { queued: boolean, conflict: boolean, keep
   else emit('update:show', false)
 }
 function host(url: string) { return new URL(url).hostname.replace(/^www\./, '') }
+function siteKey(url: string | undefined) {
+  if (!url)
+    return ''
+  try {
+    const parsed = new URL(url)
+    return `${parsed.hostname.replace(/^www\./, '')}${parsed.pathname.replace(/\/+$/, '')}`.toLowerCase()
+  }
+  catch {
+    return url.trim().toLowerCase()
+  }
+}
+const addedSiteKeys = computed(() => new Set((props.existingUrls ?? []).map(siteKey).filter(Boolean)))
+function isAdded(preset: IconPreset) { return addedSiteKeys.value.has(siteKey(preset.url)) }
+// One click saves the preset as-is; the pencil keeps the old "edit before saving" path.
+async function quickAdd(preset: IconPreset) {
+  if (!props.canAdd || busy.value || props.pageId === null) return
+  editingBusy.value = true
+  const payload: Panel.Info = { title: preset.title, url: preset.url, description: '', lanUrl: '', openMethod: 2, itemIconGroupId: props.pageId, icon: createPresetIcon(preset) }
+  try {
+    const { code, data, msg, queued, conflict } = await editItem<Panel.ItemInfo>(payload)
+    if (code !== 0) {
+      ms.error(`${t('common.saveFail')}: ${msg}`)
+      return
+    }
+    if (queued)
+      ms.info(conflict ? t('iconItem.queuedWithConflict') : t('iconItem.queuedOffline'))
+    else
+      ms.success(t('iconGallery.quickAdded', { title: preset.title, page: pageName.value ?? '' }))
+    emit('done', data || payload, { queued: Boolean(queued), conflict: Boolean(conflict), keepOpen: true })
+  }
+  catch (error) {
+    ms.error(`${t('common.saveFail')}: ${error instanceof Error ? error.message : String(error)}`)
+  }
+  finally {
+    editingBusy.value = false
+  }
+}
 </script>
 
 <template>
@@ -111,11 +151,17 @@ function host(url: string) { return new URL(url).hostname.replace(/^www\./, '') 
             <strong>{{ t(`iconGallery.categories.${category}`) }}</strong><small>{{ t('iconGallery.results', { count: filtered.length }) }}</small>
           </div>
           <div v-if="filtered.length" class="icon-gallery-grid">
-            <article v-for="preset in filtered" :key="preset.id" class="icon-gallery-tile">
-              <ItemIcon :item-icon="createPresetIcon(preset)" :site-url="preset.url" :fallback-text="preset.title" :size="60" />
-              <div class="icon-gallery-copy">
-                <strong>{{ preset.title }}</strong><small>{{ host(preset.url) }}</small><button type="button" :disabled="!canAdd || busy || pageId === null" :aria-label="t('iconGallery.choose', { title: preset.title })" @click="choose(preset)">
-                  {{ t('common.add') }}<SvgIcon icon="material-symbols-add-rounded" />
+            <article v-for="preset in filtered" :key="preset.id" class="icon-gallery-tile" :class="{ 'is-added': isAdded(preset) }">
+              <ItemIcon :item-icon="createPresetIcon(preset)" :site-url="preset.url" :fallback-text="preset.title" :size="52" />
+              <strong :title="preset.title">{{ preset.title }}</strong>
+              <small>{{ host(preset.url) }}</small>
+              <div class="icon-gallery-actions">
+                <span v-if="isAdded(preset)" class="icon-gallery-added"><SvgIcon icon="material-symbols:check-rounded" />{{ t('iconGallery.alreadyAdded') }}</span>
+                <button v-else type="button" class="icon-gallery-quick-add" :disabled="!canAdd || busy || pageId === null" :aria-label="t('iconGallery.quickAddNamed', { title: preset.title })" @click="quickAdd(preset)">
+                  <SvgIcon icon="material-symbols-add-rounded" />{{ t('common.add') }}
+                </button>
+                <button type="button" class="icon-gallery-customize" :disabled="!canAdd || busy || pageId === null" :title="t('iconGallery.customizeFirst')" :aria-label="t('iconGallery.choose', { title: preset.title })" @click="choose(preset)">
+                  <SvgIcon icon="material-symbols:edit-outline-rounded" />
                 </button>
               </div>
             </article>
@@ -166,22 +212,27 @@ function host(url: string) { return new URL(url).hostname.replace(/^www\./, '') 
 .icon-gallery-categories button.active { color: var(--pn-color-surface); background: var(--pn-color-accent); }
 .icon-gallery-heading { display: flex; align-items: center; justify-content: space-between; font-size: 14px; }
 .icon-gallery-heading small { color: var(--pn-color-text-muted); font-size: 12px; }
-.icon-gallery-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: max-content; align-content: start; gap: 14px; min-height: 0; overflow: auto; padding: 2px 3px 8px; }
-.icon-gallery-tile { display: flex; align-items: flex-start; gap: 12px; min-width: 0; min-height: 135px; padding: 16px 14px; border: 1px solid var(--pn-glass-border); border-radius: 18px; background: var(--pn-glass-panel); box-shadow: var(--pn-glass-highlight); }
-.icon-gallery-tile :deep(.item-icon) { flex: none; box-shadow: 0 5px 16px rgb(2 6 23 / 10%); border-radius: 16px; }
-.icon-gallery-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 6px; }
-.icon-gallery-copy strong { overflow: hidden; font-size: 14px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
-.icon-gallery-copy small { overflow: hidden; color: var(--pn-color-text-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.icon-gallery-copy button { display: flex; align-items: center; justify-content: center; gap: 3px; align-self: flex-end; margin-top: 8px; padding: 5px 12px; border: 0; border-radius: 16px; color: var(--pn-color-text-primary); background: color-mix(in srgb, var(--pn-color-accent) 12%, transparent); cursor: pointer; font: inherit; font-size: 12px; }
-.icon-gallery-copy button:hover:not(:disabled) { color: var(--pn-color-surface); background: var(--pn-color-accent); }
-.icon-gallery-copy svg { width: 14px; height: 14px; }
+.icon-gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); grid-auto-rows: max-content; align-content: start; gap: 12px; min-height: 0; overflow: auto; padding: 2px 3px 8px; }
+.icon-gallery-tile { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; padding: 14px 10px 10px; border: 1px solid var(--pn-glass-border); border-radius: 16px; background: var(--pn-glass-panel); box-shadow: var(--pn-glass-highlight); text-align: center; transition: border-color .15s ease; }
+.icon-gallery-tile:hover { border-color: color-mix(in srgb, var(--pn-color-accent) 55%, transparent); }
+.icon-gallery-tile :deep(.item-icon) { flex: none; margin-bottom: 6px; box-shadow: 0 5px 16px rgb(2 6 23 / 10%); border-radius: 14px; }
+.icon-gallery-tile > strong { max-width: 100%; overflow: hidden; font-size: 13px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.icon-gallery-tile > small { max-width: 100%; overflow: hidden; color: var(--pn-color-text-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.icon-gallery-actions { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; margin-top: 8px; }
+.icon-gallery-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 3px; min-height: 30px; border: 0; border-radius: 999px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 650; }
+.icon-gallery-actions svg { width: 15px; height: 15px; flex: none; }
+.icon-gallery-quick-add { flex: 1; padding: 0 12px; color: var(--pn-color-surface); background: var(--pn-color-accent); }
+.icon-gallery-quick-add:hover:not(:disabled) { filter: brightness(1.08); }
+.icon-gallery-customize { width: 30px; flex: none; color: var(--pn-color-text-secondary); background: color-mix(in srgb, var(--pn-color-accent) 10%, transparent); }
+.icon-gallery-customize:hover:not(:disabled) { color: var(--pn-color-accent); }
+.icon-gallery-added { display: inline-flex; flex: 1; align-items: center; justify-content: center; gap: 3px; min-height: 30px; color: var(--pn-color-accent); font-size: 12px; font-weight: 650; }
+.icon-gallery-tile.is-added :deep(.item-icon) { opacity: .8; }
 button:disabled { cursor: not-allowed; opacity: .55; }
 button:focus-visible { outline: 2px solid var(--pn-color-accent); outline-offset: 3px; }
 .icon-gallery-empty { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 12px; flex: 1; color: var(--pn-color-text-secondary); }
 .icon-gallery-empty > svg { width: 32px; height: 32px; }
 .icon-gallery-editor { flex: 1; min-height: 0; overflow: auto; padding: 2px 3px 6px; }
 .icon-gallery-main > :deep(.widget-gallery-embedded) { flex: 1; min-height: 0; }
-@media (max-width: 960px) { .icon-gallery-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 720px) {
   .icon-gallery-layout { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
   .icon-gallery-sidebar { flex-direction: row; gap: 5px; padding: 8px 12px; border-right: 0; border-bottom: 1px solid var(--pn-glass-border); overflow-x: auto; }
@@ -195,7 +246,6 @@ button:focus-visible { outline: 2px solid var(--pn-color-accent); outline-offset
   .icon-gallery-toolbar { flex-wrap: wrap; gap: 10px; }
   .icon-gallery-search { flex-basis: 100%; }
   .icon-gallery-page { margin-left: auto; }
-  .icon-gallery-grid { grid-template-columns: 1fr; gap: 10px; }
-  .icon-gallery-tile { min-height: 100px; padding: 13px; }
+  .icon-gallery-grid { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 10px; }
 }
 </style>

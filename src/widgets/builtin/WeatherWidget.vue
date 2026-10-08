@@ -116,9 +116,16 @@ onUnmounted(() => {
         <span v-if="weather.stale" class="weather-stale">{{ t('weather.stale') }}</span>
       </div>
     </div>
+    <div v-else-if="failed" class="widget-failure" role="status">
+      <WeatherGlyph class="weather-icon" kind="unknown" />
+      <span>{{ t('weather.unavailable') }}</span>
+      <button type="button" :disabled="loading" @click="refresh">
+        {{ t('common.retry') }}
+      </button>
+    </div>
     <div v-else class="weather-placeholder">
-      <WeatherGlyph class="weather-icon" :kind="failed ? 'unknown' : 'partlyCloudy'" />
-      <span>{{ failed ? t('weather.unavailable') : t('weather.loading') }}</span>
+      <WeatherGlyph class="weather-icon" kind="partlyCloudy" />
+      <span>{{ t('weather.loading') }}</span>
     </div>
     <ol v-if="showForecast" class="weather-forecast" :style="{ gridTemplateColumns: `repeat(${forecast.length}, minmax(0, 1fr))` }" :aria-label="t('weather.forecast')">
       <li v-for="(day, index) in forecast" :key="day.date">
@@ -128,7 +135,7 @@ onUnmounted(() => {
         <span class="forecast-date">{{ forecastDate(day.date) }}</span>
       </li>
     </ol>
-    <button class="weather-refresh" type="button" :disabled="loading" :title="t('weather.refresh')" @click="refresh">
+    <button v-if="weather || !failed" class="weather-refresh" type="button" :disabled="loading" :title="t('weather.refresh')" @click="refresh">
       <span aria-hidden="true">↻</span>
       <span class="sr-only">{{ t('weather.refresh') }}</span>
     </button>
@@ -268,4 +275,10 @@ onUnmounted(() => {
   .weather-forecast { gap: 2px; padding-top: 8px; }
   .forecast-icon { width: 20px; height: 20px; }
 }
+.widget-failure { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 0; color: var(--pn-widget-muted-text, rgb(255 255 255 / 72%)); font-size: 12px; line-height: 16px; text-align: center; }
+.widget-failure .weather-icon { opacity: .7; }
+.widget-failure button { margin-top: 2px; padding: 4px 14px; border: 1px solid var(--pn-widget-border, rgb(255 255 255 / 16%)); border-radius: 999px; color: var(--pn-widget-text-color, white); background: var(--pn-widget-retry-background, rgb(255 255 255 / 8%)); cursor: pointer; font: inherit; font-size: 12px; }
+.widget-failure button:hover:not(:disabled) { border-color: var(--pn-color-accent, #2eb8f0); }
+.widget-failure button:disabled { cursor: wait; opacity: .5; }
+.weather-card:has(> .widget-failure) { padding-right: 13px; }
 </style>

@@ -89,7 +89,7 @@ function removeItem(id: string) {
   backdrop-filter: blur(var(--pn-effect-blur, 14px));
 }
 .todo-header { display: flex; align-items: start; justify-content: space-between; gap: 8px; }
-.todo-header h3 { margin: 0; font-size: 14px; font-weight: 700; }
+.todo-header h3 { margin: 0; font-size: 14px; font-weight: 700; line-height: 20px; }
 .todo-header small { color: var(--pn-widget-muted-text, rgb(255 255 255 / 65%)); font-size: 11px; }
 .todo-header .is-error { color: var(--pn-widget-error-color, #fca5a5); }
 .todo-form { display: flex; gap: 6px; }
