@@ -14,6 +14,7 @@ import { enqueueAppearanceSave } from '@/themes/appearanceSaveQueue'
 import { set as setUserConfig } from '@/api/panel/userConfig'
 import GallerySelector from '@/components/common/GallerySelector/index.vue'
 import { preloadWallpaper } from '@/runtime/wallpaperLoader'
+import { MAX_NIGHT_DIM, clampNightDim } from '@/themes/nightDim'
 
 defineEmits<{ (event: 'browse'): void }>()
 const showGallery = ref(false)
@@ -71,6 +72,12 @@ const wallpaperUrl = computed(() => selectedUrl.value ? getRuntime().resolveUrl(
 watch(wallpaperUrl, () => { imageFailed.value = false })
 const imageStyle = computed(() => ({ filter: `blur(${panel.panelConfig.backgroundBlur || 0}px)` }))
 const maskStyle = computed(() => ({ opacity: panel.panelConfig.backgroundMaskNumber ?? 0 }))
+const isExtension = getRuntime().kind === 'extension'
+const nightDim = computed(() => clampNightDim(panel.panelConfig.nightDim))
+function setNightDim(value: number) {
+  panel.panelConfig.nightDim = value
+  scheduleSave()
+}
 let timer: ReturnType<typeof setTimeout> | undefined
 async function save() {
   if (timer) clearTimeout(timer)
@@ -145,6 +152,10 @@ onBeforeUnmount(() => { selectionGeneration++; if (timer) void save() })
         </div>
         <label class="wallpaper-slider"><span>背景模糊 <small>{{ panel.panelConfig.backgroundBlur || 0 }} px</small></span><NSlider v-model:value="panel.panelConfig.backgroundBlur" :min="0" :max="20" :step="1" @update:value="scheduleSave" /></label>
         <label class="wallpaper-slider"><span>暗色遮罩 <small>{{ Math.round((panel.panelConfig.backgroundMaskNumber || 0) * 100) }}%</small></span><NSlider v-model:value="panel.panelConfig.backgroundMaskNumber" :min="0" :max="1" :step="0.05" @update:value="scheduleSave" /></label>
+        <label v-if="isExtension" class="wallpaper-slider"><span>夜间降低亮度 <small>{{ Math.round(nightDim * 100) }}%</small></span><NSlider :value="nightDim" :min="0" :max="MAX_NIGHT_DIM" :step="0.05" @update:value="setNightDim" /></label>
+        <p v-if="isExtension" class="wallpaper-hint">
+          仅夜间模式生效，同时调暗壁纸、图标和小组件。
+        </p>
       </div>
     </div>
     <section class="settings-glass-card wallpaper-uploads">
@@ -177,6 +188,7 @@ onBeforeUnmount(() => { selectionGeneration++; if (timer) void save() })
 .wallpaper-adjustments p, .wallpaper-section-heading p { margin: 8px 0 18px; font-size: 12px; line-height: 1.6; color: var(--pn-color-text-muted); }
 .wallpaper-buttons { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
 .wallpaper-slider { display: grid; gap: 10px; margin-top: 16px; }
+.wallpaper-adjustments .wallpaper-hint { margin: 6px 0 0; }
 .wallpaper-slider > span { display: flex; justify-content: space-between; color: var(--pn-color-text-secondary); font-size: 12px; }
 .wallpaper-slider small { color: var(--pn-color-text-muted); }
 @media (max-width: 850px) { .wallpaper-overview { grid-template-columns: minmax(0, 1fr); } .wallpaper-live-preview { aspect-ratio: 16 / 9; } }

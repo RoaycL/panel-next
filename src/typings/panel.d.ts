@@ -45,6 +45,8 @@ declare namespace Panel {
         backgroundImageSrc?:string
         backgroundBlur?:number
         backgroundMaskNumber?:number
+        /** Night-only dim (0–0.6) over wallpaper, icons and widgets; undefined uses DEFAULT_NIGHT_DIM. */
+        nightDim?:number
         iconStyle?:PanelPanelConfigStyleEnum
         iconTextColor?:string
         iconTextInfoHideDescription?:boolean

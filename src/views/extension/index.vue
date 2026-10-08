@@ -52,6 +52,7 @@ import { deletes as deleteItems, edit as editItem, getListByGroupId, saveSort as
 import type { DashboardGroup } from '@/dashboard/core'
 import { createDashboardState, createItemSortRequest, isDesktopGroup, resolveItemUrl, sortDashboardGroups } from '@/dashboard/core'
 import { rememberBootWallpaper } from '@/runtime/extension'
+import { clampNightDim } from '@/themes/nightDim'
 import SearchHistoryPanel from '@/components/common/SearchHistoryPanel.vue'
 import { addSearchHistory } from '@/runtime/searchHistory'
 import { VueDraggable } from 'vue-draggable-plus'
@@ -82,7 +83,10 @@ const requestedWallpaper = computed(() => {
 })
 const { displayed: activeWallpaper, error: wallpaperLoadError } = useLoadedWallpaper(requestedWallpaper)
 watch(wallpaperLoadError, error => { if (error) ms.warning(error) })
-watch(() => [activeWallpaper.value, panelState.panelConfig.backgroundMaskNumber ?? 0.35] as const, ([url, mask]) => {
+// Night dim stacks on the wallpaper mask and is mirrored onto icons and widgets via --pn-night-dim.
+const nightDim = computed(() => wallpaperTheme.resolvedMode === 'dark' ? clampNightDim(panelState.panelConfig.nightDim) : 0)
+const wallpaperMask = computed(() => 1 - (1 - (panelState.panelConfig.backgroundMaskNumber ?? 0.35)) * (1 - nightDim.value))
+watch(() => [activeWallpaper.value, wallpaperMask.value] as const, ([url, mask]) => {
   rememberBootWallpaper(url, mask)
 }, { immediate: true })
 const authStore = useAuthStore()
@@ -2016,6 +2020,7 @@ onUnmounted(() => {
       'sidebar-suppressed': sideRailSuppressed,
       'has-wallpaper': Boolean(activeWallpaper),
     }"
+    :style="{ '--pn-night-dim': nightDim }"
   >
     <!-- 用户自定义壁纸层 -->
     <div
@@ -2091,7 +2096,7 @@ onUnmounted(() => {
     <div
       v-if="activeWallpaper"
       class="bg-overlay"
-      :style="{ backgroundColor: `rgba(0,0,0,${panelState.panelConfig.backgroundMaskNumber ?? 0.35})` }"
+      :style="{ backgroundColor: `rgba(0,0,0,${wallpaperMask})` }"
     />
 
     <!-- 核心主体区 -->
@@ -3681,6 +3686,20 @@ onUnmounted(() => {
 .extension-dashboard-grid .dashboard-add-icon:hover .dashboard-add-icon-symbol svg { color: var(--ext-accent); }
 
 /* Size choices preview their footprint; the menu stays readable over busy widgets. */
+/* Night dim: a black veil over icon art and widget shells, so busy colours do not glare at night. */
+.card-icon-box { position: relative; }
+.card-icon-box::after,
+.extension-dashboard-grid :deep(.pn-widget-shell)::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  background: rgb(0 0 0 / calc(var(--pn-night-dim, 0) * 100%));
+  pointer-events: none;
+}
+.extension-dashboard-grid :deep(.pn-widget-shell)::after { border-radius: var(--pn-radius-large, 20px); }
+
 /* Menus use the denser floating glass so they stay readable over busy widgets in both day and night. */
 .extension-context-menu { background: var(--pn-glass-sheen), var(--pn-glass-floating); }
 .context-size-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 6px; }
