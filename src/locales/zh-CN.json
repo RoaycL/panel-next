@@ -526,7 +526,25 @@
       "baidu": "百度热搜",
       "zhihu": "知乎热榜",
       "hackernews": "Hacker News"
-    }
+    },
+    "short": {
+      "weibo": "微博",
+      "baidu": "百度",
+      "zhihu": "知乎",
+      "hackernews": "HN"
+    },
+    "labels": {
+      "new": "新",
+      "hot": "热",
+      "boil": "沸",
+      "boom": "爆"
+    },
+    "topStories": "热门 TOP 3",
+    "liveList": "实时榜单",
+    "updatedAt": "{time} 更新",
+    "itemCount": "共 {count} 条",
+    "heat": "热度",
+    "openBoard": "查看完整榜单"
   },
   "countdown": {
     "title": "倒计时与纪念日",

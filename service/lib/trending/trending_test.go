@@ -18,7 +18,7 @@ func TestClientFetchesAndCachesWeibo(t *testing.T) {
 			http.NotFound(response, request)
 			return
 		}
-		_, _ = response.Write([]byte(`{"ok":1,"data":{"realtime":[{"word":"热搜第一条","num":123456},{"word":"  热搜第二条  ","num":654321},{"word":"","num":1}]}}`))
+		_, _ = response.Write([]byte(`{"ok":1,"data":{"realtime":[{"word":"热搜第一条","num":123456,"label_name":"爆"},{"word":"广告","num":9,"is_ad":1},{"word":"  热搜第二条  ","num":654321},{"word":"","num":1}]}}`))
 	}))
 	defer server.Close()
 
@@ -30,7 +30,7 @@ func TestClientFetchesAndCachesWeibo(t *testing.T) {
 	if first.Cached || first.Stale || len(first.Items) != 2 {
 		t.Fatalf("unexpected first result: %#v", first)
 	}
-	if first.Items[0].Rank != 1 || first.Items[0].Title != "热搜第一条" || first.Items[0].URL == "" {
+	if first.Items[0].Rank != 1 || first.Items[0].Title != "热搜第一条" || first.Items[0].URL == "" || first.Items[0].Label != "boom" {
 		t.Fatalf("unexpected first item: %#v", first.Items[0])
 	}
 	if first.Items[1].Title != "热搜第二条" || first.Items[1].Rank != 2 {
@@ -94,7 +94,7 @@ func TestProvidersNormalizeUpstreams(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		switch request.URL.Path {
 		case "/zhihu":
-			_, _ = response.Write([]byte(`{"data":[{"target":{"title":"知乎问题","url":"https://api.zhihu.com/questions/123456"},"detail_text":"1234 万热度"},{"target":{"title":"","url":"https://api.zhihu.com/questions/1"},"detail_text":""}]}`))
+			_, _ = response.Write([]byte(`{"data":[{"target":{"title":"知乎问题","url":"https://api.zhihu.com/questions/123456","excerpt":"  问题\n摘要  "},"detail_text":"1234 万热度","children":[{"thumbnail":"http://pic1.zhimg.com/a.jpg"}]},{"target":{"title":"","url":"https://api.zhihu.com/questions/1"},"detail_text":""}]}`))
 		case "/hackernews":
 			_, _ = response.Write([]byte(`{"hits":[{"objectID":"111","title":"Show HN: Panel","url":"","points":256},{"objectID":"222","title":"Fallback link","url":" ","points":10},{"objectID":"","title":"Drop me","url":" ","points":1}]}`))
 		default:
@@ -111,7 +111,7 @@ func TestProvidersNormalizeUpstreams(t *testing.T) {
 	if len(items) != 1 {
 		t.Fatalf("expected one zhihu item, got %#v", items)
 	}
-	if items[0].URL != "https://www.zhihu.com/question/123456" || items[0].Score != 12340000 {
+	if items[0].URL != "https://www.zhihu.com/question/123456" || items[0].Score != 12340000 || items[0].Desc != "问题 摘要" || items[0].Image != "https://pic1.zhimg.com/a.jpg" {
 		t.Fatalf("unexpected zhihu normalization: %#v", items[0])
 	}
 

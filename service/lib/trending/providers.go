@@ -28,8 +28,10 @@ func (provider *WeiboProvider) Fetch(ctx context.Context, client *http.Client) (
 		Ok   int `json:"ok"`
 		Data struct {
 			Realtime []struct {
-				Word string `json:"word"`
-				Num  int64  `json:"num"`
+				Word      string `json:"word"`
+				Num       int64  `json:"num"`
+				LabelName string `json:"label_name"`
+				IsAd      int    `json:"is_ad"`
 			} `json:"realtime"`
 		} `json:"data"`
 	}
@@ -45,14 +47,17 @@ func (provider *WeiboProvider) Fetch(ctx context.Context, client *http.Client) (
 	items := make([]Item, 0, len(response.Data.Realtime))
 	for _, entry := range response.Data.Realtime {
 		title := sanitizeTitle(entry.Word)
-		if title == "" {
+		if title == "" || entry.IsAd != 0 {
 			continue
 		}
 		link := "https://s.weibo.com/weibo?q=" + url.QueryEscape("#"+title+"#")
-		items = append(items, Item{Title: title, URL: link, Score: entry.Num})
+		items = append(items, Item{Title: title, URL: link, Score: entry.Num, Label: weiboLabels[strings.TrimSpace(entry.LabelName)]})
 	}
 	return items, nil
 }
+
+// weiboLabels 把微博的「新/热/沸/爆」角标映射成前端通用的标记。
+var weiboLabels = map[string]string{"新": "new", "热": "hot", "沸": "boil", "爆": "boom"}
 
 // BaiduProvider 抓取百度实时热搜榜。
 type BaiduProvider struct {
@@ -71,6 +76,7 @@ type baiduItem struct {
 	HotScore string `json:"hotScore"`
 	URL      string `json:"url"`
 	AppURL   string `json:"appUrl"`
+	Img      string `json:"img"`
 }
 
 func (provider *BaiduProvider) Fetch(ctx context.Context, client *http.Client) ([]Item, error) {
@@ -84,6 +90,7 @@ func (provider *BaiduProvider) Fetch(ctx context.Context, client *http.Client) (
 					HotScore string      `json:"hotScore"`
 					URL      string      `json:"url"`
 					AppURL   string      `json:"appUrl"`
+					Img      string      `json:"img"`
 					Content  []baiduItem `json:"content"`
 				} `json:"content"`
 			} `json:"cards"`
@@ -96,7 +103,7 @@ func (provider *BaiduProvider) Fetch(ctx context.Context, client *http.Client) (
 		return nil, fmt.Errorf("baidu upstream reported failure")
 	}
 	items := make([]Item, 0)
-	addItem := func(word, entryURL, appURL, rawScore string) {
+	addItem := func(word, entryURL, appURL, rawScore, desc, img string) {
 		title := sanitizeTitle(word)
 		if title == "" {
 			return
@@ -112,17 +119,17 @@ func (provider *BaiduProvider) Fetch(ctx context.Context, client *http.Client) (
 		if parsed, err := strconv.ParseInt(strings.TrimSpace(rawScore), 10, 64); err == nil {
 			score = parsed
 		}
-		items = append(items, Item{Title: title, URL: link, Score: score})
+		items = append(items, Item{Title: title, URL: link, Score: score, Desc: sanitizeDesc(desc), Image: sanitizeImage(img)})
 	}
 
 	for _, card := range response.Data.Cards {
 		for _, entry := range card.Content {
 			if len(entry.Content) > 0 {
 				for _, sub := range entry.Content {
-					addItem(sub.Word, sub.URL, sub.AppURL, sub.HotScore)
+					addItem(sub.Word, sub.URL, sub.AppURL, sub.HotScore, sub.Desc, sub.Img)
 				}
 			} else if entry.Word != "" {
-				addItem(entry.Word, entry.URL, entry.AppURL, entry.HotScore)
+				addItem(entry.Word, entry.URL, entry.AppURL, entry.HotScore, entry.Desc, entry.Img)
 			}
 		}
 	}
@@ -146,10 +153,14 @@ func (provider *ZhihuProvider) Fetch(ctx context.Context, client *http.Client) (
 	var response struct {
 		Data []struct {
 			Target struct {
-				Title string `json:"title"`
-				URL   string `json:"url"`
+				Title   string `json:"title"`
+				URL     string `json:"url"`
+				Excerpt string `json:"excerpt"`
 			} `json:"target"`
 			DetailText string `json:"detail_text"`
+			Children   []struct {
+				Thumbnail string `json:"thumbnail"`
+			} `json:"children"`
 		} `json:"data"`
 	}
 	if err := fetchJSON(ctx, client, provider.endpoint, providerUserAgent, &response); err != nil {
@@ -162,7 +173,11 @@ func (provider *ZhihuProvider) Fetch(ctx context.Context, client *http.Client) (
 			continue
 		}
 		link := normalizeZhihuLink(entry.Target.URL, title)
-		items = append(items, Item{Title: title, URL: link, Score: parseZhihuHeat(entry.DetailText)})
+		item := Item{Title: title, URL: link, Score: parseZhihuHeat(entry.DetailText), Desc: sanitizeDesc(entry.Target.Excerpt)}
+		if len(entry.Children) > 0 {
+			item.Image = sanitizeImage(entry.Children[0].Thumbnail)
+		}
+		items = append(items, item)
 	}
 	return items, nil
 }

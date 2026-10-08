@@ -525,7 +525,25 @@
       "baidu": "Baidu Trending",
       "zhihu": "Zhihu Hot List",
       "hackernews": "Hacker News"
-    }
+    },
+    "short": {
+      "weibo": "Weibo",
+      "baidu": "Baidu",
+      "zhihu": "Zhihu",
+      "hackernews": "HN"
+    },
+    "labels": {
+      "new": "New",
+      "hot": "Hot",
+      "boil": "Rising",
+      "boom": "Viral"
+    },
+    "topStories": "Top 3",
+    "liveList": "Live ranking",
+    "updatedAt": "Updated {time}",
+    "itemCount": "{count} items",
+    "heat": "Heat",
+    "openBoard": "Open full list"
   },
   "countdown": {
     "title": "Countdown & anniversary",

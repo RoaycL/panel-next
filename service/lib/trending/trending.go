@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -25,6 +26,7 @@ const (
 
 	maxResponseBytes = 1 << 20
 	maxTitleRunes    = 120
+	maxDescRunes     = 160
 	maxItems         = 50
 )
 
@@ -40,6 +42,11 @@ type Item struct {
 	Title string `json:"title"`
 	URL   string `json:"url"`
 	Score int64  `json:"score,omitempty"`
+	// Label 是上游的热度标记，归一化为 new/hot/boil/boom。
+	Label string `json:"label,omitempty"`
+	// Desc 和 Image 是可选摘要与配图（https），只在放大视图里展示。
+	Desc  string `json:"desc,omitempty"`
+	Image string `json:"image,omitempty"`
 }
 
 // Result 是一次热搜读取的完整响应。
@@ -202,6 +209,28 @@ func sanitizeTitle(title string) string {
 		title = string([]rune(title)[:maxTitleRunes])
 	}
 	return title
+}
+
+// sanitizeDesc 去掉空白并截断摘要。
+func sanitizeDesc(desc string) string {
+	desc = strings.Join(strings.Fields(desc), " ")
+	if utf8.RuneCountInString(desc) > maxDescRunes {
+		desc = string([]rune(desc)[:maxDescRunes]) + "…"
+	}
+	return desc
+}
+
+// sanitizeImage 只保留 https 图片地址，避免混合内容和奇怪的协议。
+func sanitizeImage(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if strings.HasPrefix(raw, "http://") {
+		raw = "https://" + strings.TrimPrefix(raw, "http://")
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || len(raw) > 1024 {
+		return ""
+	}
+	return raw
 }
 
 func fetchJSON(ctx context.Context, client *http.Client, endpoint, userAgent string, target interface{}) error {

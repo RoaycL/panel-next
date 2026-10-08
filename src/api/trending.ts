@@ -10,7 +10,13 @@ export interface TrendingItem {
   title: string
   url: string
   score?: number
+  /** Upstream heat badge, normalized by the server. */
+  label?: TrendingLabel
+  desc?: string
+  image?: string
 }
+
+export type TrendingLabel = 'new' | 'hot' | 'boil' | 'boom'
 
 export interface TrendingResponse {
   source: TrendingSource
