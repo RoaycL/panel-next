@@ -201,7 +201,7 @@ html.dark .item-icon-surface-glass {
   .item-icon-surface-glass { background: #f5f5f5 !important; -webkit-backdrop-filter: none; backdrop-filter: none; }
   html.dark .item-icon-surface-glass { background: #262626 !important; }
 }
-html.dark .item-icon-surface-glass.item-icon-surface-image:not(.item-icon-image-transparent)::after { position: absolute; inset: 0; z-index: 1; border-radius: inherit; background: rgba(0, 0, 0, .14); pointer-events: none; content: ''; }
+html.dark .item-icon-surface-image:not(.item-icon-image-transparent)::after { position: absolute; inset: 0; z-index: 1; border-radius: inherit; background: rgba(0, 0, 0, .14); pointer-events: none; content: ''; }
 html.dark .item-icon-image-transparent > img { filter: drop-shadow(0 0 1px rgba(255, 255, 255, .4)); }
 /* Only black monochrome transparent marks need a white night variant. */
 html.dark .item-icon-image-dark-mark > img { filter: brightness(0) invert(1); }
