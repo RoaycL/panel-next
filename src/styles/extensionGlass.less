@@ -33,6 +33,15 @@ body:is([data-panel-runtime='extension'], [data-panel-runtime='web']),
 
 }
 
+/* Night: stronger saturation lets wallpaper colour through the smoke tint, and
+   a fainter sheen keeps the glass from washing out to grey. */
+html.dark body:is([data-panel-runtime='extension'], [data-panel-runtime='web']),
+html.dark .pn-theme-root:is([data-surface='extension'], [data-surface='web']) {
+  --pn-glass-filter: blur(calc(var(--pn-effect-blur, 32px) * 1.25)) saturate(170%);
+  --pn-glass-control-filter: blur(calc(var(--pn-effect-blur, 32px) * .75)) saturate(160%);
+  --pn-glass-sheen: linear-gradient(145deg, rgba(255,255,255,.06), transparent 50%);
+}
+
 body:is([data-panel-runtime='extension'], [data-panel-runtime='web']) :is(.n-modal.n-card, .round-card-modal.n-card, .n-dialog, .n-dropdown-menu, .n-base-select-menu, .n-popover:not(.n-popover--raw), .n-message, .n-notification) {
   background: var(--pn-glass-sheen), var(--pn-glass-modal) !important;
   border: 1px solid var(--pn-glass-border) !important;
