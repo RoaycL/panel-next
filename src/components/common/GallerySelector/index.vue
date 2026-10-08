@@ -135,6 +135,7 @@ const wallhavenSortingOptions = [
   { label: '最新上传', value: 'date_added' },
 ]
 
+// cat 为 Wallhaven 分类位：General / Anime / People；内容分级仍由 purity 决定
 const quickTags = [
   { label: '🌟 精选推荐', q: '', cat: '110' },
   { label: '🎨 动漫二次元', q: 'anime', cat: '010' },
@@ -143,6 +144,8 @@ const quickTags = [
   { label: '🌌 宇宙星空', q: 'space galaxy', cat: '100' },
   { label: '💻 科技极简', q: 'minimalism tech', cat: '100' },
   { label: '🚗 顶级超跑', q: 'supercar', cat: '100' },
+  { label: '👩 美女写真', q: 'women', cat: '001' },
+  { label: '🎭 Cosplay', q: 'cosplay', cat: '011' },
 ]
 
 async function fetchImages() {
