@@ -141,7 +141,7 @@ async function flushLatestSettingsInternal() {
       const baseline = await getBootstrap()
       if (scope() !== key) return
       if (baseline.code !== 0 || baseline.data?.account.id !== accountId) throw new Error('无法读取当前账号的云端设置，稍后重试')
-      setSyncRevision(baseline.data.revision)
+      setSyncRevision(baseline.data.revision, { authoritative: true })
       const panel = { ...baseline.data.panel.config, ...snapshot.panel, sharedPreferences: snapshot.preferences }
       const result = await mutationPost('/panel/userConfig/set', { panel }, { queueOnFailure: false })
       if (scope() !== key) return

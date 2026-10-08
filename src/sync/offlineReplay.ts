@@ -81,7 +81,7 @@ async function replayOfflineQueueInternal(
       error: error instanceof Error ? error.message : '无法连接到服务端获取最新基线',
     }
   }
-  setSyncRevision(currentRemoteBootstrap.revision)
+  setSyncRevision(currentRemoteBootstrap.revision, { authoritative: true })
 
   const result: ReplayQueueResult = {
     total: queue.length,
@@ -203,7 +203,7 @@ async function replayOfflineQueueInternal(
         const nextBootstrap = await getBootstrap()
         if (nextBootstrap.code === 0 && nextBootstrap.data) {
           currentRemoteBootstrap = nextBootstrap.data
-          setSyncRevision(currentRemoteBootstrap.revision)
+          setSyncRevision(currentRemoteBootstrap.revision, { authoritative: true })
         }
         else {
           result.interrupted = true
