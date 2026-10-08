@@ -146,7 +146,6 @@ function add(type: string) {
       </aside>
 
       <div class="gallery-main">
-        <PackageCenterPanel kind="plugin" />
         <div class="gallery-tools">
           <label class="gallery-search">
             <SvgIcon icon="material-symbols:search-rounded" />
@@ -243,6 +242,15 @@ function add(type: string) {
             {{ t('widgetGallery.clearFilters') }}
           </button>
         </div>
+        <!-- Installing packages is rare; keep it below the catalog so the widgets own the first screen. -->
+        <details class="gallery-packages">
+          <summary>
+            <SvgIcon icon="material-symbols:dashboard-customize-outline-rounded" />
+            <span>{{ t('widgetGallery.packagesTitle') }}</span>
+            <small>{{ t('widgetGallery.packagesHint') }}</small>
+          </summary>
+          <PackageCenterPanel kind="plugin" />
+        </details>
       </div>
     </div>
   </component>
@@ -262,7 +270,7 @@ function add(type: string) {
 .gallery-category:hover, .gallery-category.active { color: var(--pn-color-accent, #0f9f75); background: color-mix(in srgb, var(--pn-color-accent, #0f9f75) 12%, transparent); }
 .gallery-category.active { box-shadow: inset 3px 0 var(--pn-color-accent, #0f9f75); font-weight: 700; }
 .gallery-sidebar-foot { margin: auto 9px 0; color: var(--pn-color-text-muted, #64748b); font-size: 11px; line-height: 1.5; }
-.gallery-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: 18px 20px 20px; }
+.gallery-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: auto; padding: 18px 20px 20px; }
 .gallery-tools { display: flex; align-items: center; gap: 10px; }
 .gallery-search { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; height: 44px; padding: 0 11px; border: 1px solid var(--pn-color-border, rgb(148 163 184 / 30%)); border-radius: 11px; background: var(--pn-color-surface, #fff); }
 .gallery-search svg { width: 17px; height: 17px; color: var(--pn-color-text-muted, #64748b); }
@@ -276,7 +284,7 @@ function add(type: string) {
 .gallery-filters button { min-height: 27px; padding: 4px 11px; border: 1px solid var(--pn-color-border, rgb(148 163 184 / 22%)); border-radius: 999px; color: var(--pn-color-text-secondary, #475569); background: var(--pn-color-surface, #fff); cursor: pointer; font: inherit; font-size: 11px; }
 .gallery-filters button.active { border-color: var(--pn-color-accent, #0f9f75); color: var(--pn-color-surface); background: var(--pn-color-accent, #0f9f75); }
 .gallery-filters > span { margin-left: auto; color: var(--pn-color-text-muted, #64748b); font-size: 11px; }
-.gallery-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: max-content; align-content: start; gap: 13px; min-height: 0; overflow: auto; padding: 1px 2px 8px; }
+.gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); grid-auto-rows: max-content; align-content: start; gap: 13px; padding: 1px 2px 8px; }
 .gallery-card { min-width: 0; overflow: hidden; border: 1px solid var(--pn-color-border, rgb(148 163 184 / 22%)); border-radius: 16px; background: var(--pn-color-surface, #fff); transition: border-color .15s ease, transform .15s ease, box-shadow .15s ease; }
 .gallery-card:hover { border-color: var(--pn-color-accent, #0f9f75); transform: translateY(-2px); box-shadow: 0 12px 30px rgb(2 6 23 / 12%); }
 .gallery-search, .gallery-card, .gallery-filters button:not(.active) { background: var(--pn-glass-panel); border-color: var(--pn-glass-border); box-shadow: var(--pn-glass-highlight); }
@@ -349,6 +357,15 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--pn-color-ac
 .widget-gallery-embedded .gallery-main { flex: 1; padding: 0; }
 .widget-gallery-embedded .gallery-filters { margin: 0 0 12px; }
 .widget-gallery-embedded .gallery-card-details { padding: 14px; }
-.widget-gallery-embedded .gallery-preview { height: 175px; }
-@media (max-width: 540px) { .widget-gallery-embedded .gallery-preview { height: 145px; } }
+.widget-gallery-embedded .gallery-preview { height: 120px; }
+@media (max-width: 540px) { .widget-gallery-embedded .gallery-preview { height: 110px; } }
+.gallery-packages { flex: none; margin-top: 14px; border: 1px solid var(--pn-glass-border, var(--pn-color-border, rgb(148 163 184 / 22%))); border-radius: 14px; background: var(--pn-glass-panel, var(--pn-color-surface, #fff)); }
+.gallery-packages summary { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px; cursor: pointer; color: var(--pn-color-text-secondary, #475569); font-size: 13px; font-weight: 650; list-style: none; }
+.gallery-packages summary::-webkit-details-marker { display: none; }
+.gallery-packages summary::after { content: '›'; margin-left: 8px; font-size: 16px; transition: transform .15s ease; }
+.gallery-packages[open] summary::after { transform: rotate(90deg); }
+.gallery-packages summary svg { flex: none; width: 17px; height: 17px; color: var(--pn-color-accent, #0f9f75); }
+.gallery-packages summary small { margin-left: auto; color: var(--pn-color-text-muted, #64748b); font-size: 11px; font-weight: 400; }
+.gallery-packages[open] { padding-bottom: 4px; }
+.gallery-packages > :not(summary) { margin: 0 10px 10px; }
 </style>

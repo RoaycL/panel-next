@@ -1204,7 +1204,7 @@ async function tidyActiveCanvas() {
   const items = activeCanvasItems.value
   activeCanvasItems.value = [...items.filter(item => item.kind === 'bookmark'), ...items.filter(item => item.kind === 'widget')]
   if (await persistExtensionWidgets())
-    ms.success('已整理：书签在前，小组件在后')
+    ms.success(t('extensionCanvas.tidied'))
 }
 
 const longPressKey = ref<string | null>(null)
@@ -1654,10 +1654,10 @@ async function handleRightMenuSelect(key: string) {
   else if (key === 'copy_url' && card.url) {
     try {
       await navigator.clipboard.writeText(card.url)
-      ms.success('链接已复制')
+      ms.success(t('extensionCanvas.menu.copied'))
     }
     catch {
-      ms.error('复制失败，请检查剪贴板权限')
+      ms.error(t('extensionCanvas.menu.copyFailed'))
     }
   }
   else if (key === 'edit') {
@@ -1668,8 +1668,8 @@ async function handleRightMenuSelect(key: string) {
   }
   else if (key === 'delete' && card.id) {
     dialog.warning({
-      title: '删除书签',
-      content: `确定删除“${card.title}”吗？`,
+      title: t('extensionCanvas.deleteBookmarkTitle'),
+      content: t('extensionCanvas.deleteBookmarkConfirm', { title: card.title }),
       positiveText: t('common.confirm'),
       negativeText: t('common.cancel'),
       onPositiveClick: async () => {
@@ -1711,7 +1711,7 @@ async function moveBookmarkToGroup(card: Panel.ItemInfo, groupId: number) {
     if (queued)
       ms.info(msg)
     else
-      ms.success(`已移动到「${target?.title ?? ''}」`)
+      ms.success(t('extensionCanvas.menu.moved', { title: target?.title ?? '' }))
   }
   catch (error) {
     ms.error(`${t('common.saveFail')}: ${error instanceof Error ? error.message : String(error)}`)
@@ -2179,15 +2179,15 @@ onUnmounted(() => {
             <div class="dashboard-canvas-header">
               <div class="active-group-meta">
                 <span>{{ activeGroup?.title }}</span>
-                <small>{{ activeGroup?.count || 0 }} 个书签 · {{ buildWidgetDisplayGroups(extensionWidgetInstances).length }} 个组件</small>
-                <nav v-if="sidebarAutoHide && groupTabs.length > 1" class="group-switcher" aria-label="切换分组">
+                <small>{{ t('extensionCanvas.summary', { bookmarks: activeGroup?.count || 0, widgets: buildWidgetDisplayGroups(extensionWidgetInstances).length }) }}</small>
+                <nav v-if="sidebarAutoHide && groupTabs.length > 1" class="group-switcher" :aria-label="t('extensionCanvas.switchGroup')">
                   <button
                     v-for="group in groupTabs"
                     :key="group.id"
                     type="button"
                     :class="{ active: group.id === activeGroup?.id }"
                     :aria-current="group.id === activeGroup?.id ? 'page' : undefined"
-                    :title="`${group.title}（${group.count} 项）`"
+                    :title="t('extensionCanvas.groupCount', { title: group.title, count: group.count })"
                     @click="selectGroup(group.id)"
                   >
                     {{ group.title }}
@@ -2196,21 +2196,21 @@ onUnmounted(() => {
               </div>
               <div v-if="extensionWidgetEditMode" class="extension-widget-toolbar">
                 <div class="extension-edit-mode-copy">
-                  <strong>正在编辑当前页面</strong>
-                  <small>拖动调整位置，拖拽边缘改变大小</small>
+                  <strong>{{ t('extensionCanvas.editing') }}</strong>
+                  <small>{{ t('extensionCanvas.editingHint') }}</small>
                 </div>
-                <button v-if="canTidyCanvas" type="button" class="modal-secondary-action flex items-center gap-1" title="书签排在前面，小组件依次排在后面" @click="tidyActiveCanvas">
+                <button v-if="canTidyCanvas" type="button" class="modal-secondary-action flex items-center gap-1" :title="t('extensionCanvas.tidyHint')" @click="tidyActiveCanvas">
                   <SvgIcon icon="mdi:view-dashboard-outline" class="w-4 h-4" />
-                  <span>一键整理</span>
+                  <span>{{ t('extensionCanvas.tidy') }}</span>
                 </button>
                 <button type="button" class="modal-secondary-action flex items-center gap-1" :title="t('widgetLayout.done')" :aria-label="t('widgetLayout.done')" @click="extensionWidgetEditMode = false">
                   <SvgIcon icon="material-symbols:check-rounded" class="w-4 h-4" />
                   <span>{{ t('widgetLayout.done') }}</span>
                 </button>
               </div>
-              <button v-else-if="groupsReady && activeCanvasItems.length" type="button" class="dashboard-edit-entry" title="拖动排序、调整组件大小" @click="extensionWidgetEditMode = true">
+              <button v-else-if="groupsReady && activeCanvasItems.length" type="button" class="dashboard-edit-entry" :title="t('extensionCanvas.editLayoutHint')" @click="extensionWidgetEditMode = true">
                 <SvgIcon icon="material-symbols:edit-outline-rounded" />
-                <span>编辑布局</span>
+                <span>{{ t('extensionCanvas.editLayout') }}</span>
               </button>
             </div>
 
@@ -2239,7 +2239,7 @@ onUnmounted(() => {
                   :class="[item.kind === 'widget' ? ['extension-widget-cell', { 'is-widget-hidden': item.group.members[0].hidden, 'is-resizing': resizingExtensionWidgetId === item.group.members[0].id }] : ['speed-card', { 'is-expanded': bookmarkLayout(item.card).columns > 1 || bookmarkLayout(item.card).rows > 1 }], { 'is-long-pressing': longPressKey === item.key }]"
                   :style="item.kind === 'widget' ? extensionWidgetCellStyle(item.group) : bookmarkCardStyle(item.card)"
                   :title="item.kind === 'bookmark' ? item.card.description || item.card.title : undefined"
-                  :aria-label="item.kind === 'bookmark' ? item.card.title : `${widgetDefinitionTitle(widgetRegistry.get(item.group.members[0].type) ?? { type: item.group.members[0].type })} 小组件`"
+                  :aria-label="item.kind === 'bookmark' ? item.card.title : t('extensionCanvas.widgetLabel', { title: widgetDefinitionTitle(widgetRegistry.get(item.group.members[0].type) ?? { type: item.group.members[0].type }) })"
                   :role="item.kind === 'bookmark' ? 'link' : undefined"
                   tabindex="0"
                   @click="item.kind === 'bookmark' && handleCardClick(item.card)"
@@ -2275,11 +2275,11 @@ onUnmounted(() => {
                       <span class="extension-widget-name">{{ widgetDefinitionTitle(widgetRegistry.get(item.group.members[0].type) ?? { type: item.group.members[0].type }) }}</span>
                       <span class="extension-widget-size">{{ item.group.size.columns }}×{{ item.group.size.rows }}</span>
                       <span class="extension-widget-actions">
-                        <button v-if="hasExtensionWidgetSettings(item.group.members[0])" type="button" class="is-labelled" :title="t('widgetLayout.configure')" :aria-label="t('widgetLayout.configure')" @click="openExtensionWidgetSettings(item.group.members[0])">配置</button>
+                        <button v-if="hasExtensionWidgetSettings(item.group.members[0])" type="button" class="is-labelled" :title="t('widgetLayout.configure')" :aria-label="t('widgetLayout.configure')" @click="openExtensionWidgetSettings(item.group.members[0])">{{ t('extensionCanvas.configureShort') }}</button>
                         <NDropdown v-if="!item.group.stackId && extensionWidgetStackTargetOptions(item.group.members[0]).length" trigger="click" :options="extensionWidgetStackTargetOptions(item.group.members[0])" @select="stackExtensionWidgetWith(item.group.members[0], $event)">
-                          <button type="button" class="is-labelled" :title="t('widgetLayout.stack.add')" :aria-label="t('widgetLayout.stack.add')">叠放</button>
+                          <button type="button" class="is-labelled" :title="t('widgetLayout.stack.add')" :aria-label="t('widgetLayout.stack.add')">{{ t('extensionCanvas.stackShort') }}</button>
                         </NDropdown>
-                        <button type="button" title="更多组件操作" aria-label="更多组件操作" @click.stop="handleWidgetContextMenu($event, item.group.members[0])"><SvgIcon icon="mingcute:more-1-fill" /></button>
+                        <button type="button" :title="t('extensionCanvas.widgetActions')" :aria-label="t('extensionCanvas.widgetActions')" @click.stop="handleWidgetContextMenu($event, item.group.members[0])"><SvgIcon icon="mingcute:more-1-fill" /></button>
                       </span>
                     </div>
                     <WidgetStackHost :instances="item.group.members" />
@@ -2295,8 +2295,8 @@ onUnmounted(() => {
 
               <div v-else class="extension-widget-empty">
                 <SvgIcon icon="material-symbols:dashboard-customize-outline-rounded" class="w-10 h-10 opacity-60" />
-                <p>当前页面还是空的</p>
-                <small>点击添加图标，选择网站或小组件开始布置</small>
+                <p>{{ t('extensionCanvas.emptyTitle') }}</p>
+                <small>{{ t('extensionCanvas.emptyHint') }}</small>
               </div>
 
               <button v-if="activeGroup" type="button" class="dashboard-add-icon" :title="t('iconGallery.title')" :aria-label="t('iconGallery.title')" @click="openAddCenter()">
@@ -2333,17 +2333,17 @@ onUnmounted(() => {
       @keydown="handleContextMenuKeydown"
     >
       <button type="button" class="context-menu-row" role="menuitem" @click="handleRightMenuSelect('open_tab')">
-        <ThemeIcon name="externalLink" /><span>在新标签页打开</span>
+        <ThemeIcon name="externalLink" /><span>{{ t('extensionCanvas.menu.openTab') }}</span>
       </button>
       <button v-if="activeRightCard.lanUrl" type="button" class="context-menu-row" role="menuitem" @click="handleRightMenuSelect('open_lan')">
-        <ThemeIcon name="networkWired" /><span>打开局域网地址</span>
+        <ThemeIcon name="networkWired" /><span>{{ t('extensionCanvas.menu.openLan') }}</span>
       </button>
       <button v-if="activeRightCard.url" type="button" class="context-menu-row" role="menuitem" @click="handleRightMenuSelect('copy_url')">
-        <ThemeIcon name="copy" /><span>复制链接</span>
+        <ThemeIcon name="copy" /><span>{{ t('extensionCanvas.menu.copyUrl') }}</span>
       </button>
       <div class="context-menu-section">
         <div class="context-menu-title">
-          <ThemeIcon name="dashboard" /><span>布局</span>
+          <ThemeIcon name="dashboard" /><span>{{ t('extensionCanvas.menu.layout') }}</span>
         </div>
         <div class="context-size-grid">
           <button
@@ -2362,23 +2362,23 @@ onUnmounted(() => {
       <template v-if="authStore.visitMode === VisitMode.VISIT_MODE_LOGIN">
         <div class="context-menu-divider" />
         <button type="button" class="context-menu-row" role="menuitem" @click="handleRightMenuSelect('edit')">
-          <ThemeIcon name="edit" /><span>编辑书签</span>
+          <ThemeIcon name="edit" /><span>{{ t('extensionCanvas.menu.editBookmark') }}</span>
         </button>
         <button type="button" class="context-menu-row" role="menuitem" @click="handleRightMenuSelect('edit_home')">
-          <ThemeIcon name="folder" /><span>编辑分组</span>
+          <ThemeIcon name="folder" /><span>{{ t('extensionCanvas.menu.editGroup') }}</span>
         </button>
         <div v-if="bookmarkMoveTargets.length" class="context-menu-section context-move-section">
           <div class="context-menu-title">
-            <ThemeIcon name="folder" /><span>移动到</span>
+            <ThemeIcon name="folder" /><span>{{ t('extensionCanvas.menu.moveTo') }}</span>
           </div>
           <div class="context-move-list">
-            <button v-for="group in bookmarkMoveTargets" :key="group.id" type="button" role="menuitem" :disabled="movingBookmark" :title="`移动到「${group.title}」`" @click="moveBookmarkToGroup(activeRightCard, group.id)">
+            <button v-for="group in bookmarkMoveTargets" :key="group.id" type="button" role="menuitem" :disabled="movingBookmark" :title="t('extensionCanvas.menu.moveToNamed', { title: group.title })" @click="moveBookmarkToGroup(activeRightCard, group.id)">
               {{ group.title }}
             </button>
           </div>
         </div>
         <button type="button" class="context-menu-row danger" role="menuitem" @click="handleRightMenuSelect('delete')">
-          <ThemeIcon name="delete" /><span>删除</span>
+          <ThemeIcon name="delete" /><span>{{ t('extensionCanvas.menu.delete') }}</span>
         </button>
       </template>
     </div>
@@ -2399,7 +2399,7 @@ onUnmounted(() => {
       </div>
       <div v-if="activeWidgetSizeChoices.length" class="context-menu-section">
         <div class="context-menu-title">
-          <ThemeIcon name="dashboard" /><span>布局</span>
+          <ThemeIcon name="dashboard" /><span>{{ t('extensionCanvas.menu.layout') }}</span>
         </div>
         <div class="context-size-grid">
           <button
@@ -2416,26 +2416,26 @@ onUnmounted(() => {
         </div>
       </div>
       <p v-else-if="activeRightWidget.stack" class="context-menu-note">
-        叠放中的组件需先移出叠放，再单独调整尺寸。
+        {{ t('extensionCanvas.menu.stackNote') }}
       </p>
       <div class="context-menu-divider" />
       <button v-if="hasExtensionWidgetSettings(activeRightWidget)" type="button" class="context-menu-row" role="menuitem" @click="openActiveWidgetSettings">
-        <ThemeIcon name="settings" /><span>配置组件</span>
+        <ThemeIcon name="settings" /><span>{{ t('extensionCanvas.menu.configure') }}</span>
       </button>
       <button type="button" class="context-menu-row" role="menuitem" @click="toggleExtensionWidgetHidden(activeRightWidget); closeContextMenus()">
-        <ThemeIcon :name="activeRightWidget.hidden ? 'eye' : 'eyeOff'" /><span>{{ activeRightWidget.hidden ? '显示组件' : '隐藏组件' }}</span>
+        <ThemeIcon :name="activeRightWidget.hidden ? 'eye' : 'eyeOff'" /><span>{{ activeRightWidget.hidden ? t('extensionCanvas.menu.show') : t('extensionCanvas.menu.hide') }}</span>
       </button>
       <button v-if="activeRightWidget.stack" type="button" class="context-menu-row" role="menuitem" @click="removeExtensionWidgetFromStack(activeRightWidget); closeContextMenus()">
-        <ThemeIcon name="drag" /><span>移出叠放</span>
+        <ThemeIcon name="drag" /><span>{{ t('extensionCanvas.menu.unstack') }}</span>
       </button>
       <button type="button" class="context-menu-row" role="menuitem" @click="showWidgetManager = true; closeContextMenus()">
-        <ThemeIcon name="dashboard" /><span>编辑主页组件</span>
+        <ThemeIcon name="dashboard" /><span>{{ t('extensionCanvas.menu.manage') }}</span>
       </button>
       <button type="button" class="context-menu-row" role="menuitem" @click="extensionWidgetEditMode = true; closeContextMenus()">
-        <ThemeIcon name="drag" /><span>自由排版</span>
+        <ThemeIcon name="drag" /><span>{{ t('extensionCanvas.menu.freeLayout') }}</span>
       </button>
       <button type="button" class="context-menu-row danger" role="menuitem" @click="removeActiveWidgetFromMenu">
-        <ThemeIcon name="delete" /><span>删除</span>
+        <ThemeIcon name="delete" /><span>{{ t('extensionCanvas.menu.delete') }}</span>
       </button>
     </div>
 
@@ -2496,47 +2496,55 @@ onUnmounted(() => {
     >
       <div class="widget-manager-content">
         <p>{{ t('widgetLayout.manager.desc') }}</p>
-        <div class="widget-manager-page-scope">
-          <SvgIcon icon="material-symbols:folder-outline" />
-          <span><b>{{ activeGroup?.title }}</b><small>这里只管理当前分组页面的组件，切换分组后可单独配置。</small></span>
-        </div>
-        <label class="widget-choice">
-          <span><SvgIcon icon="material-symbols:schedule-outline-rounded" /><b>{{ t('widgetLayout.manager.clockTitle') }}</b><small>{{ t('widgetLayout.manager.clockDesc') }}</small></span>
-          <NSwitch v-model:value="widgetPreferences.clock" />
-        </label>
-        <label class="widget-choice">
-          <span><SvgIcon icon="material-symbols:search-rounded" /><b>{{ t('widgetLayout.manager.searchTitle') }}</b><small>{{ t('widgetLayout.manager.searchDesc') }}</small></span>
-          <NSwitch v-model:value="widgetPreferences.search" />
-        </label>
-        <div class="extension-widget-library">
-          <div class="extension-widget-library-head">
-            <div><b>{{ t('widgetLayout.manager.contentWidgetsTitle') }}</b><small>{{ t('widgetLayout.manager.contentWidgetsDesc') }}</small></div>
-            <button type="button" class="modal-secondary-action" @click="showWidgetManager = false; openAddCenter('widgets')">
-              {{ t('widgetLayout.add') }}
-            </button>
-          </div>
-          <div v-if="extensionWidgetInstances.length" class="extension-widget-list">
-            <div v-for="(instance, index) in extensionWidgetInstances" :key="instance.id" class="extension-widget-list-item">
-              <span>{{ widgetDefinitionTitle(widgetRegistry.get(instance.type) ?? { type: instance.type }) }}</span>
-              <div>
-                <button v-if="Object.keys(widgetRegistry.get(instance.type)?.configSchema.fields ?? {}).length" type="button" @click="openExtensionWidgetSettings(instance)">
-                  {{ t('widgetLayout.configure') }}
-                </button>
-                <button type="button" @click="confirmRemoveExtensionWidget(index)">
-                  {{ t('widgetLayout.remove') }}
-                </button>
+        <section class="widget-manager-group" aria-labelledby="widget-manager-global">
+          <header>
+            <b id="widget-manager-global">{{ t('widgetLayout.manager.globalTitle') }}</b>
+            <small>{{ t('widgetLayout.manager.globalDesc') }}</small>
+          </header>
+          <label class="widget-choice">
+            <span><SvgIcon icon="material-symbols:schedule-outline-rounded" /><b>{{ t('widgetLayout.manager.clockTitle') }}</b><small>{{ t('widgetLayout.manager.clockDesc') }}</small></span>
+            <NSwitch v-model:value="widgetPreferences.clock" />
+          </label>
+          <label class="widget-choice">
+            <span><SvgIcon icon="material-symbols:search-rounded" /><b>{{ t('widgetLayout.manager.searchTitle') }}</b><small>{{ t('widgetLayout.manager.searchDesc') }}</small></span>
+            <NSwitch v-model:value="widgetPreferences.search" />
+          </label>
+        </section>
+        <section class="widget-manager-group" aria-labelledby="widget-manager-page">
+          <header>
+            <b id="widget-manager-page">{{ t('widgetLayout.manager.pageTitle', { page: activeGroup?.title ?? '' }) }}</b>
+            <small>{{ t('widgetLayout.manager.pageDesc') }}</small>
+          </header>
+          <div class="extension-widget-library">
+            <div class="extension-widget-library-head">
+              <div><b>{{ t('widgetLayout.manager.contentWidgetsTitle') }}</b><small>{{ t('widgetLayout.manager.contentWidgetsDesc') }}</small></div>
+              <button type="button" class="modal-secondary-action" @click="showWidgetManager = false; openAddCenter('widgets')">
+                {{ t('widgetLayout.add') }}
+              </button>
+            </div>
+            <div v-if="extensionWidgetInstances.length" class="extension-widget-list">
+              <div v-for="(instance, index) in extensionWidgetInstances" :key="instance.id" class="extension-widget-list-item">
+                <span>{{ widgetDefinitionTitle(widgetRegistry.get(instance.type) ?? { type: instance.type }) }}</span>
+                <div>
+                  <button v-if="Object.keys(widgetRegistry.get(instance.type)?.configSchema.fields ?? {}).length" type="button" @click="openExtensionWidgetSettings(instance)">
+                    {{ t('widgetLayout.configure') }}
+                  </button>
+                  <button type="button" @click="confirmRemoveExtensionWidget(index)">
+                    {{ t('widgetLayout.remove') }}
+                  </button>
+                </div>
               </div>
             </div>
+            <small v-else>{{ t('widgetLayout.empty') }}</small>
           </div>
-          <small v-else>{{ t('widgetLayout.empty') }}</small>
-        </div>
+        </section>
         <button type="button" class="modal-primary-action" @click="showWidgetManager = false">
           {{ t('widgetLayout.done') }}
         </button>
       </div>
     </NModal>
 
-    <IconGalleryModal v-model:show="showIconGallery" :page-id="activeTabId" :pages="groupTabs" :initial-section="addCenterSection" :can-add="authStore.visitMode === VisitMode.VISIT_MODE_LOGIN && Boolean(authStore.token)" :added-counts="extensionWidgetAddedCounts" :busy="addingExtensionWidget" @update:page-id="selectGroup" @add-widget="addExtensionWidget" @done="handleEditSuccess" @login="goToIconLogin" />
+    <IconGalleryModal v-model:show="showIconGallery" :page-id="activeTabId" :pages="groupTabs" :initial-section="addCenterSection" :can-add="authStore.visitMode === VisitMode.VISIT_MODE_LOGIN && Boolean(authStore.token)" :added-counts="extensionWidgetAddedCounts" :existing-urls="activeGroupItems.map(item => item.url)" :busy="addingExtensionWidget" @update:page-id="selectGroup" @add-widget="addExtensionWidget" @done="handleEditSuccess" @login="goToIconLogin" />
 
     <WidgetSettingsModal v-model:show="extensionWidgetSettingsVisible" :instance="extensionWidgetSettingsInstance" @save="applyExtensionWidgetSettings" />
 
@@ -2844,23 +2852,6 @@ onUnmounted(() => {
 .context-menu-heading small { padding: 3px 7px; border-radius: 999px; color: #a5f3fc; background: rgba(8,145,178,.16); font-size: 10px; }
 .context-menu-note { margin: 0; padding: 8px 9px; color: #94a3b8; font-size: 10px; line-height: 1.5; }
 
-/* iOS 主屏式书签网格 */
-.cards-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(86px, 1fr));
-  grid-auto-flow: dense;
-  grid-auto-rows: 96px;
-  gap: 22px 12px;
-  padding: 10px 6px 18px;
-}
-
-@media (min-width: 768px) {
-  .cards-grid {
-    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
-    gap: 26px 16px;
-  }
-}
-
 /* 单个图标不再使用半透明大卡片，点击区域仍覆盖图标与名称。 */
 .speed-card {
   position: relative;
@@ -2923,33 +2914,10 @@ onUnmounted(() => {
   outline-offset: 5px;
 }
 
-.speed-card.is-long-pressing {
-  transform: scale(.92);
-  filter: brightness(1.12);
-}
-
-.speed-card.is-long-pressing .card-icon-box {
-  box-shadow: 0 0 0 3px rgba(103,232,249,.72), 0 10px 24px rgba(2,6,23,.36);
-}
-
-.extension-widget-grid {
-  --widget-grid-row-height: 96px;
-  display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  grid-auto-flow: dense;
-  grid-auto-rows: var(--widget-grid-row-height);
-  gap: 14px;
-  padding: 8px;
-  position: relative;
-}
 .extension-widget-cell { position: relative; min-width: 0; min-height: 0; touch-action: pan-y; }
-.extension-widget-grid.is-editing .extension-widget-cell { outline: 1px dashed rgba(103,232,249,.38); outline-offset: 2px; border-radius: 14px; }
-.extension-widget-cell.is-long-press-dragging { opacity: .78; transform: scale(.985); outline: 2px solid rgba(103,232,249,.72); outline-offset: 3px; }
 .extension-widget-cell.is-resizing { z-index: 8; outline: 2px solid rgba(103,232,249,.78); outline-offset: 2px; }
 .extension-widget-cell.is-widget-hidden { display: none; }
-.extension-widget-grid.is-editing .is-widget-hidden { display: block; opacity: 0.4; }
 .extension-widget-toolbar { position: absolute; top: -42px; right: 8px; z-index: 30; display: flex; justify-content: flex-end; }
-.extension-widget-track { display: contents; }
 .extension-widget-editor {
   position: absolute;
   top: 7px;
@@ -3028,7 +2996,6 @@ onUnmounted(() => {
 }
 
 @media (pointer: coarse), (max-width: 720px) {
-  .extension-widget-grid { grid-template-columns: 1fr; }
   .widget-resize-handle.is-right { display: none; }
   .extension-widget-cell { grid-column: 1 / -1 !important; }
   .extension-widget-actions { flex-wrap: nowrap; }
@@ -3133,14 +3100,9 @@ onUnmounted(() => {
   .sidebar-right.sidebar-auto-hide .main-content { padding-right: 1rem; }
   .clock-hero { margin-top: 20px; }
   .active-group-meta small { display: none; }
-  .cards-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px 6px; }
   .speed-card { padding-inline: 0; }
   :global(.extension-surface-modal .n-card-header) { padding: 14px 16px; }
   :global(.wallpaper-manager-modal .n-card__content) { height: calc(100% - 53px); }
-}
-
-@media (max-width: 430px) {
-  .cards-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 /* Quiet workspace: one palette, restrained surfaces, generous spacing. */
@@ -3388,7 +3350,6 @@ onUnmounted(() => {
 .active-group-meta { margin: 0 3px 10px; color: var(--ext-text); text-shadow: none; }
 .active-group-meta > span { font-size: 18px; font-weight: 600; letter-spacing: .02em; }
 .active-group-meta small { margin-top: 5px; color: var(--ext-text-soft); font-size: 11px; }
-.extension-widget-grid { --widget-grid-row-height: 76px; gap: 12px; padding: 0 0 8px; }
 .extension-widget-cell { border-radius: 20px; }
 .extension-widget-toolbar {
   position: sticky;
@@ -3410,7 +3371,6 @@ onUnmounted(() => {
 .extension-edit-mode-copy small { margin-top: 1px; color: var(--ext-text-soft); font-size: 9px; white-space: nowrap; }
 .modal-secondary-action { border-color: var(--ext-border); color: var(--ext-text-muted); background: var(--ext-surface-raised); }
 .modal-secondary-action:hover { border-color: var(--ext-accent); color: var(--ext-accent); background: var(--ext-accent-soft); }
-.extension-widget-grid.is-editing .extension-widget-cell { outline-color: var(--ext-accent); border-radius: 20px; }
 .extension-widget-empty { color: var(--ext-text-muted) !important; border-color: var(--ext-border) !important; background: var(--ext-surface) !important; }
 .extension-widget-editor {
   top: 8px;
@@ -3436,7 +3396,6 @@ onUnmounted(() => {
 .extension-widget-editor.is-compact .extension-widget-actions .is-labelled { display: none; }
 .widget-resize-handle.is-corner { border-color: var(--ext-accent); }
 
-.cards-grid { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); grid-auto-rows: 90px; gap: 18px 12px; padding: 5px 0 18px; }
 .speed-card { gap: 7px; border-radius: 14px; color: var(--ext-text); }
 .speed-card.is-expanded:hover { background: var(--ext-surface-raised); }
 .speed-card.is-expanded { background: var(--ext-surface); border: 1px solid var(--ext-border); box-shadow: 0 10px 28px var(--ext-shadow); backdrop-filter: none; }
@@ -3489,11 +3448,6 @@ onUnmounted(() => {
 :global(.extension-surface-modal .n-card__content) { color: inherit; }
 .widget-manager-content { color: var(--ext-text); }
 .widget-manager-content > p, .extension-widget-library > small, .extension-widget-library-head small { color: var(--ext-text-soft); }
-.widget-manager-page-scope { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--ext-border); border-radius: 13px; color: var(--ext-accent); background: var(--ext-accent-soft); }
-.widget-manager-page-scope > svg { width: 18px; height: 18px; flex: none; }
-.widget-manager-page-scope > span { min-width: 0; display: flex; flex-direction: column; }
-.widget-manager-page-scope b { overflow: hidden; color: var(--ext-text); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.widget-manager-page-scope small { margin-top: 2px; color: var(--ext-text-soft); font-size: 10px; }
 .widget-choice, .extension-widget-library { color: var(--ext-text); border-color: var(--ext-border); background: var(--ext-surface); }
 .widget-choice:hover { border-color: var(--ext-accent); background: var(--ext-accent-soft); }
 .widget-choice svg { color: var(--ext-accent); }
@@ -3504,10 +3458,6 @@ onUnmounted(() => {
 
 @keyframes extension-status-pulse {
   50% { opacity: .4; transform: scale(.82); }
-}
-
-@media (min-width: 768px) {
-  .cards-grid { grid-template-columns: repeat(auto-fill, minmax(82px, 1fr)); gap: 20px 14px; }
 }
 
 @media (max-width: 720px) {
@@ -3523,13 +3473,11 @@ onUnmounted(() => {
   .sidebar-right.sidebar-auto-hide.sidebar-compact .main-content { padding-right: 14px !important; }
   .extension-widget-toolbar { margin-top: -36px; }
   .extension-edit-mode-copy small { display: none; }
-  .cards-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
 @media (max-width: 430px) {
   .clock-hero { margin-top: 4px; }
   .time-display > span:first-child { font-size: 42px !important; }
-  .cards-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .extension-edit-mode-copy { display: none; }
 }
 
@@ -3844,4 +3792,10 @@ onUnmounted(() => {
 .context-move-list button { max-width: 100%; min-height: 28px; padding: 0 10px; overflow: hidden; border: 1px solid var(--ext-border); border-radius: 8px; color: var(--ext-text-muted); background: var(--ext-surface-raised); cursor: pointer; font: inherit; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .context-move-list button:hover, .context-move-list button:focus-visible { color: var(--ext-accent); border-color: var(--ext-accent); background: var(--ext-accent-soft); outline: none; }
 .context-move-list button:disabled { cursor: wait; opacity: .5; }
+/* Global switches and per-group widgets are separate sections so the scope of each is clear. */
+.widget-manager-group { display: flex; flex-direction: column; gap: 8px; }
+.widget-manager-group + .widget-manager-group { margin-top: 6px; padding-top: 14px; border-top: 1px solid var(--ext-divider); }
+.widget-manager-group > header { display: flex; flex-direction: column; gap: 2px; }
+.widget-manager-group > header b { color: var(--ext-text); font-size: 13px; }
+.widget-manager-group > header small { color: var(--ext-text-soft); font-size: 11px; }
 </style>
