@@ -161,10 +161,10 @@ export function saveExtensionAppearance(config: Panel.panelConfig): Promise<bool
   })
 }
 
-export function readExtensionWidgets(): ExtensionWidgetPreferences {
-  const runtime = getRuntime()
+/** Reads the stored preferences, or validates `raw` (e.g. a synced copy) the same way. */
+export function readExtensionWidgets(raw?: string | null): ExtensionWidgetPreferences {
   try {
-    const parsed = JSON.parse(runtime.storage.getItem(EXTENSION_WIDGETS_KEY) || '{}') as Partial<ExtensionWidgetPreferences>
+    const parsed = JSON.parse((raw === undefined ? getRuntime().storage.getItem(EXTENSION_WIDGETS_KEY) : raw) || '{}') as Partial<ExtensionWidgetPreferences>
     const contentLayout = parsed.contentLayout
       && typeof parsed.contentLayout === 'object'
       && parsed.contentLayout.schemaVersion === 1
@@ -240,10 +240,6 @@ export function saveExtensionWidgets(
   preferences: ExtensionWidgetPreferences,
   changedPageLayoutKeys?: readonly string[],
 ): Promise<boolean> {
-  const runtime = getRuntime()
-  if (runtime.kind !== 'extension')
-    return Promise.resolve(true)
-
   const snapshot = JSON.parse(JSON.stringify(preferences)) as ExtensionWidgetPreferences
   return updateExtensionWidgets((current) => {
     const pageLayouts = changedPageLayoutKeys === undefined
@@ -324,10 +320,8 @@ export function restoreExtensionLayoutSnapshot(snapshot: ExtensionLayoutSnapshot
 export function updateExtensionWidgets(
   updater: (current: ExtensionWidgetPreferences) => ExtensionWidgetPreferences,
 ): Promise<boolean> {
+  // The web panel renders the same dashboard, so it keeps the same local copy.
   const runtime = getRuntime()
-  if (runtime.kind !== 'extension')
-    return Promise.resolve(true)
-
   return enqueueExtensionStorageSave(async () => {
     const previous = readExtensionWidgets()
     const next = updater(previous)
@@ -471,10 +465,6 @@ let isProcessingCleanups = false
 export async function processPendingWidgetCleanups(): Promise<number> {
   if (isProcessingCleanups)
     return 0
-  const runtime = getRuntime()
-  if (runtime.kind !== 'extension')
-    return 0
-
   isProcessingCleanups = true
   try {
     const prefs = readExtensionWidgets()

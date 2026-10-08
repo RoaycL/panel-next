@@ -3,11 +3,9 @@ import type { RouteRecordRaw } from 'vue-router'
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { setupPageGuard } from './permission'
 
-// Use the build-time constant directly so Rollup can remove the other
-// platform's dashboard instead of emitting both entry chunks.
-const homeComponent = __PANEL_RUNTIME__ === 'extension'
-  ? () => import('@/views/extension/index.vue')
-  : () => import('@/views/home/index.vue')
+// Web and extension share one dashboard: grouped pages, the side rail and
+// the same widget canvas. Runtime differences live inside the view.
+const homeComponent = () => import('@/views/extension/index.vue')
 
 const routes: RouteRecordRaw[] = [
   {

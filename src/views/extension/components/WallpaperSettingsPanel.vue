@@ -72,7 +72,6 @@ const wallpaperUrl = computed(() => selectedUrl.value ? getRuntime().resolveUrl(
 watch(wallpaperUrl, () => { imageFailed.value = false })
 const imageStyle = computed(() => ({ filter: `blur(${panel.panelConfig.backgroundBlur || 0}px)` }))
 const maskStyle = computed(() => ({ opacity: panel.panelConfig.backgroundMaskNumber ?? 0 }))
-const isExtension = getRuntime().kind === 'extension'
 const nightDim = computed(() => clampNightDim(panel.panelConfig.nightDim))
 function setNightDim(value: number) {
   panel.panelConfig.nightDim = value
@@ -152,8 +151,8 @@ onBeforeUnmount(() => { selectionGeneration++; if (timer) void save() })
         </div>
         <label class="wallpaper-slider"><span>背景模糊 <small>{{ panel.panelConfig.backgroundBlur || 0 }} px</small></span><NSlider v-model:value="panel.panelConfig.backgroundBlur" :min="0" :max="20" :step="1" @update:value="scheduleSave" /></label>
         <label class="wallpaper-slider"><span>暗色遮罩 <small>{{ Math.round((panel.panelConfig.backgroundMaskNumber || 0) * 100) }}%</small></span><NSlider v-model:value="panel.panelConfig.backgroundMaskNumber" :min="0" :max="1" :step="0.05" @update:value="scheduleSave" /></label>
-        <label v-if="isExtension" class="wallpaper-slider"><span>夜间降低亮度 <small>{{ Math.round(nightDim * 100) }}%</small></span><NSlider :value="nightDim" :min="0" :max="MAX_NIGHT_DIM" :step="0.05" @update:value="setNightDim" /></label>
-        <p v-if="isExtension" class="wallpaper-hint">
+        <label class="wallpaper-slider"><span>夜间降低亮度 <small>{{ Math.round(nightDim * 100) }}%</small></span><NSlider :value="nightDim" :min="0" :max="MAX_NIGHT_DIM" :step="0.05" @update:value="setNightDim" /></label>
+        <p class="wallpaper-hint">
           仅夜间模式生效，同时调暗壁纸、图标和小组件。
         </p>
       </div>

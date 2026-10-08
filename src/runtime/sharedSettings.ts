@@ -46,16 +46,11 @@ function capture(): SettingsSnapshot {
   widgets.searchHistory = [] // Queries are private usage data, not settings.
   widgets.pendingWidgetCleanupIds = [] // Never sync local deletion jobs.
   const config = stripPanel(panel.panelConfig)
-  if (runtime.kind === 'extension') {
-    config.clockShow = widgets.clock
-    config.clockShowSecond = widgets.clockSeconds
-    config.searchBoxShow = widgets.search
-  }
-  else {
-    widgets.clock = config.clockShow !== false
-    widgets.clockSeconds = config.clockShowSecond !== false
-    widgets.search = config.searchBoxShow !== false
-  }
+  // Both runtimes render the same dashboard, so its preferences lead and the
+  // legacy panel flags only mirror them for older clients.
+  config.clockShow = widgets.clock
+  config.clockShowSecond = widgets.clockSeconds
+  config.searchBoxShow = widgets.search
   return {
     panel: config,
     preferences: {

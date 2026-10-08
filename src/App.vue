@@ -72,9 +72,9 @@ watch(() => providerView.value.cssVariables, (variables) => {
           <RouterView :key="extensionDashboardRevision" />
           <ExtensionUpdateNotice v-if="runtime.kind === 'extension'" />
           <DefaultPasswordGuard v-if="overlaysReady" />
-          <SyncIndicator v-if="runtime.kind === 'extension'" />
+          <SyncIndicator />
           <NModal
-            v-if="runtime.kind === 'extension' && overlaysReady"
+            v-if="overlaysReady"
             v-model:show="extensionLoginVisible"
             to=".pn-theme-root"
             :mask-closable="false"

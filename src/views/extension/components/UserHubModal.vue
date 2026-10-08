@@ -167,6 +167,7 @@ const sidebarDensityOptions = [
 // 异步加载管理模块
 const UploadFileManagerApp = defineAsyncComponent(() => import('@/components/apps/UploadFileManager/index.vue'))
 const SiteSettingApp = defineAsyncComponent(() => import('@/components/apps/SiteSetting/index.vue'))
+const UsersApp = defineAsyncComponent(() => import('@/components/apps/Users/index.vue'))
 const UserInfoApp = defineAsyncComponent(() => import('@/components/apps/UserInfo/index.vue'))
 const AboutApp = defineAsyncComponent(() => import('@/components/apps/About/index.vue'))
 const BackupRestoreApp = defineAsyncComponent(() => import('@/components/apps/BackupRestore/index.vue'))
@@ -202,7 +203,7 @@ async function onThemeSaved(selection: import('@/themes').ThemeSelection) {
   panelStore.panelConfig = { ...panelStore.panelConfig, theme: selection }
   try {
     await enqueueAppearanceSave(() => saveExtensionAppearance(panelStore.panelConfig))
-    ms.success('主题已应用到扩展页面')
+    ms.success('主题已应用')
   }
   catch (error) {
     panelStore.applyPanelConfig(previousConfig)
@@ -253,7 +254,7 @@ const navItems = computed<HubNavItem[]>(() => {
       key: 'search',
       section: 'workspace',
       label: '搜索栏',
-      desc: '控制扩展搜索框是否显示',
+      desc: '控制首页搜索框是否显示',
       icon: 'material-symbols:search-rounded',
     },
     {
@@ -320,6 +321,13 @@ const navItems = computed<HubNavItem[]>(() => {
       icon: 'lucide-info',
     },
   ]
+  // A web panel always talks to the server that serves it; only the network
+  // mode is left on that page.
+  if (runtime.kind === 'web') {
+    const server = items.find(item => item.key === 'server')
+    if (server)
+      Object.assign(server, { label: '网络模式', desc: '内网与外网地址切换' })
+  }
   return authStore.userInfo?.role === 1
     ? items
     : items.filter(item => item.key !== 'system')
@@ -484,7 +492,7 @@ async function handleLogout() {
           </div>
 
           <!-- 设置入口按用户任务分组，颜色只表达选中状态，不再为每项随机着色。 -->
-          <nav class="hub-nav-menu" aria-label="扩展设置导航">
+          <nav class="hub-nav-menu" aria-label="设置导航">
             <section v-for="group in navGroups" :key="group.section" class="hub-nav-group">
               <div class="hub-nav-caption">
                 {{ group.label }}
@@ -602,7 +610,7 @@ async function handleLogout() {
             <section class="settings-glass-card">
               <div class="settings-section-heading">
                 <span class="settings-section-icon"><SvgIcon icon="material-symbols:search-rounded" /></span>
-                <div><h3>桌面搜索栏</h3><p>控制扩展首页的搜索框，登录后自动同步最新偏好。</p></div>
+                <div><h3>桌面搜索栏</h3><p>控制首页的搜索框，登录后自动同步最新偏好。</p></div>
               </div>
               <label class="sidebar-setting-row">
                 <span><SvgIcon icon="material-symbols:search-rounded" /><span><b>显示搜索栏</b><small>关闭后首页不再占用搜索区域</small></span></span>
@@ -633,10 +641,10 @@ async function handleLogout() {
             <section class="settings-glass-card">
               <div class="settings-section-heading">
                 <span class="settings-section-icon"><SvgIcon icon="material-symbols:routine-outline-rounded" /></span>
-                <div><h3>时间与日期</h3><p>控制扩展首页顶部的大号时钟、秒数与日期区域。</p></div>
+                <div><h3>时间与日期</h3><p>控制首页顶部的大号时钟、秒数与日期区域。</p></div>
               </div>
               <label class="sidebar-setting-row">
-                <span><SvgIcon icon="material-symbols:routine-outline-rounded" /><span><b>显示时间与日期</b><small>开关会立即作用于当前扩展页</small></span></span>
+                <span><SvgIcon icon="material-symbols:routine-outline-rounded" /><span><b>显示时间与日期</b><small>开关会立即作用于当前页面</small></span></span>
                 <NSwitch v-model:value="clockEnabledModel" />
               </label>
               <label class="sidebar-setting-row">
@@ -759,6 +767,9 @@ async function handleLogout() {
               <template #default>
                 <div class="space-y-6">
                   <SiteSettingApp />
+                  <section class="settings-glass-card">
+                    <UsersApp />
+                  </section>
                 </div>
               </template>
               <template #fallback>
@@ -772,7 +783,7 @@ async function handleLogout() {
           <!-- 5. 扩展特有：服务器节点连接与测试 -->
           <div v-else-if="currentTab === 'server'" class="view-panel max-w-xl mx-auto py-6">
             <section class="settings-glass-card mb-6"><NetworkModeSelect /></section>
-            <section class="settings-glass-card server-settings-card">
+            <section v-if="runtime.kind !== 'web'" class="settings-glass-card server-settings-card">
               <div class="settings-section-heading">
                 <span class="settings-section-icon">
                   <SvgIcon icon="mdi:web" />

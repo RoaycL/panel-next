@@ -52,6 +52,10 @@ import { deletes as deleteItems, edit as editItem, getListByGroupId, saveSort as
 import type { DashboardGroup } from '@/dashboard/core'
 import { createDashboardState, createItemSortRequest, isDesktopGroup, resolveItemUrl, sortDashboardGroups } from '@/dashboard/core'
 import { rememberBootWallpaper } from '@/runtime/extension'
+import { setTitle, updateLocalUserInfo } from '@/utils/cmn'
+import { sanitizeUserHtml } from '@/utils/sanitizeHtml'
+import { isLegacyBrandedFooter } from '@/utils/branding'
+import { defaultFooterHtml } from '@/utils/defaultFooter'
 import { clampNightDim } from '@/themes/nightDim'
 import SearchHistoryPanel from '@/components/common/SearchHistoryPanel.vue'
 import { addSearchHistory } from '@/runtime/searchHistory'
@@ -92,6 +96,12 @@ watch(() => [activeWallpaper.value, wallpaperMask.value] as const, ([url, mask])
 const authStore = useAuthStore()
 const userStore = useUserStore()
 const runtime = getRuntime()
+// The web panel renders this same dashboard; only session, cache and footer
+// behaviour differ between the two runtimes.
+const isWebRuntime = runtime.kind === 'web'
+// Web visitors browse the public account read-only; the extension's guest
+// mode keeps arranging its local starter page.
+const canArrangeDashboard = computed(() => !isWebRuntime || authStore.visitMode === VisitMode.VISIT_MODE_LOGIN)
 const extensionProfileName = computed(() => authStore.userInfo?.name?.trim() || authStore.userInfo?.username?.trim() || '访客')
 const extensionAvatarUrl = computed(() => runtime.resolveUrl(authStore.userInfo?.headImage?.trim() || ''))
 if (!authStore.token && authStore.visitMode !== VisitMode.VISIT_MODE_PUBLIC)
@@ -262,6 +272,9 @@ async function persistExtensionWidgets(): Promise<boolean> {
 }
 
 function scheduleSaveExtensionWidgets(delay = 300) {
+  // A web visitor only views the public account's layout; never keep it.
+  if (!canArrangeDashboard.value)
+    return
   stageWidgetSettings(widgetPreferences.value)
   widgetSaveGeneration += 1
   isWidgetLayoutDirty.value = true
@@ -804,15 +817,62 @@ const extensionSyncPresentation = computed(() => {
   }
   return states[extensionSyncStatus.value]
 })
-const groups = ref<DashboardGroup[]>(defaultPresetGroups)
+// The web panel never shows starter sites; its visitors see the server's public account.
+const groups = ref<DashboardGroup[]>(isWebRuntime ? [] : defaultPresetGroups)
 // Until the user picks a page, startup and sync always land on the first group.
 let followFirstGroup = true
 function showPresetGroups() {
   followFirstGroup = true
   groups.value = defaultPresetGroups.map(group => ({ ...group, items: [...(group.items ?? [])] }))
 }
-const groupsReady = ref(!authStore.token)
+const groupsReady = ref(!authStore.token && !isWebRuntime)
 let isRefreshing = false
+
+/** Signed out: the extension shows starter sites. The web panel shows the
+ * server's public account; without one the request layer opens the login page. */
+async function showSignedOutDashboard() {
+  authStore.setVisitMode(VisitMode.VISIT_MODE_PUBLIC)
+  if (!isWebRuntime) {
+    showPresetGroups()
+    groupsReady.value = true
+    extensionSyncStatus.value = navigator.onLine ? 'idle' : 'offline'
+    return
+  }
+  groups.value = []
+  try {
+    await updateLocalUserInfo()
+    if (authStore.visitMode === VisitMode.VISIT_MODE_PUBLIC) {
+      // Show the public account's look and page layouts, held in memory only.
+      await panelState.updatePanelConfigByCloud()
+      const shared = panelState.panelConfig.sharedPreferences?.widgets
+      if (shared)
+        widgetPreferences.value = { ...readExtensionWidgets(JSON.stringify(shared)), searchHistory: widgetPreferences.value.searchHistory }
+    }
+    if (authStore.visitMode === VisitMode.VISIT_MODE_PUBLIC && await loadDirectFromApi()) {
+      extensionSyncStatus.value = 'idle'
+      applyWebTitle()
+      return
+    }
+  }
+  catch (error) {
+    console.warn('Unable to load the public dashboard.', error)
+  }
+  groupsReady.value = true
+  extensionSyncStatus.value = navigator.onLine ? 'error' : 'offline'
+}
+
+// Only a footer the site admin actually wrote replaces the tagline.
+const customFooterHtml = computed(() => {
+  const raw = panelState.panelConfig.footerHtml?.trim()
+  if (!isWebRuntime || !raw || raw === defaultFooterHtml || isLegacyBrandedFooter(raw))
+    return ''
+  return sanitizeUserHtml(raw)
+})
+
+function applyWebTitle() {
+  if (isWebRuntime && panelState.panelConfig.logoText)
+    setTitle(panelState.panelConfig.logoText)
+}
 
 async function applyBootstrapData(data: Sync.BootstrapResponseV1) {
   if (isWidgetLayoutDirty.value && !await persistExtensionWidgets())
@@ -829,12 +889,12 @@ async function applyBootstrapData(data: Sync.BootstrapResponseV1) {
   let writeBack: Promise<boolean> | undefined
   if (localAppearance) {
     const syncedAppearance = resolveSyncedWallpaper(localAppearance, sharedConfig, dashboard.revision, dashboard.account.id)
-    writeBack = panelState.applyPanelConfig(syncedAppearance, { surface: 'extension', mode: appStore.theme ?? 'auto', writeBack: true }).writeBack
+    writeBack = panelState.applyPanelConfig(syncedAppearance, { surface: runtime.kind, mode: appStore.theme ?? 'auto', writeBack: !isWebRuntime }).writeBack
   }
   else {
     // Use the cloud appearance only as a first-run starting point, then fork it
     // locally so later extension changes cannot overwrite the web appearance.
-    writeBack = panelState.applyPanelConfig(sharedConfig, { surface: 'extension', mode: appStore.theme ?? 'auto', writeBack: true }).writeBack
+    writeBack = panelState.applyPanelConfig(sharedConfig, { surface: runtime.kind, mode: appStore.theme ?? 'auto', writeBack: !isWebRuntime }).writeBack
   }
   authStore.setUserInfo(dashboard.account)
   authStore.setVisitMode(VisitMode.VISIT_MODE_LOGIN)
@@ -856,11 +916,13 @@ async function applyBootstrapData(data: Sync.BootstrapResponseV1) {
     if (group && typeof payload.icon === 'string') group.icon = payload.icon
   }
   groupsReady.value = true
+  applyWebTitle()
   // Runs after setup, once readyPageLayoutKey (declared below) exists.
   // eslint-disable-next-line ts/no-use-before-define
   const pageKey = readyPageLayoutKey.value
+  adoptLegacyWebWidgets()
   if (pageKey)
-    loadExtensionWidgetLayout(widgetPreferences.value.pageLayouts[pageKey]?.contentLayout ?? emptyPageLayout().contentLayout, pageKey)
+    openPageLayout(pageKey)
   // 等待 Extension 回写真正持久化完成，失败时不假装同步成功。
   if (writeBack && (await writeBack) === false)
     extensionSyncStatus.value = 'offline'
@@ -869,10 +931,13 @@ async function applyBootstrapData(data: Sync.BootstrapResponseV1) {
 async function refreshBootstrap() {
   if (isRefreshing) return
   if (!authStore.token) {
-    authStore.setVisitMode(VisitMode.VISIT_MODE_PUBLIC)
-    extensionSyncStatus.value = navigator.onLine ? 'idle' : 'offline'
-    showPresetGroups()
-    groupsReady.value = true
+    isRefreshing = true
+    try {
+      await showSignedOutDashboard()
+    }
+    finally {
+      isRefreshing = false
+    }
     return
   }
   isRefreshing = true
@@ -886,9 +951,7 @@ async function refreshBootstrap() {
     if (authStore.authMode === 'device' && authStore.token && (!Number.isFinite(expiry) || expiry - Date.now() < 60_000 || needsUpgrade))
       await authStore.refreshSession()
     if (!authStore.token) {
-      showPresetGroups()
-      groupsReady.value = true
-      extensionSyncStatus.value = 'idle'
+      await showSignedOutDashboard()
       return
     }
     const accountId = authStore.userInfo?.id
@@ -910,10 +973,7 @@ async function refreshBootstrap() {
     }
     // 降级使用普通 API 获取
     if (!authStore.token) {
-      authStore.setVisitMode(VisitMode.VISIT_MODE_PUBLIC)
-      showPresetGroups()
-      groupsReady.value = true
-      extensionSyncStatus.value = navigator.onLine ? 'idle' : 'offline'
+      await showSignedOutDashboard()
       return
     }
     if (await loadDirectFromApi())
@@ -995,14 +1055,23 @@ async function loadCachedSnapshot() {
   }
 }
 
+/** The list endpoints answer `{ list }`; older builds answered a bare array. */
+function listPayload<T>(data: T[] | Common.ListResponse<T[]> | undefined): T[] | null {
+  if (Array.isArray(data))
+    return data
+  return Array.isArray(data?.list) ? data.list : null
+}
+
 async function loadDirectFromApi() {
-  const groupRes = await getGroupList<Panel.ItemIconGroup[]>()
-  if (groupRes.code !== 0 || !Array.isArray(groupRes.data))
+  const groupRes = await getGroupList<Panel.ItemIconGroup[] | Common.ListResponse<Panel.ItemIconGroup[]>>()
+  const groupList = groupRes.code === 0 ? listPayload(groupRes.data) : null
+  if (!groupList)
     return false
 
-  const results = await Promise.all(groupRes.data.map(async (g) => {
-    const itemsRes = await getListByGroupId<Panel.ItemInfo[]>(g.id)
-    if (itemsRes.code !== 0 || !Array.isArray(itemsRes.data))
+  const results = await Promise.all(groupList.map(async (g) => {
+    const itemsRes = await getListByGroupId<Panel.ItemInfo[] | Common.ListResponse<Panel.ItemInfo[]>>(g.id)
+    const items = itemsRes.code === 0 ? listPayload(itemsRes.data) : null
+    if (!items)
       return null
     return {
         id: g.id ?? 0,
@@ -1011,7 +1080,7 @@ async function loadDirectFromApi() {
         // Missing sort stays missing so ordering puts it last, as in bootstrap.
         sort: g.sort,
         hoverStatus: false,
-        items: itemsRes.data,
+        items,
       } satisfies DashboardGroup
   }))
   if (results.some(group => group === null))
@@ -1223,7 +1292,7 @@ const longPressKey = ref<string | null>(null)
 let longPressOrigin: { x: number, y: number } | null = null
 
 function startLongPressHint(event: PointerEvent, key: string) {
-  if (extensionWidgetEditMode.value || event.button !== 0 || activeCanvasItems.value.length < 2)
+  if (!canArrangeDashboard.value || extensionWidgetEditMode.value || event.button !== 0 || activeCanvasItems.value.length < 2)
     return
   if ((event.target as Element | null)?.closest('input, textarea, button, a, select, [contenteditable="true"], [data-no-drag]'))
     return
@@ -1297,6 +1366,11 @@ watch(readyPageLayoutKey, (pageKey) => {
   if (loadedWidgetPageKey && loadedWidgetPageKey !== pageKey)
     syncLoadedWidgetPageLayout(loadedWidgetPageKey)
 
+  openPageLayout(pageKey)
+}, { immediate: true })
+
+/** Load a page, first moving any legacy global widget layout onto it. */
+function openPageLayout(pageKey: string) {
   let pageLayout = widgetPreferences.value.pageLayouts[pageKey]
   const legacyLayout = widgetPreferences.value.contentLayout
   const shouldMigrateLegacy = !pageLayout && legacyLayout.widgets.length > 0
@@ -1313,7 +1387,17 @@ watch(readyPageLayoutKey, (pageKey) => {
   loadExtensionWidgetLayout(pageLayout?.contentLayout ?? emptyPageLayout().contentLayout, pageKey)
   if (shouldMigrateLegacy)
     scheduleSaveExtensionWidgets(0)
-}, { immediate: true })
+}
+
+/** The old web panel kept one widget strip above all groups. Carry it onto the
+ * first page once, when this account has no dashboard pages yet. */
+function adoptLegacyWebWidgets() {
+  const legacy = panelState.panelConfig.widgets
+  const preferences = widgetPreferences.value
+  if (!isWebRuntime || !legacy?.widgets?.length || Object.keys(preferences.pageLayouts).length || preferences.contentLayout.widgets.length)
+    return
+  preferences.contentLayout = JSON.parse(JSON.stringify(legacy))
+}
 
 watch(packageRevision, () => {
   if (isWidgetLayoutDirty.value)
@@ -1442,13 +1526,40 @@ function handleGroupWheel(event: WheelEvent) {
   }
 
   event.preventDefault()
-  const currentIndex = Math.max(0, groupTabs.value.findIndex(group => group.id === activeTabId.value))
-  const direction = event.deltaY > 0 ? 1 : -1
-  const nextIndex = (currentIndex + direction + groupTabs.value.length) % groupTabs.value.length
-  selectGroup(groupTabs.value[nextIndex].id, direction > 0 ? 'next' : 'previous')
+  stepGroup(event.deltaY > 0 ? 1 : -1)
   wheelLocked = true
   wheelLockTimer = window.setTimeout(() => { wheelLocked = false; wheelLockTimer = null }, 420)
+}
+
+function stepGroup(direction: 1 | -1) {
+  const currentIndex = Math.max(0, groupTabs.value.findIndex(group => group.id === activeTabId.value))
+  const nextIndex = (currentIndex + direction + groupTabs.value.length) % groupTabs.value.length
+  selectGroup(groupTabs.value[nextIndex].id, direction > 0 ? 'next' : 'previous')
   flashSideRail()
+}
+
+// Touch screens page through groups with a horizontal swipe, like the wheel.
+let swipeStart: { x: number, y: number, time: number } | null = null
+function handleGroupTouchStart(event: TouchEvent) {
+  const target = event.target as HTMLElement | null
+  swipeStart = event.touches.length === 1 && !extensionWidgetEditMode.value && !target?.closest('input, textarea, [role="dialog"], .search-history-panel, .extension-context-menu')
+    ? { x: event.touches[0].clientX, y: event.touches[0].clientY, time: Date.now() }
+    : null
+}
+function cancelGroupSwipe() {
+  swipeStart = null
+}
+// Quicker than the 480ms long press, so a swipe never competes with a drag.
+function handleGroupTouchEnd(event: TouchEvent) {
+  const start = swipeStart
+  swipeStart = null
+  if (!start || groupTabs.value.length < 2 || event.changedTouches.length !== 1 || Date.now() - start.time > 450)
+    return
+  const dx = event.changedTouches[0].clientX - start.x
+  const dy = event.changedTouches[0].clientY - start.y
+  if (Math.abs(dx) < 56 || Math.abs(dx) < Math.abs(dy) * 1.6)
+    return
+  stepGroup(dx < 0 ? 1 : -1)
 }
 
 // 点击卡片在浏览器新标签页打开
@@ -1458,7 +1569,13 @@ async function handleCardClick(card: Panel.ItemInfo) {
     return
   }
   const targetUrl = await resolveItemUrl(card, panelState.networkMode)
-  if (targetUrl)
+  if (!targetUrl)
+    return
+  // A web panel honours the bookmark's "open in current page" choice; a new
+  // tab page always opens a fresh tab, as the extension always has.
+  if (isWebRuntime && card.openMethod === 1 && window.top === window.self)
+    runtime.openUrl(targetUrl, 'current')
+  else
     runtime.openUrl(targetUrl, 'tab')
 }
 
@@ -1602,6 +1719,8 @@ function handleCardContextMenu(event: MouseEvent, card: Panel.ItemInfo) {
 
 function handleWidgetContextMenu(event: MouseEvent, instance: WidgetInstance) {
   event.preventDefault()
+  if (!canArrangeDashboard.value)
+    return
   contextMenuReturnFocus = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
   activeRightWidget.value = instance
   activeRightCard.value = null
@@ -1879,7 +1998,7 @@ async function applyExternalStorageChanges() {
     const appearance = readExtensionAppearance()
     if (appearance) {
       // 等待回写 promise，失败时同步状态不假装成功。
-      const writeBack = panelState.applyPanelConfig(appearance, { surface: 'extension', mode: appStore.theme ?? 'auto', writeBack: true }).writeBack
+      const writeBack = panelState.applyPanelConfig(appearance, { surface: runtime.kind, mode: appStore.theme ?? 'auto', writeBack: !isWebRuntime }).writeBack
       if (writeBack && (await writeBack) === false)
         extensionSyncStatus.value = 'offline'
     }
@@ -1981,7 +2100,7 @@ onMounted(async () => {
   window.addEventListener('beforeunload', flushPendingLayoutIfDirty)
 
   void processPendingWidgetCleanups()
-  if (authStore.token) await loadCachedSnapshot()
+  if (authStore.token && !isWebRuntime) await loadCachedSnapshot()
   // Give the restored dashboard a paint opportunity before cloud work.
   await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
   await refreshBootstrap()
@@ -2100,7 +2219,7 @@ onUnmounted(() => {
     />
 
     <!-- 核心主体区 -->
-    <main class="main-content flex flex-col items-center justify-start overflow-y-auto px-4 pb-12 pt-6" @wheel="handleGroupWheel">
+    <main class="main-content flex flex-col items-center justify-start overflow-y-auto px-4 pb-12 pt-6" @wheel="handleGroupWheel" @touchstart.passive="handleGroupTouchStart" @touchend.passive="handleGroupTouchEnd" @touchcancel.passive="cancelGroupSwipe">
       <header class="workspace-heading">
         <button type="button" class="workspace-brand" title="打开设置" aria-label="打开设置" @click="openSettings">
           <img class="workspace-brand-mark" :src="brandLogo" alt="" aria-hidden="true"><span>Panel <b>Next</b></span>
@@ -2232,7 +2351,7 @@ onUnmounted(() => {
                   <span>{{ t('widgetLayout.done') }}</span>
                 </button>
               </div>
-              <button v-else-if="groupsReady && activeCanvasItems.length" type="button" class="dashboard-edit-entry" :title="t('extensionCanvas.editLayoutHint')" @click="extensionWidgetEditMode = true">
+              <button v-else-if="groupsReady && canArrangeDashboard && activeCanvasItems.length" type="button" class="dashboard-edit-entry" :title="t('extensionCanvas.editLayoutHint')" @click="extensionWidgetEditMode = true">
                 <SvgIcon icon="material-symbols:edit-outline-rounded" />
                 <span>{{ t('extensionCanvas.editLayout') }}</span>
               </button>
@@ -2244,7 +2363,7 @@ onUnmounted(() => {
                 v-model="activeCanvasItems"
                 item-key="key"
                 class="extension-dashboard-track"
-                :disabled="!groupsReady || Boolean(resizingExtensionWidgetId) || activeCanvasItems.length < 2"
+                :disabled="!groupsReady || !canArrangeDashboard || Boolean(resizingExtensionWidgetId) || activeCanvasItems.length < 2"
                 :delay="extensionWidgetEditMode ? 0 : 480"
                 :delay-on-touch-only="false"
                 :touch-start-threshold="8"
@@ -2323,7 +2442,7 @@ onUnmounted(() => {
                 <small>{{ t('extensionCanvas.emptyHint') }}</small>
               </div>
 
-              <button v-if="activeGroup" type="button" class="dashboard-add-icon" :title="t('iconGallery.title')" :aria-label="t('iconGallery.title')" @click="openAddCenter()">
+              <button v-if="activeGroup && canArrangeDashboard" type="button" class="dashboard-add-icon" :title="t('iconGallery.title')" :aria-label="t('iconGallery.title')" @click="openAddCenter()">
                 <span class="dashboard-add-icon-symbol"><SvgIcon icon="material-symbols-add-rounded" /></span>
                 <span>{{ t('iconGallery.title') }}</span>
               </button>
@@ -2332,7 +2451,9 @@ onUnmounted(() => {
         </Transition>
       </section>
       <footer class="workspace-footer">
-        <span>属于你的每一次开始</span>
+        <!-- Sanitized site footer (e.g. an ICP filing) set by the web panel admin. -->
+        <div v-if="customFooterHtml" class="workspace-footer-custom" v-html="customFooterHtml" />
+        <span v-else>属于你的每一次开始</span>
       </footer>
     </main>
 
@@ -2358,7 +2479,7 @@ onUnmounted(() => {
       <button v-if="activeRightCard.url" type="button" class="context-menu-row" role="menuitem" @click="handleRightMenuSelect('copy_url')">
         <ThemeIcon name="copy" /><span>{{ t('extensionCanvas.menu.copyUrl') }}</span>
       </button>
-      <div class="context-menu-section">
+      <div v-if="canArrangeDashboard" class="context-menu-section">
         <div class="context-menu-title">
           <ThemeIcon name="dashboard" /><span>{{ t('extensionCanvas.menu.layout') }}</span>
         </div>
@@ -3569,6 +3690,7 @@ onUnmounted(() => {
 .speed-card:hover .card-icon-box { transform: translateY(-4px) scale(1.045); box-shadow: 0 12px 26px rgba(0, 0, 0, 0.38); filter: brightness(1.06); }
 .card-icon-box { transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease; }
 .dashboard-add-icon-symbol svg { background: transparent; color: var(--ext-text-soft); width: 32px; height: 32px; padding: 4px; }
+.workspace-footer-custom :deep(a) { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 .workspace-footer { display: flex; align-items: center; justify-content: center; flex: none; gap: 16px; width: min(100%, 1080px); margin-top: auto; padding-top: 40px; color: var(--ext-text-soft); font-size: 11px; letter-spacing: .04em; }
 .modal-secondary-action:focus-visible, .search-submit-btn:focus-visible, .engine-select-btn:focus-visible { outline: 2px solid var(--ext-accent); outline-offset: 3px; }
 .main-content { scrollbar-width: thin; scrollbar-color: var(--ext-border) transparent; }

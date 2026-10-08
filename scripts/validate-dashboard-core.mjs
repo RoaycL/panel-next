@@ -91,7 +91,10 @@ assert.match(extensionView, /if \(authStore\.visitMode !== VisitMode\.VISIT_MODE
 assert.match(extensionView, /type="button" class="rail-avatar"[\s\S]*@click="handleAvatarClick"/)
 assert.match(extensionView, /v-for="group in groupTabs"/)
 assert.match(extensionView, /function openGroupManager\(\)[\s\S]*VisitMode\.VISIT_MODE_LOGIN/)
-assert.match(extensionView, /if \(!authStore\.token\) \{[\s\S]*VisitMode\.VISIT_MODE_PUBLIC[\s\S]*showPresetGroups\(\)/)
+// Signed out: the extension shows starter sites, the web panel the public account (read-only).
+assert.match(extensionView, /async function showSignedOutDashboard\(\) \{\s*authStore\.setVisitMode\(VisitMode\.VISIT_MODE_PUBLIC\)\s*if \(!isWebRuntime\) \{\s*showPresetGroups\(\)/)
+assert.match(extensionView, /if \(!authStore\.token\) \{[\s\S]*?await showSignedOutDashboard\(\)/)
+assert.match(extensionView, /const canArrangeDashboard = computed\(\(\) => !isWebRuntime \|\| authStore\.visitMode === VisitMode\.VISIT_MODE_LOGIN\)/)
 
 const reordered = createDashboardState({ ...bootstrap, panel: { ...bootstrap.panel, groups: [
   { ...bootstrap.panel.groups[0], id: 1, title: 'First created', sort: 3 },
