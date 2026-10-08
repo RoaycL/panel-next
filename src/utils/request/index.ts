@@ -155,6 +155,11 @@ function http<T = any>(options: HttpOption, sessionRetry = false): Promise<Respo
       return res.data
     }
 
+    // Sync cursor errors are handled by the sync layer (rebase, retry or
+    // conflict resolution). Syncing stays silent unless that layer fails.
+    if (res.data.code === 1501 || res.data.code === 1502)
+      return res.data
+
     if (!apiRespErrMsg(res.data))
       return Promise.reject(new HttpRequestError(res.data.msg || 'Business Error', false, 200))
     else

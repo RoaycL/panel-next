@@ -83,14 +83,13 @@ async function save() {
       if (result.code !== 0) message.error(result.msg || '壁纸设置保存失败，请重试')
       else {
         panel.recordState()
-        message.success(result.queued ? '壁纸设置已保存在本机，等待同步' : '壁纸设置已同步')
+        message.success('壁纸设置已保存')
       }
       return
     }
     const result = await enqueueAppearanceSave(() => saveAndSyncExtensionWallpaper(config))
     if (result.status === 'failed') message.warning(result.message || '壁纸同步失败，请重试')
-    else if (result.status === 'queued') message.info('壁纸设置已保存在本机，等待同步')
-    else message.success(result.status === 'synced' ? '壁纸设置已同步' : '壁纸设置已保存')
+    else message.success('壁纸设置已保存')
   }
   catch { message.error('壁纸设置保存失败，请重试') }
   finally { saving.value = false }

@@ -7,6 +7,8 @@ import { getRuntime } from '@/runtime'
 import { useAuthStore } from '@/store/modules/auth'
 import { enqueueOfflineMutation } from '@/sync/offlineQueue'
 import type { OfflineMutation, OfflineMutationAction } from '@/sync/offlineQueue'
+import { fetchChangesSince } from '@/sync/changes'
+import { trackSyncActivity } from '@/sync/activity'
 
 interface MutationEnvelope<T> {
   revision: Sync.Revision
@@ -77,7 +79,64 @@ export interface MutationOptions {
   queuePayload?: unknown
 }
 
-export async function mutationPost<T>(url: string, data: unknown, options: MutationOptions = {}): Promise<Response<T>> {
+/** Whether a change written by someone else touches what this write changes. */
+function changeOverlaps(descriptor: QueueDescriptor, change: Sync.ChangeV1) {
+  if (change.resourceType !== descriptor.resourceType)
+    return false
+  switch (descriptor.action) {
+    case 'item.edit':
+    case 'item.delete':
+    case 'group.edit':
+    case 'group.delete':
+      return change.resourceId === String(descriptor.resourceId)
+    case 'item.sort':
+      // A sort rewrites every item of one group; deletes carry no group id.
+      return change.operation === 'delete'
+        || (change.data as { itemIconGroupId?: unknown } | null)?.itemIconGroupId === Number(descriptor.resourceId)
+    case 'item.add':
+    case 'group.add':
+      return false
+    default:
+      // panel.set and group.sort rewrite the whole resource.
+      return true
+  }
+}
+
+/**
+ * The revision is shared by the whole account, so a 1502 also happens when
+ * an unrelated resource changed (another tab, a wallpaper save, a settings
+ * flush). Only a change to the same resource is a real conflict; otherwise
+ * return the current revision so the write can be retried on top of it.
+ */
+async function rebaseRevision(url: string, data: unknown, expectedRevision: Sync.Revision): Promise<Sync.Revision | null> {
+  const descriptor = queueDescriptor(url, data)
+  if (!descriptor)
+    return null
+  try {
+    const page = await fetchChangesSince(expectedRevision)
+    if (!page || page.hasMore || page.changes.some(change => changeOverlaps(descriptor, change)))
+      return null
+    return page.currentRevision
+  }
+  catch {
+    return null
+  }
+}
+
+let mutationTail: Promise<unknown> = Promise.resolve()
+
+/**
+ * Writes from one page are sent one at a time. Two writes in flight with the
+ * same expected revision would make the second one look like a change from
+ * another device.
+ */
+export function mutationPost<T>(url: string, data: unknown, options: MutationOptions = {}): Promise<Response<T>> {
+  const run = mutationTail.then(() => trackSyncActivity(() => mutationPostInternal<T>(url, data, options)))
+  mutationTail = run.catch(() => undefined)
+  return run
+}
+
+async function mutationPostInternal<T>(url: string, data: unknown, options: MutationOptions): Promise<Response<T>> {
   const queueOnFailure = options.queueOnFailure !== false
   const queueSupported = queueOnFailure && canQueueMutation(data, url)
   let expectedRevision: Sync.Revision
@@ -98,16 +157,25 @@ export async function mutationPost<T>(url: string, data: unknown, options: Mutat
     }
   }
 
+  const send = (revision: Sync.Revision) => post<MutationEnvelope<T>>({
+    url,
+    silentNetworkError: queueSupported,
+    data: {
+      expectedRevision: revision,
+      data,
+    },
+  })
+
   let response: Response<MutationEnvelope<T>>
   try {
-    response = await post<MutationEnvelope<T>>({
-      url,
-      silentNetworkError: queueSupported,
-      data: {
-        expectedRevision,
-        data,
-      },
-    })
+    response = await send(expectedRevision)
+    if (response.code === 1502 && revisionTrusted) {
+      const rebased = await rebaseRevision(url, data, expectedRevision)
+      if (rebased) {
+        setSyncRevision(rebased)
+        response = await send(rebased)
+      }
+    }
   }
   catch (error) {
     if (queueOnFailure && error instanceof HttpRequestError && error.retryable && await enqueueIfSupported(options.queuePayload ?? data, url, revisionTrusted ? expectedRevision : null))

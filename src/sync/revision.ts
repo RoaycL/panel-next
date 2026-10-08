@@ -1,12 +1,34 @@
 import { isSyncRevision } from './bootstrapSnapshot'
+import { getRuntime } from '@/runtime'
+import { useAuthStore } from '@/store/modules/auth'
 
 let currentRevision: Sync.Revision | null = null
+let currentScope = ''
 const conflictListeners = new Set<() => void | Promise<void>>()
 
+function revisionScope() {
+  try {
+    return `${getRuntime().getServerOrigin() ?? ''}:${useAuthStore().userInfo?.id ?? ''}`
+  }
+  catch {
+    return ''
+  }
+}
+
+/**
+ * The revision only moves forward within one server/account. A bootstrap or
+ * cached snapshot that started before a local write must not roll the cursor
+ * back: the next write would then be rejected as if another device had
+ * changed the dashboard.
+ */
 export function setSyncRevision(revision: Sync.Revision) {
   if (!isSyncRevision(revision))
     throw new Error('Invalid sync revision.')
+  const scope = revisionScope()
+  if (currentRevision !== null && scope === currentScope && BigInt(revision) < BigInt(currentRevision))
+    return
   currentRevision = revision
+  currentScope = scope
 }
 
 export function getSyncRevision(): Sync.Revision {

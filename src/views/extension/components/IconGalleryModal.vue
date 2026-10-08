@@ -99,9 +99,7 @@ async function quickAdd(preset: IconPreset) {
       ms.error(`${t('common.saveFail')}: ${msg}`)
       return
     }
-    if (queued)
-      ms.info(conflict ? t('iconItem.queuedWithConflict') : t('iconItem.queuedOffline'))
-    else
+    if (!queued)
       ms.success(t('iconGallery.quickAdded', { title: preset.title, page: pageName.value ?? '' }))
     emit('done', data || payload, { queued: Boolean(queued), conflict: Boolean(conflict), keepOpen: true })
   }

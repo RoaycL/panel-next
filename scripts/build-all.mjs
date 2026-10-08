@@ -50,6 +50,7 @@ runStep('test:extension-startup', node, [path.resolve('scripts/test-extension-st
 runStep('test:icon-cache', node, [path.resolve('scripts/test-icon-cache.mjs')])
 runStep('test:icon-edit-position', node, [path.resolve('scripts/test-icon-edit-position.mjs')])
 runStep('test:shared-settings', node, [path.resolve('scripts/test-shared-settings.mjs')])
+runStep('test:sync-mutation', node, [path.resolve('scripts/test-sync-mutation.mjs')])
 runStep('test:network-mode', node, [path.resolve('scripts/test-network-mode.mjs')])
 
 // 2. Type check (local binary, offline safe)

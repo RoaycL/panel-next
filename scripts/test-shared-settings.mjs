@@ -28,6 +28,7 @@ const fixture = {
     posts++; cloud = structuredClone(body.panel); revision = String(BigInt(revision) + 1n)
     return { code: 0 }
   },
+  trackSyncActivity: task => task(), reportSyncFailure: () => {}, clearSyncFailure: () => {},
   navigator: { onLine: true }, window: { addEventListener() {} }, setTimeout: () => 1, clearTimeout: () => {}, setInterval: () => 1,
 }
 globalThis.sharedFixture = fixture

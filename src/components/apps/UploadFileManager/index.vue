@@ -133,12 +133,10 @@ async function handleSetWallpaper(imgSrc: string) {
     await enqueueAppearanceSave(async () => {
       try {
         const result = await saveAndSyncExtensionWallpaper(panelStore.panelConfig)
-        if (result.status === 'synced')
-          ms.success('壁纸已保存并同步')
-        else if (result.status === 'local')
+        if (result.status === 'local')
           ms.success(t('apps.uploadsFileManager.wallpaperSavedExtension'))
-        else
-          ms.warning(result.message || '壁纸已保存在本机，将在联网后同步')
+        else if (result.status === 'failed')
+          ms.warning(result.message || '壁纸已保存在本机，但云端同步失败，请重试')
       }
       catch (err) {
         if (panelStore.panelConfig.backgroundImageSrc === imgSrc)

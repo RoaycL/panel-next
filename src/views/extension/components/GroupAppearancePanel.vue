@@ -88,8 +88,7 @@ async function save() {
     if (auth.userInfo?.id !== accountId || runtime.getServerOrigin() !== origin || !auth.token)
       throw new Error('账号或服务器已切换，请刷新当前页面')
     emit('saved', { ...payload, ...result.data }, { queued: Boolean(result.queued) })
-    if (result.queued) message.info(result.conflict ? '分组图标已保存到待同步队列，请处理云端冲突' : '分组图标已保存到待同步队列，联网后同步')
-    else message.success('分组图标已保存并同步')
+    message.success('分组图标已保存')
   }
   catch (error) { message.error(error instanceof Error ? error.message : '保存失败，请重试') }
   finally { saving.value = false }

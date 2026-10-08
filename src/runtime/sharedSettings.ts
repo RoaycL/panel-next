@@ -9,6 +9,7 @@ import type { ExtensionWidgetPreferences } from './extensionAppearance'
 import { readWallpaperFavorites, wallpaperFavoritesKey } from './wallpaperFavorites'
 import type { FavoriteWallpaper } from './wallpaperFavorites'
 import { onSettingsChanged } from './settingsEvents'
+import { clearSyncFailure, reportSyncFailure, trackSyncActivity } from '@/sync/activity'
 
 export interface SharedPreferences {
   schemaVersion: 1
@@ -153,16 +154,23 @@ async function flushLatestSettingsInternal() {
       lastBytes = bytes
       settingsSyncState.value = readPending(key) ? 'pending' : 'synced'
       settingsSyncError.value = ''
+      clearSyncFailure()
       return
     }
     throw new Error('另一端正在修改设置，稍后自动同步最新选择')
   }
   running = true
   try {
-    if (navigator.locks) await navigator.locks.request(`panel-next-latest-settings:${key}`, run)
-    else await run()
+    await trackSyncActivity(async () => {
+      if (navigator.locks) await navigator.locks.request(`panel-next-latest-settings:${key}`, run)
+      else await run()
+    })
   }
-  catch (error) { settingsSyncState.value = 'error'; settingsSyncError.value = error instanceof Error ? error.message : '设置已保存在本机，连接恢复后重试' }
+  catch (error) {
+    settingsSyncState.value = 'error'
+    settingsSyncError.value = error instanceof Error ? error.message : '设置已保存在本机，连接恢复后重试'
+    reportSyncFailure(`设置同步失败：${settingsSyncError.value}`)
+  }
   finally { running = false }
 }
 
