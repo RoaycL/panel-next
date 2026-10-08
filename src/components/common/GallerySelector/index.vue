@@ -171,30 +171,51 @@ async function fetchImages() {
   }
 }
 
+// 关键词 + 分类 + 分辨率 + 比例 + 榜单时间同时生效时，冷门组合常为 0 张；
+// 首页无结果时逐级放宽：榜单时间 1 个月 → 1 年，再去掉 16:9/16:10 比例限制。
+const WALLHAVEN_RELAX_STEPS = [
+  { topRange: '1M', ratios: '16x9,16x10', note: '' },
+  { topRange: '1y', ratios: '16x9,16x10', note: '近一个月没有结果，已扩大到近一年' },
+  { topRange: '1y', ratios: undefined, note: '已放宽到近一年、不限屏幕比例' },
+] as const
+const wallhavenRelaxLevel = ref(0)
+const wallhavenRelaxNote = computed(() => WALLHAVEN_RELAX_STEPS[wallhavenRelaxLevel.value].note)
+
 async function fetchWallhaven() {
   const generation = ++requestGeneration
   loading.value = true
   wallhavenList.value = []
+  if (wallhavenPage.value === 1) wallhavenRelaxLevel.value = 0
   try {
-    const params: WallhavenSearchParams = {
-      q: wallhavenQuery.value.trim() || undefined,
-      categories: wallhavenCategories.value,
-      purity: wallhavenPurity.value,
-      sorting: wallhavenSorting.value,
-      topRange: '1M',
-      atleast: '1920x1080',
-      ratios: '16x9,16x10',
-      page: wallhavenPage.value,
-    }
-    const res = await getWallhavenWallpapers(params, wallhavenApiKey.value)
-    if (generation !== requestGeneration) return
-    if (res.code === 0 && res.data) {
+    while (true) {
+      const step = WALLHAVEN_RELAX_STEPS[wallhavenRelaxLevel.value]
+      const params: WallhavenSearchParams = {
+        q: wallhavenQuery.value.trim() || undefined,
+        categories: wallhavenCategories.value,
+        purity: wallhavenPurity.value,
+        sorting: wallhavenSorting.value,
+        topRange: step.topRange,
+        atleast: '1920x1080',
+        ratios: step.ratios,
+        page: wallhavenPage.value,
+      }
+      const res = await getWallhavenWallpapers(params, wallhavenApiKey.value)
+      if (generation !== requestGeneration) return
+      if (res.code !== 0 || !res.data) {
+        ms.error(res.msg || '获取 Wallhaven 壁纸失败')
+        return
+      }
+      const canRelax = wallhavenPage.value === 1 && !res.data.items?.length && wallhavenRelaxLevel.value < WALLHAVEN_RELAX_STEPS.length - 1
+      // 非榜单排序不受时间范围影响，跳过只改 topRange 的那一级
+      if (canRelax) {
+        wallhavenRelaxLevel.value++
+        if (wallhavenSorting.value !== 'toplist' && wallhavenRelaxLevel.value === 1) wallhavenRelaxLevel.value++
+        continue
+      }
       wallhavenList.value = res.data.items || []
       wallhavenTotalPages.value = res.data.meta.lastPage || 1
       wallhavenTotal.value = res.data.meta.total || 0
-    }
-    else {
-      ms.error(res.msg || '获取 Wallhaven 壁纸失败')
+      return
     }
   }
   catch {
@@ -379,7 +400,7 @@ onMounted(() => {
           {{ tag.label }}
         </button>
       </div>
-      <div v-if="wallhavenTotal > 0" class="wallhaven-results-summary">找到约 {{ wallhavenTotal }} 张壁纸 · 第 {{ wallhavenPage }} 页</div>
+      <div v-if="wallhavenTotal > 0" class="wallhaven-results-summary">找到约 {{ wallhavenTotal }} 张壁纸 · 第 {{ wallhavenPage }} 页{{ wallhavenRelaxNote ? ` · ${wallhavenRelaxNote}` : '' }}</div>
     </div>
     <p v-if="selectingUrl" role="status" class="gallery-selection-status">
       正在加载原图，成功后应用；期间保留当前壁纸…
@@ -448,7 +469,7 @@ onMounted(() => {
     <!-- 2. Wallhaven 壁纸网格 -->
     <div v-else class="flex-1 flex flex-col">
       <div v-if="wallhavenList.length === 0" class="text-center text-slate-400 py-12">
-        未找到相关壁纸，换个关键词试试吧
+        已放宽时间范围和屏幕比例仍未找到壁纸，可以换个关键词，或把内容范围、排序方式换一下试试
       </div>
 
       <div v-else class="wallhaven-grid">
