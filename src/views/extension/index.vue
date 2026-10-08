@@ -2267,7 +2267,7 @@ onUnmounted(() => {
                   </template>
 
                   <template v-else>
-                    <div v-if="extensionWidgetEditMode" class="extension-widget-editor" :class="{ 'is-compact': item.group.size.columns <= 2 }">
+                    <div v-if="extensionWidgetEditMode" class="extension-widget-editor" :class="{ 'is-compact': item.group.size.columns <= 2, 'is-narrow': item.group.size.columns === 1 }">
                       <span class="extension-widget-handle" :title="t('widgetLayout.drag')" :aria-label="t('widgetLayout.drag')">
                         <SvgIcon icon="material-symbols:drag-indicator" class="w-4 h-4" />
                       </span>
@@ -3729,6 +3729,10 @@ onUnmounted(() => {
 .extension-dashboard-grid .extension-widget-editor .extension-widget-actions button { height: 24px; }
 .extension-dashboard-grid .extension-widget-editor .extension-widget-actions button:not(.is-labelled) { width: 24px; min-width: 24px; }
 .extension-dashboard-grid .extension-widget-editor .extension-widget-handle { align-self: stretch; }
+/* One column is about one icon wide: keep only the More button, which still reaches size, settings and stacking. */
+.extension-dashboard-grid .extension-widget-editor.is-narrow { justify-content: center; padding: 0; }
+.extension-dashboard-grid .extension-widget-editor.is-narrow :is(.extension-widget-handle, .extension-widget-size, .extension-widget-stack-badge) { display: none; }
+.extension-dashboard-grid .extension-widget-editor.is-narrow .extension-widget-actions { margin-left: 0; }
 @media (pointer: coarse), (max-width: 720px) {
   .extension-dashboard-grid .extension-widget-editor { min-height: 0; padding: 0 4px; }
   .extension-dashboard-grid .extension-widget-editor .extension-widget-actions button { height: 28px; }

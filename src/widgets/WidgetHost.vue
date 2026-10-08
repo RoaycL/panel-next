@@ -273,6 +273,12 @@ function retryLoad() {
 .pn-widget-shell[data-widget-columns='2'] :deep(.weather-details) { display: none; }
 .pn-widget-shell[data-widget-rows='2'][data-widget-columns='2'] :deep(.weather-forecast) { display: grid; }
 .pn-widget-shell[data-widget-rows='1'] :deep(.weather-card) { padding: 6px 26px 12px 10px; }
+/* One row leaves ~64px: failure states lay out in a line so the retry button stays visible. */
+.pn-widget-shell[data-widget-rows='1'] :deep(.widget-failure),
+.pn-widget-shell[data-widget-rows='1'] :deep(.trending-placeholder.is-failed) { flex-direction: row; flex-wrap: wrap; gap: 4px 8px; padding: 0; }
+.pn-widget-shell[data-widget-rows='1'] :deep(.widget-failure .weather-icon) { display: none; }
+.pn-widget-shell[data-widget-rows='1'] :deep(.widget-failure button),
+.pn-widget-shell[data-widget-rows='1'] :deep(.trending-placeholder.is-failed button) { margin-top: 0; padding: 2px 10px; font-size: 11px; }
 .pn-widget-shell[data-widget-rows='1'] :deep(.weather-icon) { width: 24px; height: 24px; }
 .pn-widget-shell[data-widget-rows='1'] :deep(.weather-reading strong) { font-size: 20px; }
 </style>
