@@ -1036,14 +1036,12 @@ async function loadDirectFromApi() {
 const activeTabId = ref<number | null>(null)
 const groupSlideDirection = ref<'next' | 'previous'>('next')
 const sideRailRevealed = ref(!sidebarAutoHide.value)
-const wheelHintVisible = ref(false)
 const settingsModalVisible = ref(false)
 const editCardModalVisible = ref(false)
 const editCardData = ref<Panel.ItemInfo | null>(null)
 const editCardGroupId = ref<number | undefined>(undefined)
 let wheelLocked = false
 let wheelLockTimer: number | null = null
-let wheelHintTimer: number | null = null
 let suppressNextCardClick = false
 let suppressCardClickTimer: number | null = null
 let bookmarkSortSnapshot: Panel.ItemInfo[] | null = null
@@ -1080,6 +1078,18 @@ function scheduleSideAreaHide() {
       sideRailRevealed.value = false
     sideHideTimer = null
   }, 260)
+}
+
+// Wheel switching briefly shows the auto-hidden rail so the user sees which group is now active.
+function flashSideRail() {
+  if (!sidebarAutoHide.value || sideRailSuppressed.value)
+    return
+  revealSideArea()
+  sideHideTimer = window.setTimeout(() => {
+    sideHideTimer = null
+    if (!sideRailElement.value?.matches(':hover, :focus-within'))
+      sideRailRevealed.value = false
+  }, 1400)
 }
 
 function closeSideArea() {
@@ -1162,9 +1172,8 @@ const activeCanvasItems = computed<ExtensionCanvasItem[]>({
     const bookmarks = activeGroupItems.value
       .map(card => ({ key: bookmarkCanvasKey(card), kind: 'bookmark' as const, card }))
     const savedOrder = pageKey ? widgetPreferences.value.pageLayouts[pageKey]?.itemOrder ?? [] : []
-    // Unsorted pages list bookmarks first: widgets placed ahead of them leave
-    // narrow grid gaps that the dense flow fills with a column of bookmarks.
-    return orderedCanvasItems([...bookmarks, ...widgetGroups], savedOrder)
+    // Unsorted pages use the same order as 一键整理: widgets first, then bookmarks.
+    return orderedCanvasItems(tidyCanvasOrder([...widgetGroups, ...bookmarks]), savedOrder)
   },
   set: (items) => {
     const pageKey = readyPageLayoutKey.value
@@ -1198,11 +1207,24 @@ const canTidyCanvas = computed(() => {
   return kinds.includes('widget') && kinds.lastIndexOf('bookmark') > kinds.indexOf('widget')
 })
 
+// Widgets lead, tallest then widest first, so the dense grid packs them into
+// rows and bookmarks flow into whatever columns are left beside them.
+function tidyCanvasOrder(items: ExtensionCanvasItem[]) {
+  const widgets = items.filter(item => item.kind === 'widget')
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => {
+      const sizeA = a.item.kind === 'widget' ? a.item.group.size : { rows: 0, columns: 0 }
+      const sizeB = b.item.kind === 'widget' ? b.item.group.size : { rows: 0, columns: 0 }
+      return sizeB.rows - sizeA.rows || sizeB.columns - sizeA.columns || a.index - b.index
+    })
+    .map(entry => entry.item)
+  return [...widgets, ...items.filter(item => item.kind !== 'widget')]
+}
+
 async function tidyActiveCanvas() {
   if (!readyPageLayoutKey.value)
     return
-  const items = activeCanvasItems.value
-  activeCanvasItems.value = [...items.filter(item => item.kind === 'bookmark'), ...items.filter(item => item.kind === 'widget')]
+  activeCanvasItems.value = tidyCanvasOrder(activeCanvasItems.value)
   if (await persistExtensionWidgets())
     ms.success(t('extensionCanvas.tidied'))
 }
@@ -1358,11 +1380,9 @@ function handleGroupWheel(event: WheelEvent) {
   const direction = event.deltaY > 0 ? 1 : -1
   const nextIndex = (currentIndex + direction + groupTabs.value.length) % groupTabs.value.length
   selectGroup(groupTabs.value[nextIndex].id, direction > 0 ? 'next' : 'previous')
-  wheelHintVisible.value = true
   wheelLocked = true
   wheelLockTimer = window.setTimeout(() => { wheelLocked = false; wheelLockTimer = null }, 420)
-  if (wheelHintTimer) window.clearTimeout(wheelHintTimer)
-  wheelHintTimer = window.setTimeout(() => { wheelHintVisible.value = false }, 1100)
+  flashSideRail()
 }
 
 // 点击卡片在浏览器新标签页打开
@@ -1904,7 +1924,6 @@ onUnmounted(() => {
   flushPendingLayoutIfDirty()
   stopClockTimer()
   if (sideHideTimer) clearTimeout(sideHideTimer)
-  if (wheelHintTimer) clearTimeout(wheelHintTimer)
   if (wheelLockTimer) clearTimeout(wheelLockTimer)
   if (suppressCardClickTimer) clearTimeout(suppressCardClickTimer)
   if (externalStorageTimer) clearTimeout(externalStorageTimer)
@@ -2179,20 +2198,6 @@ onUnmounted(() => {
             <div class="dashboard-canvas-header">
               <div class="active-group-meta">
                 <span>{{ activeGroup?.title }}</span>
-                <small>{{ t('extensionCanvas.summary', { bookmarks: activeGroup?.count || 0, widgets: buildWidgetDisplayGroups(extensionWidgetInstances).length }) }}</small>
-                <nav v-if="sidebarAutoHide && groupTabs.length > 1" class="group-switcher" :aria-label="t('extensionCanvas.switchGroup')">
-                  <button
-                    v-for="group in groupTabs"
-                    :key="group.id"
-                    type="button"
-                    :class="{ active: group.id === activeGroup?.id }"
-                    :aria-current="group.id === activeGroup?.id ? 'page' : undefined"
-                    :title="t('extensionCanvas.groupCount', { title: group.title, count: group.count })"
-                    @click="selectGroup(group.id)"
-                  >
-                    {{ group.title }}
-                  </button>
-                </nav>
               </div>
               <div v-if="extensionWidgetEditMode" class="extension-widget-toolbar">
                 <div class="extension-edit-mode-copy">
@@ -2312,13 +2317,6 @@ onUnmounted(() => {
       </footer>
     </main>
 
-    <Transition name="wheel-hint">
-      <div v-if="wheelHintVisible" class="wheel-switch-hint">
-        <SvgIcon icon="material-symbols:mouse-outline-rounded" />
-        <span>{{ activeGroup?.title }}</span>
-        <small>{{ activeGroup?.count || 0 }} 项</small>
-      </div>
-    </Transition>
 
     <div v-if="rightMenuShow || widgetRightMenuShow" class="context-menu-dismiss" @pointerdown="closeContextMenus()" @contextmenu.prevent="closeContextMenus()" />
 
@@ -2484,6 +2482,7 @@ onUnmounted(() => {
       v-model:visible="editCardModalVisible"
       :item-info="editCardData"
       :item-group-id="editCardGroupId"
+      :title="t('iconItem.manage')"
       @done="handleEditSuccess"
     />
 
@@ -2783,27 +2782,6 @@ onUnmounted(() => {
 .active-group-meta > span { font-size: 13px; font-weight: 650; }
 .active-group-meta small { color: rgba(255,255,255,.48); font-size: 10px; }
 
-.wheel-switch-hint {
-  position: fixed;
-  left: 50%;
-  bottom: 28px;
-  z-index: 45;
-  transform: translateX(-50%);
-  padding: 9px 13px;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: white;
-  border: 1px solid rgba(255,255,255,.14);
-  border-radius: 999px;
-  background: rgba(8,13,24,.72);
-  backdrop-filter: blur(18px);
-  box-shadow: 0 10px 35px rgba(0,0,0,.28);
-  font-size: 11px;
-}
-.wheel-switch-hint small { color: rgba(255,255,255,.45); }
-.wheel-hint-enter-active,.wheel-hint-leave-active { transition: 180ms ease; }
-.wheel-hint-enter-from,.wheel-hint-leave-to { opacity: 0; transform: translate(-50%, 8px); }
 
 .context-menu-dismiss { position: fixed; inset: 0; z-index: 46; background: transparent; }
 .extension-context-menu {
@@ -3427,8 +3405,6 @@ onUnmounted(() => {
 .context-size-grid button:hover, .context-size-grid button.active { color: var(--ext-accent); border-color: var(--ext-accent); background: var(--ext-accent-soft); }
 .context-menu-divider { background: var(--ext-divider); }
 .context-menu-note { color: var(--ext-text-soft); }
-.wheel-switch-hint { color: var(--ext-text); border-color: var(--ext-border); background: var(--ext-surface); box-shadow: 0 10px 35px var(--ext-shadow); backdrop-filter: none; }
-.wheel-switch-hint small { color: var(--ext-text-soft); }
 .empty-state { color: var(--ext-text-muted) !important; }
 .engine-select-btn :deep(svg), .clear-btn :deep(svg) { color: var(--ext-text-muted) !important; }
 
@@ -3484,20 +3460,21 @@ onUnmounted(() => {
 /* Shared page canvas: bookmarks and widgets consume the exact same grid unit. */
 .dashboard-canvas-section { max-width: 1080px; margin-bottom: 32px; }
 .dashboard-group-page { width: 100%; }
+/* Pages slide like a vertical pager: the next group rises in from below, the previous one drops in from above. */
 .group-slide-next-enter-active, .group-slide-previous-enter-active {
-  transition: transform 240ms cubic-bezier(.2, .7, .2, 1), opacity 240ms ease;
+  transition: transform 360ms cubic-bezier(.16, 1, .3, 1), opacity 260ms ease-out, filter 300ms ease-out;
 }
 .group-slide-next-leave-active, .group-slide-previous-leave-active {
-  transition: transform 160ms ease-in, opacity 160ms ease-in;
+  transition: transform 180ms cubic-bezier(.4, 0, 1, 1), opacity 180ms ease-in, filter 180ms ease-in;
   pointer-events: none;
 }
-.group-slide-next-enter-from, .group-slide-previous-leave-to { opacity: 0; transform: translateY(36px); }
-.group-slide-next-leave-to, .group-slide-previous-enter-from { opacity: 0; transform: translateY(-36px); }
+.group-slide-next-enter-from, .group-slide-previous-leave-to { opacity: 0; transform: translateY(72px) scale(.97); filter: blur(6px); }
+.group-slide-next-leave-to, .group-slide-previous-enter-from { opacity: 0; transform: translateY(-72px) scale(.97); filter: blur(6px); }
 @media (prefers-reduced-motion: reduce) {
   .group-slide-next-enter-active, .group-slide-previous-enter-active,
   .group-slide-next-leave-active, .group-slide-previous-leave-active { transition-duration: 1ms; }
   .group-slide-next-enter-from, .group-slide-previous-leave-to,
-  .group-slide-next-leave-to, .group-slide-previous-enter-from { transform: none; }
+  .group-slide-next-leave-to, .group-slide-previous-enter-from { transform: none; filter: none; }
 }
 .dashboard-canvas-header {
   min-height: 42px;
@@ -3653,7 +3630,7 @@ onUnmounted(() => {
 .speed-card:hover .card-icon-box { transform: translateY(-4px) scale(1.045); box-shadow: 0 12px 26px rgba(0, 0, 0, 0.38); filter: brightness(1.06); }
 .card-icon-box { transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease; }
 .dashboard-add-icon-symbol svg { background: transparent; color: var(--ext-text-soft); width: 32px; height: 32px; padding: 4px; }
-.workspace-footer { display: flex; align-items: center; justify-content: space-between; flex: none; gap: 16px; width: min(100%, 1080px); margin-top: auto; padding-top: 40px; color: var(--ext-text-soft); font-size: 11px; letter-spacing: .04em; }
+.workspace-footer { display: flex; align-items: center; justify-content: center; flex: none; gap: 16px; width: min(100%, 1080px); margin-top: auto; padding-top: 40px; color: var(--ext-text-soft); font-size: 11px; letter-spacing: .04em; }
 .modal-secondary-action:focus-visible, .search-submit-btn:focus-visible, .engine-select-btn:focus-visible, .bookmark-search-trigger:focus-visible { outline: 2px solid var(--ext-accent); outline-offset: 3px; }
 .main-content { scrollbar-width: thin; scrollbar-color: var(--ext-border) transparent; }
 
@@ -3699,7 +3676,7 @@ onUnmounted(() => {
 /* Blur only independent surfaces, not every child, to avoid stacked GPU layers. */
 .side-rail, .search-bar-capsule, .bookmark-search-panel,
 .sync-status-banner, .extension-widget-toolbar, .extension-widget-editor,
-.extension-context-menu, .wheel-switch-hint, .speed-card.is-expanded {
+.extension-context-menu, .speed-card.is-expanded {
   -webkit-backdrop-filter: var(--pn-glass-filter);
   backdrop-filter: var(--pn-glass-filter);
   box-shadow: var(--pn-glass-highlight), var(--ext-elevation);
@@ -3768,14 +3745,6 @@ onUnmounted(() => {
 .extension-dashboard-grid .dashboard-add-icon > span:last-child { line-height: 16px; }
 .extension-dashboard-grid .dashboard-add-icon:hover .dashboard-add-icon-symbol { border-color: var(--ext-accent); }
 .extension-dashboard-grid .dashboard-add-icon:hover .dashboard-add-icon-symbol svg { color: var(--ext-accent); }
-/* Group pills stand in for the auto-hidden rail, so other groups stay discoverable. */
-.group-switcher { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-.dashboard-canvas-header:has(.group-switcher) { align-items: flex-start; }
-.group-switcher button { max-width: 160px; min-height: 26px; padding: 0 11px; overflow: hidden; border: 1px solid var(--ext-border); border-radius: 999px; color: var(--ext-text-muted); background: color-mix(in srgb, var(--ext-text) 6%, var(--ext-surface)); cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-.group-switcher button:hover { color: var(--ext-text); border-color: var(--ext-accent); }
-.group-switcher button.active { color: var(--pn-color-surface, #fff); border-color: transparent; background: var(--ext-accent); }
-.group-switcher button:focus-visible { outline: 2px solid var(--ext-accent); outline-offset: 2px; }
-.has-wallpaper .group-switcher button { text-shadow: none; }
 
 /* Size choices preview their footprint; the menu stays readable over busy widgets. */
 /* The glass surface is ~70% opaque; over widgets that reads as noise, so menus sit on the page colour. */

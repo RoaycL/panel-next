@@ -74,13 +74,29 @@ function handleChange() {
   emit('update:itemIcon', { ...itemIconInfo.value })
 }
 
-function handleResetBackgroundColor() {
-  itemIconInfo.value.backgroundColor = initData.backgroundColor
-  handleChange()
-}
-
-function handleTransparentBackground() {
-  itemIconInfo.value.backgroundColor = '#00000000'
+type BackgroundMode = 'default' | 'none' | 'color' | 'glass'
+const backgroundModes: { value: BackgroundMode, label: string }[] = [
+  { value: 'default', label: t('iconItem.backgroundDefault') },
+  { value: 'none', label: t('iconItem.noBackground') },
+  { value: 'color', label: t('iconItem.backgroundSolid') },
+  { value: 'glass', label: t('iconItem.backgroundGlass') },
+]
+const backgroundMode = computed<BackgroundMode>(() => {
+  if (itemIconInfo.value.surface === 'glass')
+    return 'glass'
+  const color = itemIconInfo.value.backgroundColor?.toLowerCase()
+  if (!color || color === initData.backgroundColor)
+    return 'default'
+  return color === '#00000000' || color === 'transparent' ? 'none' : 'color'
+})
+let lastSolidColor = '#ffffff'
+function setBackgroundMode(mode: BackgroundMode) {
+  if (backgroundMode.value === 'color')
+    lastSolidColor = itemIconInfo.value.backgroundColor || lastSolidColor
+  delete itemIconInfo.value.surface
+  if (mode === 'glass')
+    itemIconInfo.value.surface = 'glass'
+  itemIconInfo.value.backgroundColor = mode === 'none' ? '#00000000' : mode === 'color' ? lastSolidColor : initData.backgroundColor
   handleChange()
 }
 
@@ -179,11 +195,7 @@ function handleGallerySelect(url: string) {
 
         <!-- 图片模式 (URL / 上传 / 图库) -->
         <div v-if="itemIconInfo.itemType === 2" class="flex flex-col gap-2">
-          <div class="text-xs text-slate-400 dark:text-zinc-400">
-            {{ $t('iconItem.inputIconUrlOrUpload') }}
-          </div>
-          <NInput v-model:value="itemIconInfo.src" size="small" type="text" placeholder="https://... 或本地上传" @input="handleChange" />
-          <small class="icon-cache-hint">{{ $t('iconItem.localCacheHint') }}</small>
+          <NInput v-model:value="itemIconInfo.src" size="small" type="text" placeholder="https://... 或本地上传" :title="$t('iconItem.localCacheHint')" @input="handleChange" />
           <div class="icon-upload-actions flex gap-2">
             <NUpload
               :action="uploadAction"
@@ -214,7 +226,7 @@ function handleGallerySelect(url: string) {
 
         <div class="icon-scale-controls">
           <div class="icon-scale-heading">
-            <span>{{ $t('iconItem.contentScale') }}</span>
+            <span :title="$t('iconItem.contentScaleHint')">{{ $t('iconItem.contentScale') }}</span>
             <div class="icon-scale-actions">
               <NButton size="tiny" secondary @click="fillIconTile">
                 {{ $t('iconItem.fillTile') }}
@@ -232,34 +244,34 @@ function handleGallerySelect(url: string) {
               </template>
             </NInputNumber>
           </div>
-          <small class="icon-cache-hint">{{ $t('iconItem.contentScaleHint') }}</small>
         </div>
 
-        <!-- 背景色调节 -->
-        <div class="icon-color-controls flex items-center gap-2.5 mt-3 pt-2.5 border-t border-white/10 dark:border-white/10">
-          <span class="text-xs text-slate-400 dark:text-zinc-400 whitespace-nowrap">{{ $t('common.backgroundColor') }}:</span>
-          <div class="w-[120px]">
-            <NColorPicker
-              v-model:value="itemIconInfo.backgroundColor"
-              class="icon-background-color-picker"
-              size="small"
-              :modes="['hex']"
-              :swatches="defautSwatchesBackground"
-              @complete="handleChange"
-              @update-value="handleChange"
-            />
+        <!-- 背景：默认显示图标原样，也可单独选择无背景、纯色或磨砂玻璃。 -->
+        <div class="icon-background-controls">
+          <span class="icon-background-label">{{ $t('common.backgroundColor') }}</span>
+          <div class="icon-background-modes" role="radiogroup" :aria-label="$t('common.backgroundColor')">
+            <button
+              v-for="mode in backgroundModes"
+              :key="mode.value"
+              type="button"
+              role="radio"
+              :aria-checked="backgroundMode === mode.value"
+              :class="{ active: backgroundMode === mode.value }"
+              @click="setBackgroundMode(mode.value)"
+            >
+              {{ mode.label }}
+            </button>
           </div>
-          <NButton size="small" :type="itemIconInfo.backgroundColor === '#00000000' ? 'primary' : 'default'" secondary @click="handleTransparentBackground">
-            {{ $t('iconItem.noBackground') }}
-          </NButton>
-          <button
-            v-if="itemIconInfo.backgroundColor !== initData.backgroundColor"
-            type="button"
-            class="text-xs text-sky-400 hover:text-sky-300 transition-colors underline cursor-pointer"
-            @click="handleResetBackgroundColor"
-          >
-            {{ $t('common.reset') }}
-          </button>
+          <NColorPicker
+            v-if="backgroundMode === 'color'"
+            v-model:value="itemIconInfo.backgroundColor"
+            class="icon-background-color-picker"
+            size="small"
+            :modes="['hex']"
+            :swatches="defautSwatchesBackground"
+            @complete="handleChange"
+            @update-value="handleChange"
+          />
         </div>
       </div>
     </div>
@@ -336,20 +348,25 @@ function handleGallerySelect(url: string) {
 }
 
 .icon-cache-hint { color: var(--pn-color-text-muted, #64748b); font-size: 11px; line-height: 1.4; }
-.icon-color-controls, .icon-upload-actions { flex-wrap: wrap; }
+.icon-upload-actions { flex-wrap: wrap; }
 .icon-upload-actions :deep(.n-upload) { width: auto; flex: none; }
-.icon-color-controls > div { flex: 0 0 120px; }
 .icon-background-color-picker { border-radius: 8px; overflow: hidden; }
-.icon-color-controls :deep(.n-color-picker__fill) { inset: 0 !important; border-radius: inherit; overflow: hidden; }
+.icon-background-controls :deep(.n-color-picker__fill) { inset: 0 !important; border-radius: inherit; overflow: hidden; }
 .icon-background-color-picker :deep(.n-color-picker__value) { padding: 0 8px; font-size: 12px; font-weight: 600; }
-.icon-color-controls button { flex: none; white-space: nowrap; }
 .icon-editor-container :deep(.text-slate-400) { color: var(--pn-color-text-muted); }
-.icon-editor-container .icon-color-controls { border-color: var(--pn-color-border); padding-top: 16px; margin-top: 16px; }
-.type-selector-bar { display: flex; margin-bottom: 18px; padding: 4px; }
+.type-selector-bar { display: flex; margin-bottom: 14px; padding: 4px; }
 .type-pill-btn { flex: 1; justify-content: center; min-height: 34px; }
-.icon-scale-controls { margin-top: 16px; display: grid; gap: 9px; }
+.icon-scale-controls { margin-top: 12px; display: grid; gap: 6px; }
 .icon-scale-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--pn-color-text-secondary); }
 .icon-scale-actions { display: flex; align-items: center; gap: 4px; }
 .icon-scale-inputs { display: grid; grid-template-columns: minmax(60px, 1fr) 106px; gap: 16px; align-items: center; }
-
+.icon-background-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--pn-color-border, rgb(148 163 184 / 18%)); }
+.icon-background-label { color: var(--pn-color-text-secondary); font-size: 12px; white-space: nowrap; }
+.icon-background-modes { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--pn-color-border, rgb(148 163 184 / 18%)); border-radius: 9px; background: var(--pn-color-surface-hover, rgb(148 163 184 / 8%)); }
+.icon-background-modes button { min-height: 26px; padding: 0 10px; border: 0; border-radius: 6px; color: var(--pn-color-text-secondary, #64748b); background: transparent; cursor: pointer; font: inherit; font-size: 12px; white-space: nowrap; }
+.icon-background-modes button:hover { color: var(--pn-color-accent, #0f9f75); }
+.icon-background-modes button.active { color: var(--pn-color-surface, #fff); background: var(--pn-color-accent, #0f9f75); }
+.icon-background-modes button:focus-visible { outline: 2px solid var(--pn-color-accent, #0f9f75); outline-offset: 2px; }
+.icon-background-controls .icon-background-color-picker,
+.icon-background-controls :deep(.n-color-picker) { width: 132px; flex: none; }
 </style>
