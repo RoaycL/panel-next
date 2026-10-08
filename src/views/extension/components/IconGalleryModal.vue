@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { NModal, NSelect, useMessage } from 'naive-ui'
+import { NInput, NModal, NSelect, useMessage } from 'naive-ui'
+import type { SelectOption } from 'naive-ui'
 import { edit as editItem } from '@/api/panel/itemIcon'
 import SvgIcon from '@/components/common/SvgIcon/index.vue'
 import ItemIcon from '@/components/common/ItemIcon/index.vue'
@@ -17,6 +18,7 @@ const props = defineProps<{
   addedCounts?: Record<string, number>
   existingUrls?: string[]
   busy?: boolean
+  createPage?: (title: string) => Promise<number | null>
 }>()
 const emit = defineEmits<{
   (event: 'update:show', value: boolean): void
@@ -32,7 +34,8 @@ type Category = 'all' | IconPresetCategory
 const { t } = useI18n()
 const ms = useMessage()
 const editingBusy = ref(false)
-const busy = computed(() => props.busy || editingBusy.value)
+const creatingPage = ref(false)
+const busy = computed(() => props.busy || editingBusy.value || creatingPage.value)
 const visible = computed({ get: () => props.show, set: (value) => { if (!busy.value) emit('update:show', value) } })
 const section = ref<Section>('sites')
 const query = ref('')
@@ -44,7 +47,42 @@ const sections = computed(() => [
   { id: 'custom' as const, title: t('iconGallery.custom'), icon: 'mdi-pencil' },
 ])
 const categories: Category[] = ['all', 'popular', 'development', 'productivity', 'social', 'entertainment']
-const pageOptions = computed(() => props.pages.map(page => ({ label: page.title, value: page.id })))
+const NEW_PAGE = -1
+const pageOptions = computed<SelectOption[]>(() => [
+  ...props.pages.map(page => ({ label: page.title, value: page.id })),
+  ...(props.canAdd && props.createPage ? [{ label: `＋ ${t('iconGallery.newGroup')}`, value: NEW_PAGE, class: 'icon-gallery-new-page-option' }] : []),
+])
+const namingPage = ref(false)
+const newPageTitle = ref('')
+function selectPage(value: number) {
+  if (value !== NEW_PAGE) {
+    emit('update:pageId', value)
+    return
+  }
+  newPageTitle.value = ''
+  namingPage.value = true
+}
+function cancelNewPage() {
+  if (creatingPage.value) return
+  namingPage.value = false
+  newPageTitle.value = ''
+}
+async function confirmNewPage() {
+  const title = newPageTitle.value.trim()
+  if (!title || creatingPage.value || !props.createPage) return
+  creatingPage.value = true
+  try {
+    const id = await props.createPage(title)
+    if (id !== null) {
+      ms.success(t('iconGallery.newGroupCreated', { title }))
+      namingPage.value = false
+      newPageTitle.value = ''
+    }
+  }
+  finally {
+    creatingPage.value = false
+  }
+}
 const pageName = computed(() => props.pages.find(page => page.id === props.pageId)?.title)
 const filtered = computed(() => {
   const keyword = query.value.trim().toLocaleLowerCase()
@@ -54,6 +92,7 @@ const filtered = computed(() => {
 watch(() => props.show, (show) => {
   if (show) {
     section.value = props.initialSection || 'sites'
+    namingPage.value = false
     seed.value = null
     query.value = ''
     category.value = 'all'
@@ -131,7 +170,13 @@ async function quickAdd(preset: IconPreset) {
           <div v-else class="icon-gallery-custom-heading">
             <strong>{{ t('iconGallery.custom') }}</strong><small>{{ t('iconGallery.customHint') }}</small>
           </div>
-          <label class="icon-gallery-page"><span>{{ t('iconGallery.target') }}</span><NSelect :value="pageId" :options="pageOptions" :disabled="busy" size="small" @update:value="emit('update:pageId', $event)" /></label>
+          <form v-if="namingPage" class="icon-gallery-page icon-gallery-new-page" @submit.prevent="confirmNewPage">
+            <span>{{ t('iconGallery.newGroup') }}</span>
+            <NInput v-model:value="newPageTitle" size="small" :maxlength="50" :placeholder="t('iconGallery.newGroupPlaceholder')" :disabled="creatingPage" autofocus @keydown.esc.stop.prevent="cancelNewPage" />
+            <button type="submit" class="icon-gallery-new-page-confirm" :disabled="creatingPage || !newPageTitle.trim()">{{ t('iconGallery.newGroupCreate') }}</button>
+            <button type="button" class="icon-gallery-new-page-cancel" :disabled="creatingPage" :title="t('common.cancel')" :aria-label="t('common.cancel')" @click="cancelNewPage"><SvgIcon icon="material-symbols:close-rounded" /></button>
+          </form>
+          <label v-else class="icon-gallery-page"><span>{{ t('iconGallery.target') }}</span><NSelect :value="pageId" :options="pageOptions" :disabled="busy" size="small" @update:value="selectPage" /></label>
         </div>
         <div v-if="!canAdd && section !== 'widgets'" class="icon-gallery-login" role="status">
           <span>{{ t('iconGallery.loginHint') }}</span><button type="button" @click="emit('login')">
@@ -200,6 +245,12 @@ async function quickAdd(preset: IconPreset) {
 .icon-gallery-page { display: flex; align-items: center; gap: 8px; flex: none; font-size: 12px; color: var(--pn-color-text-secondary); }
 .icon-gallery-page > span { white-space: nowrap; }
 .icon-gallery-page :deep(.n-select) { width: 145px; }
+.icon-gallery-new-page :deep(.n-input) { width: 150px; }
+.icon-gallery-new-page-confirm, .icon-gallery-new-page-cancel { display: inline-flex; align-items: center; justify-content: center; flex: none; height: 28px; border: 0; border-radius: 999px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 650; }
+.icon-gallery-new-page-confirm { padding: 0 12px; color: var(--pn-color-surface); background: var(--pn-color-accent); }
+.icon-gallery-new-page-cancel { width: 28px; color: var(--pn-color-text-secondary); background: color-mix(in srgb, var(--pn-color-accent) 10%, transparent); }
+.icon-gallery-new-page-cancel svg { width: 16px; height: 16px; }
+:global(.icon-gallery-new-page-option) { color: var(--pn-color-accent) !important; font-weight: 650; }
 .icon-gallery-custom-heading { display: flex; flex: 1; flex-direction: column; gap: 4px; }
 .icon-gallery-custom-heading strong { font-size: 19px; }
 .icon-gallery-custom-heading small { font-size: 12px; color: var(--pn-color-text-muted); }

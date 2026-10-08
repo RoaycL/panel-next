@@ -2,6 +2,7 @@
 import { NButton, NCard, NForm, NFormItem, NInput, NSelect, useMessage } from 'naive-ui'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { login, registerAccount } from '@/api'
+import brandLogo from '@/assets/logo.svg'
 import { getSiteInfo } from '@/api/site'
 import { useAppStore, useAuthStore } from '@/store'
 import { SvgIcon, Captcha } from '@/components/common'
@@ -204,7 +205,7 @@ function handleChangeLanuage(value: Language) {
       </button>
       <div class="login-toolbar">
         <div class="login-brand-mark">
-          <span class="login-brand-icon" aria-hidden="true">PN</span>
+          <img class="login-brand-icon" :src="brandLogo" alt="" aria-hidden="true">
           <span>Panel Next</span>
         </div>
         <div class="login-language">
@@ -380,15 +381,11 @@ function handleChangeLanuage(value: Language) {
 }
 
 .login-brand-icon {
-  display: grid;
-  place-items: center;
-  background: var(--pn-color-text-primary, #111);
-  color: var(--pn-color-page-background, #fff);
-  font-size: 11px;
+  display: block;
+  flex: none;
   width: 30px;
   height: 30px;
-  border-radius: var(--pn-radius-small, 8px);
-  box-shadow: var(--pn-effect-shadow-low, 0 1px 3px rgb(2 6 23 / 18%));
+  border-radius: 7px;
 }
 
 .login-language {

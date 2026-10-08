@@ -47,6 +47,8 @@ const weatherKind = computed(() => kindFromCode(weather.value?.current.weatherCo
 
 const forecast = computed(() => weather.value?.daily?.slice(0, (widgetContext?.size.columns ?? 4) < 4 ? 3 : 6) ?? [])
 const showForecast = computed(() => (widgetContext?.size.rows ?? 2) >= 2 && forecast.value.length > 0)
+// At two rows the date line pushes the forecast past the cell; the weekday is enough there.
+const showForecastDate = computed(() => (widgetContext?.size.rows ?? 2) > 2)
 
 function forecastDay(date: string, index: number) {
   if (index === 0)
@@ -132,7 +134,7 @@ onUnmounted(() => {
         <span class="forecast-day">{{ forecastDay(day.date, index) }}</span>
         <WeatherGlyph class="forecast-icon" :kind="kindFromCode(day.weatherCode)" />
         <span class="forecast-temperatures">{{ Math.round(day.temperatureMax) }}°<small>{{ Math.round(day.temperatureMin) }}°</small></span>
-        <span class="forecast-date">{{ forecastDate(day.date) }}</span>
+        <span v-if="showForecastDate" class="forecast-date">{{ forecastDate(day.date) }}</span>
       </li>
     </ol>
     <button v-if="weather || !failed" class="weather-refresh" type="button" :disabled="loading" :title="t('weather.refresh')" @click="refresh">

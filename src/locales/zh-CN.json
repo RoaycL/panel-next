@@ -603,6 +603,10 @@
     }
   },
   "iconGallery": {
+    "newGroup": "新建分组",
+    "newGroupPlaceholder": "分组名称",
+    "newGroupCreate": "创建",
+    "newGroupCreated": "已创建分组「{title}」",
     "alreadyAdded": "已添加",
     "quickAddNamed": "添加{title}",
     "customizeFirst": "编辑后再添加",

@@ -18,6 +18,7 @@ import NetworkModeSelect from '@/components/common/NetworkModeSelect.vue'
 import { settingsSyncState, settingsSyncError, flushLatestSettings } from '@/runtime/sharedSettings'
 import { enqueueAppearanceSave } from '@/themes/appearanceSaveQueue'
 import SvgIcon from '@/components/common/SvgIcon/index.vue'
+import brandLogo from '@/assets/logo.svg'
 import ProfileAvatar from '@/components/common/ProfileAvatar/index.vue'
 import { logout } from '@/api'
 import { openExtensionLogin } from '@/runtime/extensionLogin'
@@ -425,7 +426,7 @@ async function handleLogout() {
       <aside class="hub-sidebar flex flex-col justify-between w-[260px] p-4 select-none shrink-0 overflow-hidden">
         <div class="sidebar-top flex flex-col">
           <button type="button" class="hub-brand" aria-label="返回个人中心" @click="currentTab = 'profile'">
-            <span class="hub-brand-mark">PN</span>
+            <img class="hub-brand-mark" :src="brandLogo" alt="" aria-hidden="true">
             <span class="hub-brand-copy"><b>Panel Next</b><small>让空间，顺你心意</small></span>
             <span class="hub-revision">R{{ syncRevision }}</span>
           </button>
@@ -1170,15 +1171,9 @@ async function handleLogout() {
 .hub-brand-mark {
   width: 34px;
   height: 34px;
-  display: grid;
+  display: block;
   flex: none;
-  place-items: center;
-  border-radius: 11px;
-  color: white;
-  background: var(--hub-accent);
-  box-shadow: none;
-  font-size: 11px;
-  font-weight: 800;
+  border-radius: 8px;
 }
 .hub-brand-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; }
 .hub-brand-copy b { font-size: 13px; }
@@ -1316,7 +1311,6 @@ async function handleLogout() {
 .hub-login-button { background: var(--hub-accent); color: var(--pn-color-surface); min-height: 40px; }
 .hub-login-button:hover { filter: brightness(.95); }
 .hub-sidebar { background: var(--pn-glass-panel); }
-.hub-brand-mark { color: var(--pn-color-surface); }
 .nav-icon-wrap { background: transparent; }
 .hub-nav-caption { margin-top: 8px; color: var(--hub-text-muted); font-weight: 500; }
 .nav-item-label { font-size: 13px; font-weight: 500; }

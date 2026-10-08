@@ -63,12 +63,14 @@ onErrorCaptured((error) => {
 
 let loadGeneration = 0
 
-watch(() => ({ type: props.instance.type, id: props.instance.id, retry: retryGeneration.value, packages: packageRevision.value }), async (next) => {
+// Watch the primitives, not a fresh object: a reloaded layout hands us a new
+// instance object with the same id/type, and that must not remount the widget.
+watch([() => props.instance.type, () => props.instance.id, retryGeneration, packageRevision], async ([type]) => {
   const generation = ++loadGeneration
   component.value = null
   renderError.value = null
   loading.value = true
-  const definition = widgetRegistry.get(next.type)
+  const definition = widgetRegistry.get(type)
   if (!definition) {
     renderError.value = t('widgetLayout.host.unsupported')
     loading.value = false
@@ -82,7 +84,7 @@ watch(() => ({ type: props.instance.type, id: props.instance.id, retry: retryGen
     }
   }
   catch (error) {
-    console.error(`Failed to load widget ${next.type}.`, error)
+    console.error(`Failed to load widget ${type}.`, error)
     if (generation === loadGeneration) {
       renderError.value = error instanceof Error ? error.message : t('widgetLayout.host.loadFailed')
       loading.value = false
@@ -141,7 +143,16 @@ function retryLoad() {
   height: 100%;
   max-width: 100%;
   max-height: 100%;
-  overflow: auto;
+  overflow: hidden;
+}
+
+/* Widgets fit their cell; inner lists may still scroll, but never show a scrollbar track. */
+.pn-widget-shell :deep(*) {
+  scrollbar-width: none;
+}
+
+.pn-widget-shell :deep(*::-webkit-scrollbar) {
+  display: none;
 }
 
 /* Widget Variant（§13）：glass 默认；solid 用表面色；borderless 去壳。 */

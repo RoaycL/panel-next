@@ -191,8 +191,6 @@ onUnmounted(() => {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: var(--pn-widget-border) transparent;
   align-content: start;
 }
 

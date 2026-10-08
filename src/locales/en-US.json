@@ -602,6 +602,10 @@
     }
   },
   "iconGallery": {
+    "newGroup": "New group",
+    "newGroupPlaceholder": "Group name",
+    "newGroupCreate": "Create",
+    "newGroupCreated": "Created group \"{title}\"",
     "alreadyAdded": "Added",
     "quickAddNamed": "Add {title}",
     "customizeFirst": "Edit before adding",

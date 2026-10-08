@@ -38,6 +38,7 @@ import { enqueueAppearanceSave } from '@/themes/appearanceSaveQueue'
 import { resolveSyncedWallpaper, saveAndSyncExtensionWallpaper } from '@/runtime/extensionWallpaper'
 import { receiveSharedSettings, stageWidgetSettings } from '@/runtime/sharedSettings'
 import ThemeIcon from '@/themes/ThemeIcon.vue'
+import brandLogo from '@/assets/logo.svg'
 import { BOOTSTRAP_SNAPSHOT_KEY_PREFIX, readBootstrapSnapshot, refreshBootstrapSnapshot } from '@/sync/bootstrapCache'
 import { onSyncConflict, setSyncRevision } from '@/sync/revision'
 import { beginSyncActivity } from '@/sync/activity'
@@ -46,7 +47,7 @@ import { getPendingMutationCount, OFFLINE_QUEUE_KEY_PREFIX, onOfflineQueueChange
 import GroupIcon from '@/components/common/GroupIcon/index.vue'
 import type { ConflictDescriptor, ConflictResolutionChoice } from '@/sync/conflictResolver'
 import { getBootstrap, waitForSyncChange } from '@/api/sync'
-import { getList as getGroupList } from '@/api/panel/itemIconGroup'
+import { deletes as deleteGroups, edit as editGroup, getList as getGroupList } from '@/api/panel/itemIconGroup'
 import { deletes as deleteItems, edit as editItem, getListByGroupId, saveSort as saveItemSort } from '@/api/panel/itemIcon'
 import type { DashboardGroup } from '@/dashboard/core'
 import { createDashboardState, createItemSortRequest, isDesktopGroup, resolveItemUrl, sortDashboardGroups } from '@/dashboard/core'
@@ -205,6 +206,10 @@ let loadedWidgetPageKey: string | null = null
 let isLoadingWidgetPage = false
 let widgetSaveGeneration = 0
 const dirtyPageLayoutKeys = new Set<string>()
+// Groups created in this tab may stay empty; see removeEmptyGroups.
+const keptEmptyGroupIds = new Set<number>()
+let groupIdsBeforeManager: Set<number> | null = null
+let removingEmptyGroups = false
 
 function emptyPageLayout(): ExtensionPageLayout {
   return { contentLayout: { schemaVersion: 1, widgets: [] }, itemOrder: [] }
@@ -370,6 +375,7 @@ async function addExtensionWidget(type: string | number) {
     extensionWidgetInstances.value.push(widgetRegistry.create(String(type), generateWidgetInstanceId(String(type)), { column: 0, row: extensionWidgetInstances.value.length }))
     inserted = true
     isWidgetLayoutDirty.value = true
+    keptEmptyGroupIds.delete(Number(loadedWidgetPageKey?.split(':').pop()))
     if (await persistExtensionWidgets())
       ms.success(t('widgetGallery.addedMessage', { title: widgetDefinitionTitle(widgetRegistry.get(String(type)) ?? { type: String(type) }) }))
     else
@@ -563,6 +569,9 @@ async function executeRemoveExtensionWidget(instanceId: string) {
     else {
       ms.success(t('widgetLayout.removeSuccess'))
     }
+    const pageGroupId = Number(loadedWidgetPageKey?.split(':').pop())
+    if (!extensionWidgetInstances.value.length && Number.isSafeInteger(pageGroupId))
+      void removeEmptyGroups([pageGroupId])
   }
   catch (error) {
     console.error('Failed to execute remove widget flow.', error)
@@ -828,6 +837,13 @@ async function applyBootstrapData(data: Sync.BootstrapResponseV1) {
   userStore.updateUserInfo(dashboard.account)
   refreshPendingMutationsCount()
   groups.value = dashboard.groups || []
+  if (groupIdsBeforeManager) {
+    for (const group of groups.value) {
+      if (!groupIdsBeforeManager.has(group.id as number))
+        keptEmptyGroupIds.add(group.id as number)
+    }
+    groupIdsBeforeManager = null
+  }
   // Preserve a queued icon choice while a cached/remote bootstrap refreshes.
   for (const mutation of readOfflineQueue(dashboard.account.id)) {
     if (mutation.action !== 'group.edit' || mutation.status === 'applied') continue
@@ -877,6 +893,7 @@ async function refreshBootstrap() {
       if (result.data) {
         await applyBootstrapData(result.data)
         extensionSyncStatus.value = 'online'
+        void removeEmptyGroups()
         return
       }
     }
@@ -884,6 +901,7 @@ async function refreshBootstrap() {
     if (bootstrapRes.code === 0 && bootstrapRes.data) {
       await applyBootstrapData(bootstrapRes.data)
       extensionSyncStatus.value = 'online'
+      void removeEmptyGroups()
       return
     }
     // 降级使用普通 API 获取
@@ -1316,7 +1334,83 @@ function openGroupManager() {
     ms.info('登录后可新增和管理分组')
     return
   }
+  // Groups created in the manager are allowed to stay empty in this tab.
+  groupIdsBeforeManager = new Set(groups.value.map(group => group.id as number))
   showGroupManager.value = true
+}
+
+// An empty group (no icons, no widgets) is removed instead of showing an empty
+// page. The first group is home and always stays; so does a group created in
+// this tab until something is added to it (see keptEmptyGroupIds).
+function groupHasContent(groupId: number) {
+  const group = groups.value.find(item => item.id === groupId)
+  if (!group || group.items?.length)
+    return true
+  const pageKey = `${authStore.userInfo?.id ?? 'guest'}:${groupId}`
+  if (pageKey === loadedWidgetPageKey)
+    return extensionWidgetInstances.value.length > 0 || extensionQuarantinedWidgets.value.length > 0
+  const widgets = widgetPreferences.value.pageLayouts[pageKey]?.contentLayout?.widgets
+  return Array.isArray(widgets) && widgets.length > 0
+}
+
+async function removeEmptyGroups(candidateIds?: number[]) {
+  const accountId = authStore.userInfo?.id
+  if (removingEmptyGroups || !groupsReady.value || !accountId || !authStore.token || authStore.visitMode !== VisitMode.VISIT_MODE_LOGIN)
+    return
+  // Queued offline edits may still add icons to a group that looks empty here.
+  if (getPendingMutationCount(accountId) > 0)
+    return
+  const desktopGroups = groups.value.filter(isDesktopGroup)
+  const homeId = desktopGroups[0]?.id as number | undefined
+  const ids = desktopGroups
+    .map(group => group.id as number)
+    .filter(id => id !== homeId && !keptEmptyGroupIds.has(id) && (!candidateIds || candidateIds.includes(id)) && !groupHasContent(id))
+  if (!ids.length || homeId === undefined)
+    return
+  removingEmptyGroups = true
+  try {
+    const response = await deleteGroups(ids, false)
+    if (response.code !== 0)
+      return
+    if (activeTabId.value !== null && ids.includes(activeTabId.value)) {
+      groupSlideDirection.value = 'previous'
+      activeTabId.value = homeId
+    }
+    groups.value = groups.value.filter(group => !ids.includes(group.id as number))
+  }
+  catch (error) {
+    console.warn('Failed to remove empty groups.', error)
+  }
+  finally {
+    removingEmptyGroups = false
+  }
+}
+
+const creatingGroup = ref(false)
+async function createGroupFromAddCenter(title: string): Promise<number | null> {
+  const name = title.trim()
+  if (!name || creatingGroup.value)
+    return null
+  creatingGroup.value = true
+  try {
+    const sort = Math.max(0, ...groups.value.map(group => group.sort ?? 0)) + 1
+    const { code, data, msg } = await editGroup<Panel.ItemIconGroup>({ title: name, icon: 'material-symbols:folder-outline', sort }, false)
+    if (code !== 0 || !data?.id) {
+      ms.error(`${t('common.saveFail')}: ${msg}`)
+      return null
+    }
+    keptEmptyGroupIds.add(data.id)
+    groups.value = sortDashboardGroups([...groups.value, { ...data, hoverStatus: false, items: [] }])
+    selectGroup(data.id)
+    return data.id
+  }
+  catch (error) {
+    ms.error(`${t('common.saveFail')}: ${error instanceof Error ? error.message : String(error)}`)
+    return null
+  }
+  finally {
+    creatingGroup.value = false
+  }
 }
 
 function closeGroupManager() {
@@ -1669,10 +1763,14 @@ async function handleRightMenuSelect(key: string) {
         for (const group of groups.value)
           group.items = (group.items ?? []).filter(item => item.id !== card.id)
         groups.value = [...groups.value]
-        if (response.queued)
+        if (response.queued) {
           ms.info(response.msg)
-        else
+        }
+        else {
           ms.success(t('common.deleteSuccess'))
+          if (card.itemIconGroupId)
+            void removeEmptyGroups([card.itemIconGroupId])
+        }
       },
     })
   }
@@ -1725,6 +1823,8 @@ function handleAvatarClick() {
 function handleEditSuccess(updated: Panel.Info, meta: { queued: boolean } = { queued: false }) {
   editCardModalVisible.value = false
   const updatedItem = updated as Panel.ItemInfo
+  // A new group is only kept while it has never held anything.
+  keptEmptyGroupIds.delete(Number(updatedItem.itemIconGroupId))
   const targetGroup = groups.value.find(group => group.id === updatedItem.itemIconGroupId)
   const existingIndex = targetGroup?.items?.findIndex(item => item.id === updatedItem.id) ?? -1
   for (const group of groups.value) {
@@ -1998,7 +2098,7 @@ onUnmounted(() => {
     <main class="main-content flex flex-col items-center justify-start overflow-y-auto px-4 pb-12 pt-6" @wheel="handleGroupWheel">
       <header class="workspace-heading">
         <button type="button" class="workspace-brand" title="打开设置" aria-label="打开设置" @click="openSettings">
-          <span class="workspace-brand-mark" aria-hidden="true"><ThemeIcon name="dashboard" /></span><span>Panel <b>Next</b></span>
+          <img class="workspace-brand-mark" :src="brandLogo" alt="" aria-hidden="true"><span>Panel <b>Next</b></span>
         </button>
         <div
           v-if="['offline', 'error'].includes(extensionSyncStatus) || pendingMutationsCount > 0"
@@ -2457,7 +2557,7 @@ onUnmounted(() => {
       </div>
     </NModal>
 
-    <IconGalleryModal v-model:show="showIconGallery" :page-id="activeTabId" :pages="groupTabs" :initial-section="addCenterSection" :can-add="authStore.visitMode === VisitMode.VISIT_MODE_LOGIN && Boolean(authStore.token)" :added-counts="extensionWidgetAddedCounts" :existing-urls="activeGroupItems.map(item => item.url)" :busy="addingExtensionWidget" @update:page-id="selectGroup" @add-widget="addExtensionWidget" @done="handleEditSuccess" @login="goToIconLogin" />
+    <IconGalleryModal v-model:show="showIconGallery" :page-id="activeTabId" :pages="groupTabs" :initial-section="addCenterSection" :can-add="authStore.visitMode === VisitMode.VISIT_MODE_LOGIN && Boolean(authStore.token)" :added-counts="extensionWidgetAddedCounts" :existing-urls="activeGroupItems.map(item => item.url)" :busy="addingExtensionWidget" :create-page="createGroupFromAddCenter" @update:page-id="selectGroup" @add-widget="addExtensionWidget" @done="handleEditSuccess" @login="goToIconLogin" />
 
     <WidgetSettingsModal v-model:show="extensionWidgetSettingsVisible" :instance="extensionWidgetSettingsInstance" @save="applyExtensionWidgetSettings" />
 
@@ -3443,11 +3543,9 @@ onUnmounted(() => {
   transition: opacity 150ms ease;
 }
 .workspace-brand:hover { opacity: 0.85; }
-.workspace-brand:hover .workspace-brand-mark { border-color: var(--ext-accent); background: var(--ext-accent-soft); }
 .workspace-brand:focus-visible { outline: 2px solid var(--ext-accent); outline-offset: 3px; border-radius: 9px; }
 .workspace-brand b { font-weight: 650; }
-.workspace-brand-mark { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--ext-border); border-radius: 9px; color: var(--ext-accent); background: var(--ext-surface); transition: border-color 150ms ease, background-color 150ms ease; }
-.workspace-brand-mark svg { width: 17px; height: 17px; }
+.workspace-brand-mark { display: block; flex: none; width: 28px; height: 28px; border-radius: 7px; box-shadow: 0 1px 3px rgba(0, 0, 0, .18); }
 .clock-eyebrow { margin: 0 0 18px; color: var(--ext-text-soft); font-size: 12px; letter-spacing: .22em; }
 .extension-search-input { min-width: 0; width: 0; height: 38px; padding-block: 0 !important; border: 0 !important; border-radius: 0 !important; outline: 0 !important; box-shadow: none !important; appearance: none; -webkit-appearance: none; background: transparent !important; font: inherit; font-size: 14px; color: var(--ext-text); }
 /* A quiet magnifier instead of a filled block: Enter is the main way to search. */

@@ -285,10 +285,10 @@ function add(type: string) {
 .gallery-filters button.active { border-color: var(--pn-color-accent, #0f9f75); color: var(--pn-color-surface); background: var(--pn-color-accent, #0f9f75); }
 .gallery-filters > span { margin-left: auto; color: var(--pn-color-text-muted, #64748b); font-size: 11px; }
 .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); grid-auto-rows: max-content; align-content: start; gap: 13px; padding: 1px 2px 8px; }
-.gallery-card { min-width: 0; overflow: hidden; border: 1px solid var(--pn-color-border, rgb(148 163 184 / 22%)); border-radius: 16px; background: var(--pn-color-surface, #fff); transition: border-color .15s ease, transform .15s ease, box-shadow .15s ease; }
+.gallery-card { min-width: 0; overflow: hidden; isolation: isolate; border: 1px solid var(--pn-color-border, rgb(148 163 184 / 22%)); border-radius: 16px; background: var(--pn-color-surface, #fff); transition: border-color .15s ease, transform .15s ease, box-shadow .15s ease; }
 .gallery-card:hover { border-color: var(--pn-color-accent, #0f9f75); transform: translateY(-2px); box-shadow: 0 12px 30px rgb(2 6 23 / 12%); }
 .gallery-search, .gallery-card, .gallery-filters button:not(.active) { background: var(--pn-glass-panel); border-color: var(--pn-glass-border); box-shadow: var(--pn-glass-highlight); }
-.gallery-preview { position: relative; display: grid; place-items: center; height: 145px; overflow: hidden; padding: 14px 20px; color: #f8fafc; background: var(--pn-sidebar-active-background); color: var(--pn-color-text-primary); text-shadow: none; isolation: isolate; }
+.gallery-preview { position: relative; display: grid; place-items: center; height: 145px; overflow: hidden; border-radius: 15px 15px 0 0; padding: 14px 20px; color: #f8fafc; background: var(--pn-sidebar-active-background); color: var(--pn-color-text-primary); text-shadow: none; isolation: isolate; }
 .preview-kicker { position: absolute; top: 11px; right: 13px; color: var(--pn-color-text-muted); font-size: 9px; font-weight: 700; letter-spacing: .08em; }
 .gallery-preview > div { width: min(100%, 270px); }
 .preview-weather { display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 14px; }
