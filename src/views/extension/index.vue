@@ -3681,8 +3681,8 @@ onUnmounted(() => {
 .extension-dashboard-grid .dashboard-add-icon:hover .dashboard-add-icon-symbol svg { color: var(--ext-accent); }
 
 /* Size choices preview their footprint; the menu stays readable over busy widgets. */
-/* The glass surface is ~70% opaque; over widgets that reads as noise, so menus sit on the page colour. */
-.extension-context-menu { background: color-mix(in srgb, var(--pn-color-page-background, #fff) 94%, transparent); }
+/* Menus use the denser floating glass so they stay readable over busy widgets in both day and night. */
+.extension-context-menu { background: var(--pn-glass-sheen), var(--pn-glass-floating); }
 .context-size-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 6px; }
 .context-size-grid button { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; min-width: 0; height: 64px; padding: 6px 4px 5px; border-radius: 10px; }
 .context-size-grid button small { font-size: 10px; line-height: 12px; font-variant-numeric: tabular-nums; }
