@@ -29,6 +29,7 @@ declare namespace Panel {
         // bgColor ?: string
         backgroundColor ?: string
         scale ?: number // Content zoom, 0.5–2; omitted means legacy size.
+        surface ?: 'glass' // Frosted tile behind the icon; omitted shows the icon as is.
         dockerContainerId ?: string // Docker 容器 ID（itemType=4 时使用）
     }
 

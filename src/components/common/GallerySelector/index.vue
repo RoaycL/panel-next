@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   NButton,
   NInput,
   NInputGroup,
+  NModal,
   NPagination,
   NSelect,
   NSpin,
@@ -79,9 +80,9 @@ watch(apiKeyStorageKey, key => {
   wallhavenPurity.value = '100'
 }, { immediate: true })
 const purityOptions = computed(() => [
-  { label: 'SFW · 安全', value: '100' },
-  { label: 'Sketchy · 中间级', value: '010' },
-  { label: 'NSFW · 成人', value: '001', disabled: !wallhavenApiKey.value },
+  { label: 'SFW', value: '100' },
+  { label: 'Sketchy', value: '010' },
+  { label: 'NSFW', value: '001', disabled: !wallhavenApiKey.value },
 ])
 async function saveApiKey() {
   const key = apiKeyDraft.value.trim()
@@ -125,7 +126,23 @@ const wallhavenTotalPages = ref(1)
 const wallhavenTotal = ref(0)
 const wallhavenQuery = ref('')
 const wallhavenSorting = ref<'toplist' | 'hot' | 'views' | 'random' | 'date_added'>('toplist')
-const wallhavenCategories = ref('110') // 110: General + Anime
+const wallhavenCategories = ref('111') // 位串：综合 / 动漫 / 人物，默认全选
+const wallhavenCategoryOptions = [
+  { label: '综合', bit: 0 },
+  { label: '动漫', bit: 1 },
+  { label: '人物', bit: 2 },
+]
+function isCategoryOn(bit: number) {
+  return wallhavenCategories.value[bit] === '1'
+}
+// 可多选，但至少保留一个分类
+function toggleCategory(bit: number) {
+  const bits = wallhavenCategories.value.split('')
+  bits[bit] = bits[bit] === '1' ? '0' : '1'
+  if (!bits.includes('1')) return
+  wallhavenCategories.value = bits.join('')
+  handleWallhavenSearch()
+}
 
 const wallhavenSortingOptions = [
   { label: '最热榜单', value: 'toplist' },
@@ -137,7 +154,7 @@ const wallhavenSortingOptions = [
 
 // cat 为 Wallhaven 分类位：General / Anime / People；内容分级仍由 purity 决定
 const quickTags = [
-  { label: '🌟 精选推荐', q: '', cat: '110' },
+  { label: '🌟 精选推荐', q: '', cat: '111' },
   { label: '🎨 动漫二次元', q: 'anime', cat: '010' },
   { label: '🌄 自然风光', q: 'nature landscape', cat: '100' },
   { label: '🏙️ 赛博朋克', q: 'cyberpunk', cat: '110' },
@@ -226,11 +243,54 @@ async function fetchWallhaven() {
   }
 }
 
+// 壁纸库点击图片先放大预览，确认后再设为壁纸
+const previewIndex = ref(-1)
+const previewItem = computed(() => wallhavenList.value[previewIndex.value])
+const previewRawLoaded = ref(false)
+const previewRawFailed = ref(false)
+const previewAttempt = ref(0)
+const previewDialog = ref<HTMLElement | null>(null)
+const showPreview = computed({
+  get: () => !!previewItem.value,
+  set: value => { if (!value) previewIndex.value = -1 },
+})
+function openPreview(index: number) {
+  previewRawLoaded.value = false
+  previewRawFailed.value = false
+  previewIndex.value = index
+  // 关闭了 NModal 自动聚焦，手动聚焦对话框，方向键才能直接切换
+  void nextTick(() => previewDialog.value?.focus())
+}
+function retryPreviewRaw() {
+  previewRawFailed.value = false
+  previewAttempt.value++
+}
+function stepPreview(delta: number) {
+  const next = previewIndex.value + delta
+  if (next < 0 || next >= wallhavenList.value.length) return
+  openPreview(next)
+}
+function handlePreviewKeydown(event: KeyboardEvent) {
+  if (event.key === 'ArrowLeft') stepPreview(-1)
+  else if (event.key === 'ArrowRight') stepPreview(1)
+}
+async function applyPreview() {
+  const item = previewItem.value
+  if (!item) return
+  if (await handleSelect(item.rawUrl) && previewItem.value === item) previewIndex.value = -1
+}
+watch(wallhavenList, () => { previewIndex.value = -1 })
+
 function handleQuickTagClick(tag: typeof quickTags[number]) {
   wallhavenQuery.value = tag.q
   wallhavenCategories.value = tag.cat
   wallhavenPage.value = 1
   void fetchWallhaven()
+}
+
+// naive-ui 先调用 @update-value 再更新 v-model，等值写入后再请求，否则会用旧筛选条件
+function afterSelectChange(handler: () => unknown) {
+  void nextTick(handler)
 }
 
 function handleWallhavenSearch() {
@@ -243,16 +303,20 @@ function handlePageChange(page: number) {
   void fetchWallhaven()
 }
 
-async function handleSelect(url: string) {
+async function handleSelect(url: string): Promise<boolean> {
   const generation = ++selectionGeneration
   selectingUrl.value = url
   try {
     await preloadWallpaper(runtime.resolveUrl(url))
-    if (generation !== selectionGeneration) return
+    if (generation !== selectionGeneration) return false
     emit('select', url)
     ms.success(props.type === 'wallpaper' ? '壁纸已加载并选择' : '已选择图片')
+    return true
   }
-  catch (error) { if (generation === selectionGeneration) ms.error(error instanceof Error ? error.message : '图片加载失败') }
+  catch (error) {
+    if (generation === selectionGeneration) ms.error(error instanceof Error ? error.message : '图片加载失败')
+    return false
+  }
   finally { if (generation === selectionGeneration) selectingUrl.value = '' }
 }
 
@@ -302,6 +366,7 @@ onMounted(() => {
         </button>
 
         <button
+          v-if="!isWallpaperPicker"
           type="button"
           class="source-tab-btn"
           :class="{ active: source === 'public' }"
@@ -329,7 +394,7 @@ onMounted(() => {
         :options="sourceOptions"
         size="small"
         style="width: 140px"
-        @update-value="fetchImages"
+        @update-value="afterSelectChange(fetchImages)"
       />
       <NButton v-if="source === 'private' || source === 'public'" size="small" secondary @click="fetchImages">
         刷新图库
@@ -375,15 +440,28 @@ onMounted(() => {
             v-model:value="wallhavenSorting"
             :options="wallhavenSortingOptions"
             aria-label="Wallhaven 排序方式"
-            @update-value="handleWallhavenSearch"
+            @update-value="afterSelectChange(handleWallhavenSearch)"
           />
         </label>
         <label class="wallhaven-filter"><span>内容分级</span>
-          <NSelect v-model:value="wallhavenPurity" :options="purityOptions" aria-label="Wallhaven 内容范围" @update-value="handleWallhavenSearch" />
+          <NSelect v-model:value="wallhavenPurity" :options="purityOptions" aria-label="Wallhaven 内容范围" @update-value="afterSelectChange(handleWallhavenSearch)" />
         </label>
-        <label class="wallhaven-filter"><span>壁纸分类</span>
-          <NSelect v-model:value="wallhavenCategories" :options="[{ label: '全部分类', value: '111' }, { label: '综合 + 动漫', value: '110' }, { label: '综合', value: '100' }, { label: '动漫', value: '010' }, { label: '人物', value: '001' }]" aria-label="Wallhaven 分类" @update-value="handleWallhavenSearch" />
-        </label>
+        <div class="wallhaven-filter" role="group" aria-label="壁纸分类，可多选">
+          <span>壁纸分类 · 可多选</span>
+          <div class="category-toggles">
+            <button
+              v-for="option in wallhavenCategoryOptions"
+              :key="option.bit"
+              type="button"
+              class="tag-btn category-toggle"
+              :class="{ active: isCategoryOn(option.bit) }"
+              :aria-pressed="isCategoryOn(option.bit)"
+              @click="toggleCategory(option.bit)"
+            >
+              {{ option.label }}
+            </button>
+          </div>
+        </div>
       </div>
       <p v-if="!wallhavenApiKey" class="wallhaven-rating-hint">NSFW 需要配置有效的 Wallhaven 账号 API Key。</p>
 
@@ -474,18 +552,20 @@ onMounted(() => {
 
       <div v-else class="wallhaven-grid">
         <div
-          v-for="item in wallhavenList"
+          v-for="(item, index) in wallhavenList"
           :key="item.id"
           class="wallhaven-card group relative rounded-xl overflow-hidden border border-slate-200 dark:border-zinc-800 hover:border-emerald-500 cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 bg-zinc-900"
-          @click="handleSelect(item.rawUrl)"
+          @click="openPreview(index)"
         >
-          <!-- 缩略图 -->
-          <img
-            :src="item.thumbUrl"
-            :alt="item.id"
-            loading="lazy"
-            class="wallhaven-thumbnail transition-transform duration-500 group-hover:scale-105"
-          >
+          <!-- 缩略图：独立按钮承担键盘/读屏的「预览」入口，点击冒泡到卡片打开预览 -->
+          <button type="button" class="wallhaven-preview-trigger" :aria-label="`预览壁纸：Wallhaven ${item.id}`">
+            <img
+              :src="item.thumbUrl"
+              :alt="item.id"
+              loading="lazy"
+              class="wallhaven-thumbnail transition-transform duration-500 group-hover:scale-105"
+            >
+          </button>
 
           <!-- 分辨率与分类浮层徽标 -->
           <button v-if="isWallpaperPicker" type="button" class="favorite-button" :class="{ 'is-favorite': isFavorite(item.rawUrl) }" :aria-pressed="isFavorite(item.rawUrl)" :aria-label="`${isFavorite(item.rawUrl) ? '取消喜欢' : '喜欢'}：Wallhaven ${item.id}`" :title="isFavorite(item.rawUrl) ? '取消喜欢' : '加入我的喜欢'" :disabled="savingFavorite" @click.stop="toggleFavorite({ url: item.rawUrl, thumbnail: item.thumbUrl || item.rawUrl, title: `Wallhaven ${item.id}`, source: 'wallhaven' })">
@@ -507,6 +587,8 @@ onMounted(() => {
             <button
               type="button"
               class="w-full py-1 bg-emerald-500 hover:bg-emerald-600 rounded-lg text-xs font-bold text-white shadow transition-colors"
+              :disabled="!!selectingUrl"
+              @click.stop="handleSelect(item.rawUrl)"
             >
               设为壁纸
             </button>
@@ -525,6 +607,42 @@ onMounted(() => {
         />
       </div>
     </div>
+
+    <NModal v-model:show="showPreview" :auto-focus="false">
+      <div v-if="previewItem" ref="previewDialog" class="wallhaven-preview" role="dialog" aria-modal="true" :aria-label="`壁纸预览：Wallhaven ${previewItem.id}`" tabindex="-1" @keydown="handlePreviewKeydown">
+        <div class="wallhaven-preview-stage">
+          <img v-if="!previewRawLoaded" :src="previewItem.thumbUrl" alt="" aria-hidden="true" class="wallhaven-preview-image is-thumb">
+          <img v-if="!previewRawFailed" :key="`${previewItem.rawUrl}#${previewAttempt}`" :src="previewItem.rawUrl" :alt="`Wallhaven ${previewItem.id}`" class="wallhaven-preview-image" :class="{ 'is-loaded': previewRawLoaded }" @load="previewRawLoaded = true" @error="previewRawFailed = true">
+          <span v-if="previewRawFailed" class="wallhaven-preview-loading" role="alert">原图加载失败，当前显示的是缩略图 <button type="button" class="wallhaven-preview-retry" @click="retryPreviewRaw">重试</button></span>
+          <span v-else-if="!previewRawLoaded" class="wallhaven-preview-loading">正在加载原图…</span>
+          <button type="button" class="wallhaven-preview-nav is-prev" aria-label="上一张" :disabled="previewIndex <= 0" @click="stepPreview(-1)">
+            <SvgIcon icon="material-symbols:chevron-left-rounded" />
+          </button>
+          <button type="button" class="wallhaven-preview-nav is-next" aria-label="下一张" :disabled="previewIndex >= wallhavenList.length - 1" @click="stepPreview(1)">
+            <SvgIcon icon="material-symbols:chevron-right-rounded" />
+          </button>
+          <button type="button" class="wallhaven-preview-close" aria-label="关闭预览" @click="showPreview = false">
+            <SvgIcon icon="material-symbols:close-rounded" />
+          </button>
+        </div>
+        <div class="wallhaven-preview-bar">
+          <div class="wallhaven-preview-meta">
+            <strong>{{ previewItem.resolution }}</strong>
+            <span class="capitalize">{{ previewItem.category }}</span>
+            <span><SvgIcon icon="material-symbols:favorite" class="text-rose-400" /> {{ previewItem.favorites }}</span>
+            <a :href="previewItem.url" target="_blank" rel="noopener noreferrer">在 Wallhaven 查看</a>
+          </div>
+          <div class="wallhaven-preview-actions">
+            <NButton v-if="isWallpaperPicker" secondary :disabled="savingFavorite" @click="toggleFavorite({ url: previewItem.rawUrl, thumbnail: previewItem.thumbUrl || previewItem.rawUrl, title: `Wallhaven ${previewItem.id}`, source: 'wallhaven' })">
+              {{ isFavorite(previewItem.rawUrl) ? '取消喜欢' : '加入喜欢' }}
+            </NButton>
+            <NButton type="primary" :loading="selectingUrl === previewItem.rawUrl" :disabled="!!selectingUrl && selectingUrl !== previewItem.rawUrl" @click="applyPreview">
+              {{ isWallpaperPicker ? '设为壁纸' : '使用这张图' }}
+            </NButton>
+          </div>
+        </div>
+      </div>
+    </NModal>
   </div>
 </template>
 
@@ -568,6 +686,8 @@ onMounted(() => {
 .wallhaven-toolbar { display: flex; flex-direction: column; gap: 16px; margin: 4px 0 18px; }
 .wallhaven-search-row { width: 100%; }
 .wallhaven-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.category-toggles { display: flex; min-height: 34px; align-items: center; gap: 8px; }
+.category-toggle { flex: 1 1 0; padding: 8px 0; font-size: 12px; }
 .wallhaven-filter { display: flex; min-width: 0; flex-direction: column; gap: 8px; }
 .wallhaven-filter > span { font-size: 12px; color: var(--pn-color-text-secondary); }
 .wallhaven-rating-hint { margin: -6px 0 0; font-size: 11px; color: var(--pn-color-text-secondary); }
@@ -575,6 +695,29 @@ onMounted(() => {
 .quick-tags { gap: 8px; }
 .wallhaven-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 18px; align-content: start; }
 .wallhaven-thumbnail { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; }
+.wallhaven-preview-trigger { display: block; width: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; }
+.wallhaven-preview-trigger:focus-visible { outline: 2px solid var(--pn-color-accent); outline-offset: -2px; }
+.wallhaven-preview { display: flex; width: min(1100px, calc(100vw - 32px)); max-height: calc(100vh - 48px); flex-direction: column; overflow: hidden; border: 1px solid rgb(255 255 255 / 12%); border-radius: 16px; background: #0b0b0f; color: #f4f4f5; outline: none; box-shadow: 0 24px 80px rgb(0 0 0 / 55%); }
+.wallhaven-preview-stage { position: relative; display: grid; min-height: 240px; place-items: center; background: #000; }
+.wallhaven-preview-image { grid-area: 1 / 1; display: block; max-width: 100%; max-height: calc(100vh - 140px); object-fit: contain; opacity: 0; transition: opacity .3s ease; }
+.wallhaven-preview-image.is-thumb { width: 100%; opacity: 1; filter: blur(6px); }
+.wallhaven-preview-image.is-loaded { opacity: 1; filter: none; }
+.wallhaven-preview-loading { position: absolute; bottom: 12px; left: 50%; padding: 4px 12px; border-radius: 999px; background: rgb(0 0 0 / 60%); font-size: 12px; transform: translateX(-50%); }
+.wallhaven-preview-nav, .wallhaven-preview-close { position: absolute; display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid rgb(255 255 255 / 25%); border-radius: 50%; background: rgb(0 0 0 / 50%); color: white; cursor: pointer; backdrop-filter: blur(12px); }
+.wallhaven-preview-nav :deep(svg), .wallhaven-preview-close :deep(svg) { width: 24px; height: 24px; }
+.wallhaven-preview-nav { top: 50%; transform: translateY(-50%); }
+.wallhaven-preview-nav.is-prev { left: 12px; }
+.wallhaven-preview-nav.is-next { right: 12px; }
+.wallhaven-preview-nav:disabled { cursor: default; opacity: .3; }
+.wallhaven-preview-close { top: 12px; right: 12px; }
+.wallhaven-preview-nav:focus-visible, .wallhaven-preview-close:focus-visible { outline: 2px solid var(--pn-color-accent); }
+.wallhaven-preview-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; }
+.wallhaven-preview-retry { margin-left: 8px; padding: 1px 10px; border: 1px solid rgb(255 255 255 / 40%); border-radius: 999px; color: white; cursor: pointer; }
+.wallhaven-preview-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; font-size: 13px; color: #d4d4d8; }
+.wallhaven-preview-meta strong { color: #34d399; }
+.wallhaven-preview-meta span { display: inline-flex; align-items: center; gap: 4px; }
+.wallhaven-preview-meta a { color: #a1a1aa; text-decoration: underline; }
+.wallhaven-preview-actions { display: flex; gap: 8px; }
 @container (max-width: 580px) {
   .wallhaven-filters { grid-template-columns: 1fr; gap: 12px; }
   .wallhaven-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
