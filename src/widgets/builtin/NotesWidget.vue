@@ -43,7 +43,7 @@ const heading = computed(() => props.title.trim() || t('notesWidget.title'))
   backdrop-filter: blur(var(--pn-effect-blur, 14px));
 }
 .notes-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.notes-header h3 { overflow: hidden; margin: 0; font-size: 14px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.notes-header h3 { overflow: hidden; margin: 0; font-size: 14px; font-weight: 700; line-height: 20px; text-overflow: ellipsis; white-space: nowrap; }
 .notes-header small { flex: none; color: var(--pn-widget-muted-text, rgb(255 255 255 / 65%)); font-size: 11px; }
 .notes-header .is-error { color: var(--pn-widget-error-color, #fca5a5); }
 textarea {

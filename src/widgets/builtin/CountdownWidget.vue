@@ -136,22 +136,26 @@ function clampToMonthEnd(year: number, month: number, day: number) {
 .countdown-header {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   min-width: 0;
   flex: none;
 }
 
 .countdown-icon {
+  display: grid;
   flex: none;
-  font-size: 16px;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  font-size: 15px;
   line-height: 1;
 }
 
 .countdown-name {
   overflow: hidden;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
-  line-height: 1.2;
+  line-height: 20px;
   white-space: nowrap;
   text-overflow: ellipsis;
 }

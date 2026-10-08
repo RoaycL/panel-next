@@ -46,7 +46,7 @@ import GroupIcon from '@/components/common/GroupIcon/index.vue'
 import type { ConflictDescriptor, ConflictResolutionChoice } from '@/sync/conflictResolver'
 import { getBootstrap, waitForSyncChange } from '@/api/sync'
 import { getList as getGroupList } from '@/api/panel/itemIconGroup'
-import { deletes as deleteItems, getListByGroupId, saveSort as saveItemSort } from '@/api/panel/itemIcon'
+import { deletes as deleteItems, edit as editItem, getListByGroupId, saveSort as saveItemSort } from '@/api/panel/itemIcon'
 import type { DashboardGroup } from '@/dashboard/core'
 import { createDashboardState, createItemSortRequest, isDesktopGroup, resolveItemUrl, sortDashboardGroups } from '@/dashboard/core'
 import { rememberBootWallpaper } from '@/runtime/extension'
@@ -1490,6 +1490,16 @@ function positionContextMenu(event: MouseEvent, estimatedWidth = 252, estimatedH
   rightMenuY.value = Math.max(10, Math.min(y, window.innerHeight - estimatedHeight - 10))
 }
 
+// The estimate above only gets the first frame close; once rendered, keep the
+// real menu inside the viewport.
+function clampContextMenu(menu: HTMLElement | null) {
+  if (!menu)
+    return
+  const { width, height } = menu.getBoundingClientRect()
+  rightMenuX.value = Math.max(10, Math.min(rightMenuX.value, window.innerWidth - width - 10))
+  rightMenuY.value = Math.max(10, Math.min(rightMenuY.value, window.innerHeight - height - 10))
+}
+
 function handleCardContextMenu(event: MouseEvent, card: Panel.ItemInfo) {
   event.preventDefault()
   contextMenuReturnFocus = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
@@ -1498,7 +1508,10 @@ function handleCardContextMenu(event: MouseEvent, card: Panel.ItemInfo) {
   widgetRightMenuShow.value = false
   positionContextMenu(event)
   rightMenuShow.value = true
-  void nextTick(() => bookmarkContextMenuRef.value?.querySelector<HTMLElement>('[role="menuitem"]')?.focus())
+  void nextTick(() => {
+    clampContextMenu(bookmarkContextMenuRef.value)
+    bookmarkContextMenuRef.value?.querySelector<HTMLElement>('[role="menuitem"]')?.focus()
+  })
 }
 
 function handleWidgetContextMenu(event: MouseEvent, instance: WidgetInstance) {
@@ -1509,7 +1522,10 @@ function handleWidgetContextMenu(event: MouseEvent, instance: WidgetInstance) {
   rightMenuShow.value = false
   positionContextMenu(event, 280, 360)
   widgetRightMenuShow.value = true
-  void nextTick(() => widgetContextMenuRef.value?.querySelector<HTMLElement>('[role="menuitem"]')?.focus())
+  void nextTick(() => {
+    clampContextMenu(widgetContextMenuRef.value)
+    widgetContextMenuRef.value?.querySelector<HTMLElement>('[role="menuitem"]')?.focus()
+  })
 }
 
 function openCardContextMenuFromKeyboard(event: KeyboardEvent, card: Panel.ItemInfo) {
@@ -1635,6 +1651,15 @@ async function handleRightMenuSelect(key: string) {
   else if (key === 'open_lan' && card.lanUrl) {
     runtime.openUrl(card.lanUrl, 'tab')
   }
+  else if (key === 'copy_url' && card.url) {
+    try {
+      await navigator.clipboard.writeText(card.url)
+      ms.success('链接已复制')
+    }
+    catch {
+      ms.error('复制失败，请检查剪贴板权限')
+    }
+  }
   else if (key === 'edit') {
     openCardEditor(card)
   }
@@ -1662,6 +1687,37 @@ async function handleRightMenuSelect(key: string) {
           ms.success(t('common.deleteSuccess'))
       },
     })
+  }
+}
+
+const movingBookmark = ref(false)
+const bookmarkMoveTargets = computed(() => groupTabs.value.filter(group => group.id !== activeRightCard.value?.itemIconGroupId))
+
+async function moveBookmarkToGroup(card: Panel.ItemInfo, groupId: number) {
+  if (movingBookmark.value || !card.id)
+    return
+  closeContextMenus()
+  movingBookmark.value = true
+  const target = groupTabs.value.find(group => group.id === groupId)
+  try {
+    const payload: Panel.ItemInfo = { ...card, itemIconGroupId: groupId }
+    delete (payload as { revision?: unknown }).revision
+    const { code, data, msg, queued } = await editItem<Panel.ItemInfo>(payload)
+    if (code !== 0) {
+      ms.error(`${t('common.saveFail')}: ${msg}`)
+      return
+    }
+    handleEditSuccess(data || payload, { queued: Boolean(queued) })
+    if (queued)
+      ms.info(msg)
+    else
+      ms.success(`已移动到「${target?.title ?? ''}」`)
+  }
+  catch (error) {
+    ms.error(`${t('common.saveFail')}: ${error instanceof Error ? error.message : String(error)}`)
+  }
+  finally {
+    movingBookmark.value = false
   }
 }
 
@@ -2124,6 +2180,19 @@ onUnmounted(() => {
               <div class="active-group-meta">
                 <span>{{ activeGroup?.title }}</span>
                 <small>{{ activeGroup?.count || 0 }} 个书签 · {{ buildWidgetDisplayGroups(extensionWidgetInstances).length }} 个组件</small>
+                <nav v-if="sidebarAutoHide && groupTabs.length > 1" class="group-switcher" aria-label="切换分组">
+                  <button
+                    v-for="group in groupTabs"
+                    :key="group.id"
+                    type="button"
+                    :class="{ active: group.id === activeGroup?.id }"
+                    :aria-current="group.id === activeGroup?.id ? 'page' : undefined"
+                    :title="`${group.title}（${group.count} 项）`"
+                    @click="selectGroup(group.id)"
+                  >
+                    {{ group.title }}
+                  </button>
+                </nav>
               </div>
               <div v-if="extensionWidgetEditMode" class="extension-widget-toolbar">
                 <div class="extension-edit-mode-copy">
@@ -2269,6 +2338,9 @@ onUnmounted(() => {
       <button v-if="activeRightCard.lanUrl" type="button" class="context-menu-row" role="menuitem" @click="handleRightMenuSelect('open_lan')">
         <ThemeIcon name="networkWired" /><span>打开局域网地址</span>
       </button>
+      <button v-if="activeRightCard.url" type="button" class="context-menu-row" role="menuitem" @click="handleRightMenuSelect('copy_url')">
+        <ThemeIcon name="copy" /><span>复制链接</span>
+      </button>
       <div class="context-menu-section">
         <div class="context-menu-title">
           <ThemeIcon name="dashboard" /><span>布局</span>
@@ -2279,9 +2351,11 @@ onUnmounted(() => {
             :key="`${layout.columns}x${layout.rows}`"
             type="button"
             :class="{ active: bookmarkLayout(activeRightCard).columns === layout.columns && bookmarkLayout(activeRightCard).rows === layout.rows }"
+            :aria-label="`${layout.columns}×${layout.rows}`"
             @click="setBookmarkLayout(activeRightCard, layout); closeContextMenus()"
           >
-            {{ layout.columns }}×{{ layout.rows }}
+            <span class="context-size-glyph" :style="{ '--size-columns': Math.min(layout.columns, 6), '--size-rows': Math.min(layout.rows, 4) }" aria-hidden="true" />
+            <small>{{ layout.columns }}×{{ layout.rows }}</small>
           </button>
         </div>
       </div>
@@ -2293,6 +2367,16 @@ onUnmounted(() => {
         <button type="button" class="context-menu-row" role="menuitem" @click="handleRightMenuSelect('edit_home')">
           <ThemeIcon name="folder" /><span>编辑分组</span>
         </button>
+        <div v-if="bookmarkMoveTargets.length" class="context-menu-section context-move-section">
+          <div class="context-menu-title">
+            <ThemeIcon name="folder" /><span>移动到</span>
+          </div>
+          <div class="context-move-list">
+            <button v-for="group in bookmarkMoveTargets" :key="group.id" type="button" role="menuitem" :disabled="movingBookmark" :title="`移动到「${group.title}」`" @click="moveBookmarkToGroup(activeRightCard, group.id)">
+              {{ group.title }}
+            </button>
+          </div>
+        </div>
         <button type="button" class="context-menu-row danger" role="menuitem" @click="handleRightMenuSelect('delete')">
           <ThemeIcon name="delete" /><span>删除</span>
         </button>
@@ -2323,9 +2407,11 @@ onUnmounted(() => {
             :key="`${size.columns}x${size.rows}`"
             type="button"
             :class="{ active: activeRightWidget.size.columns === size.columns && activeRightWidget.size.rows === size.rows }"
+            :aria-label="`${size.columns}×${size.rows}`"
             @click="setActiveWidgetSize(size); closeContextMenus()"
           >
-            {{ size.columns }}×{{ size.rows }}
+            <span class="context-size-glyph" :style="{ '--size-columns': Math.min(size.columns, 6), '--size-rows': Math.min(size.rows, 4) }" aria-hidden="true" />
+            <small>{{ size.columns }}×{{ size.rows }}</small>
           </button>
         </div>
       </div>
@@ -3730,4 +3816,32 @@ onUnmounted(() => {
 .extension-dashboard-grid .dashboard-add-icon > span:last-child { line-height: 16px; }
 .extension-dashboard-grid .dashboard-add-icon:hover .dashboard-add-icon-symbol { border-color: var(--ext-accent); }
 .extension-dashboard-grid .dashboard-add-icon:hover .dashboard-add-icon-symbol svg { color: var(--ext-accent); }
+/* Group pills stand in for the auto-hidden rail, so other groups stay discoverable. */
+.group-switcher { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.dashboard-canvas-header:has(.group-switcher) { align-items: flex-start; }
+.group-switcher button { max-width: 160px; min-height: 26px; padding: 0 11px; overflow: hidden; border: 1px solid var(--ext-border); border-radius: 999px; color: var(--ext-text-muted); background: color-mix(in srgb, var(--ext-text) 6%, var(--ext-surface)); cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.group-switcher button:hover { color: var(--ext-text); border-color: var(--ext-accent); }
+.group-switcher button.active { color: var(--pn-color-surface, #fff); border-color: transparent; background: var(--ext-accent); }
+.group-switcher button:focus-visible { outline: 2px solid var(--ext-accent); outline-offset: 2px; }
+.has-wallpaper .group-switcher button { text-shadow: none; }
+
+/* Size choices preview their footprint; the menu stays readable over busy widgets. */
+/* The glass surface is ~70% opaque; over widgets that reads as noise, so menus sit on the page colour. */
+.extension-context-menu { background: color-mix(in srgb, var(--pn-color-page-background, #fff) 94%, transparent); }
+.context-size-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 6px; }
+.context-size-grid button { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; min-width: 0; height: 64px; padding: 6px 4px 5px; border-radius: 10px; }
+.context-size-grid button small { font-size: 10px; line-height: 12px; font-variant-numeric: tabular-nums; }
+.context-size-glyph {
+  --size-cell: 7px;
+  --size-gap: 2px;
+  width: calc(var(--size-columns) * var(--size-cell) + (var(--size-columns) - 1) * var(--size-gap));
+  height: calc(var(--size-rows) * var(--size-cell) + (var(--size-rows) - 1) * var(--size-gap));
+  border: 1.5px solid currentColor;
+  border-radius: 3px;
+  background: color-mix(in srgb, currentColor 18%, transparent);
+}
+.context-move-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.context-move-list button { max-width: 100%; min-height: 28px; padding: 0 10px; overflow: hidden; border: 1px solid var(--ext-border); border-radius: 8px; color: var(--ext-text-muted); background: var(--ext-surface-raised); cursor: pointer; font: inherit; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.context-move-list button:hover, .context-move-list button:focus-visible { color: var(--ext-accent); border-color: var(--ext-accent); background: var(--ext-accent-soft); outline: none; }
+.context-move-list button:disabled { cursor: wait; opacity: .5; }
 </style>
