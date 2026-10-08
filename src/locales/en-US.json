@@ -446,7 +446,16 @@
     "syncUnavailable": "Offline · No cache",
     "syncLastAt": "Last synced: {time}"
   },
+  "widgetDetails": {
+    "expand": "Expand {title}",
+    "fullscreen": "View fullscreen",
+    "exitFullscreen": "Exit fullscreen"
+  },
   "weather": {
+    "feelsLike": "Feels like",
+    "windSpeed": "Wind speed",
+    "updatedAt": "Updated",
+    "fullForecast": "Daily forecast",
     "title": "Current weather",
     "today": "Today",
     "forecast": "Six-day forecast",

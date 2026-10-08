@@ -9,6 +9,7 @@ import WeatherGlyph from './WeatherGlyph.vue'
 const props = withDefaults(defineProps<{
   city?: string
   units?: 'metric' | 'imperial'
+  expanded?: boolean
 }>(), {
   city: '北京',
   units: 'metric',
@@ -45,7 +46,7 @@ function kindFromCode(code?: number) {
 
 const weatherKind = computed(() => kindFromCode(weather.value?.current.weatherCode))
 
-const forecast = computed(() => weather.value?.daily?.slice(0, (widgetContext?.size.columns ?? 4) < 4 ? 3 : 6) ?? [])
+const forecast = computed(() => props.expanded ? weather.value?.daily ?? [] : weather.value?.daily?.slice(0, (widgetContext?.size.columns ?? 4) < 4 ? 3 : 6) ?? [])
 const showForecast = computed(() => (widgetContext?.size.rows ?? 2) >= 2 && forecast.value.length > 0)
 // At two rows the date line pushes the forecast past the cell; the weekday is enough there.
 const showForecastDate = computed(() => (widgetContext?.size.rows ?? 2) > 2)
@@ -105,7 +106,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <section class="weather-card" :class="{ 'is-expanded': showForecast }" :aria-label="t('weather.title')">
+  <section class="weather-card" :class="{ 'is-expanded': showForecast, 'is-detail': expanded }" :aria-label="t('weather.title')">
     <div v-if="weather" class="weather-current">
       <WeatherGlyph class="weather-icon" :kind="weatherKind" :is-day="weather.current.isDay" />
       <div class="weather-reading">
@@ -129,7 +130,16 @@ onUnmounted(() => {
       <WeatherGlyph class="weather-icon" kind="partlyCloudy" />
       <span>{{ t('weather.loading') }}</span>
     </div>
-    <ol v-if="showForecast" class="weather-forecast" :style="{ gridTemplateColumns: `repeat(${forecast.length}, minmax(0, 1fr))` }" :aria-label="t('weather.forecast')">
+    <div v-if="expanded && weather" class="weather-detail-summary">
+      <span>{{ locationLabel }}</span>
+      <span>{{ t('weather.feelsLike') }} {{ Math.round(weather.current.apparentTemperature) }}{{ weather.current.temperatureUnit }}</span>
+      <span>{{ t('weather.windSpeed') }} {{ weather.current.windSpeed }} {{ weather.current.windSpeedUnit }}</span>
+      <span>{{ t('weather.updatedAt') }} {{ weather.current.time.replace('T', ' ') }}</span>
+    </div>
+    <h3 v-if="expanded && showForecast" class="weather-detail-heading">
+      {{ t('weather.fullForecast') }}
+    </h3>
+    <ol v-if="showForecast" class="weather-forecast" :style="{ gridTemplateColumns: `repeat(${forecast.length}, minmax(${expanded ? '76px' : '0'}, 1fr))` }" :aria-label="t(expanded ? 'weather.fullForecast' : 'weather.forecast')">
       <li v-for="(day, index) in forecast" :key="day.date">
         <span class="forecast-day">{{ forecastDay(day.date, index) }}</span>
         <WeatherGlyph class="forecast-icon" :kind="kindFromCode(day.weatherCode)" />
@@ -165,6 +175,19 @@ onUnmounted(() => {
 }
 
 .weather-card.is-expanded { justify-content: space-between; gap: 8px; padding: 14px 14px 16px; }
+.weather-card.is-detail { padding: 32px; justify-content: flex-start; gap: 28px; }
+.is-detail .weather-current { gap: 20px; }
+.weather-card.is-detail .weather-reading strong { font-size: clamp(42px, 8cqw, 80px); }
+.weather-card.is-detail .weather-icon { width: 64px; height: 64px; }
+.weather-detail-summary { display: flex; flex-wrap: wrap; gap: 14px 28px; font-size: 14px; }
+.weather-detail-summary span { padding: 12px 16px; border-radius: 12px; background: var(--pn-color-surface-hover); }
+.weather-detail-heading { margin: auto 0 0; font-size: 16px; font-weight: 600; }
+.is-detail .weather-forecast { margin-top: 0; padding-top: 24px; padding-bottom: 12px; overflow-x: auto; }
+.is-detail .weather-forecast li { min-width: 76px; gap: 10px; }
+.is-detail .forecast-day, .is-detail .forecast-date { font-size: 13px; }
+.is-detail .forecast-icon { width: 36px; height: 36px; }
+.is-detail .forecast-temperatures { font-size: 18px; line-height: 24px; }
+@media (max-width: 640px) { .weather-card.is-detail { padding: 20px 16px; gap: 20px; } }
 .weather-card.is-expanded .weather-icon { width: 40px; height: 40px; }
 .weather-forecast { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; min-width: 0; margin: auto 0 0; padding: 10px 0 0; border-top: 1px solid var(--pn-widget-border, rgb(255 255 255 / 16%)); list-style: none; }
 .weather-forecast li { display: flex; align-items: center; flex-direction: column; gap: 3px; min-width: 0; white-space: nowrap; }
@@ -279,6 +302,7 @@ onUnmounted(() => {
 }
 .widget-failure { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 0; color: var(--pn-widget-muted-text, rgb(255 255 255 / 72%)); font-size: 12px; line-height: 16px; text-align: center; }
 .widget-failure .weather-icon { opacity: .7; }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .widget-failure button { margin-top: 2px; padding: 4px 14px; border: 1px solid var(--pn-widget-border, rgb(255 255 255 / 16%)); border-radius: 999px; color: var(--pn-widget-text-color, white); background: var(--pn-widget-retry-background, rgb(255 255 255 / 8%)); cursor: pointer; font: inherit; font-size: 12px; }
 .widget-failure button:hover:not(:disabled) { border-color: var(--pn-color-accent, #2eb8f0); }
 .widget-failure button:disabled { cursor: wait; opacity: .5; }

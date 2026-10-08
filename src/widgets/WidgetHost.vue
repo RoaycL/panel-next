@@ -8,6 +8,7 @@ import { getRuntime } from '@/runtime'
 import { t } from '@/locales'
 import { useTheme } from '@/themes/context'
 import { packageRevision } from '@/packages/manager'
+import { NModal } from 'naive-ui'
 
 defineOptions({ inheritAttrs: false })
 const props = defineProps<{ instance: WidgetInstance; editMode?: boolean }>()
@@ -15,10 +16,15 @@ const attrs = useAttrs()
 const component = shallowRef<Component | null>(null)
 const renderError = ref<string | null>(null)
 const loading = ref(false)
+const showDetails = ref(false)
+const detailTarget = ref<HTMLElement | null>(null)
+const detailFullscreen = ref(false)
+const detailTitle = computed(() => t(widgetRegistry.get(props.instance.type)?.meta?.title || props.instance.type))
 const retryGeneration = ref(0)
 const componentProps = computed(() => ({
   ...(typeof props.instance.config === 'object' && props.instance.config !== null ? props.instance.config : {}),
   ...attrs,
+  expanded: showDetails.value,
 }))
 
 // 主题切片：无 ThemeProvider（独立预览）时自动回退默认主题。
@@ -41,7 +47,7 @@ const widgetContext = reactive({
     return theme.tokens.widget
   },
   get size() {
-    return props.instance.size
+    return showDetails.value ? { columns: 12, rows: 6 } : props.instance.size
   },
 })
 watch(() => props.editMode, (editMode) => {
@@ -99,6 +105,22 @@ watch(() => props.instance.config, () => {
 function retryLoad() {
   retryGeneration.value++
 }
+
+let pointerStart: { x: number; y: number } | null = null
+function rememberPointer(event: PointerEvent) {
+  pointerStart = { x: event.clientX, y: event.clientY }
+}
+
+function openDetails(event?: MouseEvent) {
+  if (props.editMode || showDetails.value || loading.value || renderError.value
+    || props.instance.id.startsWith('header.'))
+    return
+  if (event && pointerStart && Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y) > 6)
+    return
+  if (event && (event.defaultPrevented || (event.target as HTMLElement).closest('a, button, input, textarea, select, [contenteditable], [role="button"]')))
+    return
+  showDetails.value = true
+}
 </script>
 
 <template>
@@ -110,6 +132,8 @@ function retryLoad() {
     :data-widget-columns="instance.size.columns"
     :data-widget-rows="instance.size.rows"
     :data-widget-placement="instance.id.startsWith('header.') ? 'header' : 'content'"
+    @click="openDetails"
+    @pointerdown="rememberPointer"
   >
     <div v-if="renderError" class="widget-error-boundary" role="alert">
       <span class="widget-error-icon" aria-hidden="true">⚠️</span>
@@ -122,12 +146,28 @@ function retryLoad() {
     <div v-else-if="loading" class="widget-loading" role="status">
       {{ t('widgetLayout.host.loading') }}
     </div>
-    <component :is="component" v-else-if="component && !instance.hidden" v-bind="componentProps" />
+    <Teleport v-else-if="component && !instance.hidden" :to="detailTarget || 'body'" :disabled="!showDetails || !detailTarget">
+      <div class="widget-render-stage" :class="{ 'is-detail': showDetails }">
+        <component :is="component" v-bind="componentProps" />
+      </div>
+    </Teleport>
+    <button v-if="component && !instance.hidden && !editMode && !instance.id.startsWith('header.') && !showDetails" class="widget-expand-button" type="button" :aria-label="t('widgetDetails.expand', { title: detailTitle })" :title="t('widgetDetails.expand', { title: detailTitle })" @click.stop="showDetails = true">
+      ⤢
+    </button>
   </div>
+  <NModal v-model:show="showDetails" preset="card" :title="detailTitle" :to="getRuntime().kind === 'extension' ? '.pn-theme-root' : undefined" class="widget-detail-modal" :class="{ 'is-fullscreen': detailFullscreen }" :style="{ width: detailFullscreen ? 'calc(100vw - 24px)' : 'min(1120px, calc(100vw - 32px))' }" @after-leave="detailFullscreen = false">
+    <template #header-extra>
+      <button type="button" class="widget-fullscreen-button" :aria-label="t(detailFullscreen ? 'widgetDetails.exitFullscreen' : 'widgetDetails.fullscreen')" @click="detailFullscreen = !detailFullscreen">
+        ⤢
+      </button>
+    </template>
+    <div ref="detailTarget" class="widget-detail-body" :class="{ 'is-fullscreen': detailFullscreen }" />
+  </NModal>
 </template>
 
 <style scoped>
 .pn-widget-shell {
+  position: relative;
   container-type: inline-size;
   display: flex;
   flex: 1;
@@ -136,6 +176,16 @@ function retryLoad() {
   min-height: 0;
   color: var(--pn-widget-text-color, inherit);
 }
+.widget-render-stage { width: 100%; height: 100%; min-width: 0; min-height: 0; }
+.widget-render-stage > :deep(*) { box-sizing: border-box; width: 100%; height: 100%; max-width: 100%; overflow: auto; }
+.pn-widget-shell > .widget-expand-button { position: absolute; right: 6px; bottom: 5px; z-index: 3; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 7px; color: var(--pn-widget-text-color, inherit); background: var(--pn-widget-background, transparent); cursor: pointer; opacity: 0; font-size: 18px; }
+.pn-widget-shell:hover > .widget-expand-button, .widget-expand-button:focus-visible { opacity: 1; }
+.widget-expand-button:focus-visible, .widget-fullscreen-button:focus-visible { outline: 2px solid var(--pn-color-accent); outline-offset: 2px; }
+.widget-fullscreen-button { width: 28px; height: 28px; border: 0; border-radius: 8px; background: var(--pn-color-surface-hover); color: var(--pn-color-text-primary); cursor: pointer; font-size: 20px; }
+.widget-detail-body { container-type: inline-size; height: min(640px, 72dvh); min-height: 0; }
+.widget-detail-body.is-fullscreen { height: calc(100dvh - 132px); }
+:global(.widget-detail-modal) { border-radius: 24px; background: var(--pn-modal-background, var(--pn-color-surface)); color: var(--pn-color-text-primary); }
+@media (max-width: 640px) { .pn-widget-shell > .widget-expand-button { opacity: .7; } .widget-detail-body { height: 72dvh; } }
 
 .pn-widget-shell > :deep(*) {
   box-sizing: border-box;

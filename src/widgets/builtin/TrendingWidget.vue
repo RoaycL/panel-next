@@ -11,9 +11,11 @@ import zhihuIcon from '@/assets/brand-icons/zhihu.ico'
 const props = withDefaults(defineProps<{
   source?: TrendingSource
   limit?: number
+  expanded?: boolean
 }>(), {
   source: 'weibo',
   limit: 10,
+  expanded: false,
 })
 
 const { locale, t } = useI18n()
@@ -25,11 +27,11 @@ const failed = ref(false)
 let requestController: AbortController | null = null
 
 const sourceLabel = computed(() => t(`trending.sources.${activeSource.value}`))
-const showSourceTabs = computed(() => (widgetContext?.size.columns ?? 4) >= 3 && (widgetContext?.size.rows ?? 2) >= 2)
+const showSourceTabs = computed(() => props.expanded || ((widgetContext?.size.columns ?? 4) >= 3 && (widgetContext?.size.rows ?? 2) >= 2))
 const sourceTabs: TrendingSource[] = ['weibo', 'baidu', 'zhihu', 'hackernews']
 const sourceIcons: Partial<Record<TrendingSource, string>> = { weibo: weiboIcon, baidu: baiduIcon, zhihu: zhihuIcon }
 
-const displayItems = computed<TrendingItem[]>(() => trending.value?.items.slice(0, props.limit) ?? [])
+const displayItems = computed<TrendingItem[]>(() => trending.value?.items.slice(0, props.expanded ? 50 : Math.min(4, props.limit)) ?? [])
 
 function formatScore(score?: number) {
   if (!score || score <= 0)
@@ -48,7 +50,7 @@ async function refresh() {
   loading.value = true
   failed.value = false
   try {
-    const response = await getTrending(activeSource.value, props.limit, controller.signal)
+    const response = await getTrending(activeSource.value, props.expanded ? 50 : Math.max(4, props.limit), controller.signal)
     if (requestController !== controller)
       return
     if (response.code === 0 && Array.isArray(response.data?.items) && response.data.items.length > 0)
@@ -68,7 +70,7 @@ async function refresh() {
 
 watch(() => props.source, value => { activeSource.value = value })
 watch(activeSource, () => { trending.value = null })
-watch([activeSource, () => props.limit, locale], refresh, { immediate: true })
+watch([activeSource, () => props.limit, () => props.expanded, locale], refresh, { immediate: true })
 const refreshTimer = window.setInterval(refresh, 5 * 60 * 1000)
 
 onUnmounted(() => {
@@ -78,8 +80,8 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <section class="trending-card" :aria-label="t('trending.title')">
-    <header class="trending-header">
+  <section class="trending-card" :class="{ 'is-detail': expanded, 'is-compact': !expanded }" :aria-label="t('trending.title')">
+    <header v-if="expanded" class="trending-header">
       <img v-if="sourceIcons[activeSource]" class="trending-brand" :src="sourceIcons[activeSource]" alt="">
       <span v-else class="trending-brand trending-brand-letter" aria-hidden="true">Y</span>
       <h3 class="trending-title">
@@ -93,7 +95,10 @@ onUnmounted(() => {
     </header>
     <div v-if="showSourceTabs" class="trending-sources" role="group" :aria-label="t('trending.selectSource')">
       <button v-for="sourceOption in sourceTabs" :key="sourceOption" type="button" :class="{ active: activeSource === sourceOption }" :aria-pressed="activeSource === sourceOption" @click="activeSource = sourceOption">
-        {{ t(`trending.sources.${sourceOption}`) }}
+        {{ expanded ? t(`trending.sources.${sourceOption}`) : t(`trending.sources.${sourceOption}`).replace(/热搜|热榜/g, '') }}
+      </button>
+      <button v-if="!expanded" class="trending-refresh" type="button" :disabled="loading" :aria-label="t('trending.refresh')" @click="refresh">
+        ↻
       </button>
     </div>
     <ol v-if="displayItems.length" class="trending-list">
@@ -135,6 +140,19 @@ onUnmounted(() => {
   backdrop-filter: blur(var(--pn-effect-blur, 14px));
   text-shadow: none;
 }
+.trending-card.is-compact { padding: 10px 12px; gap: 4px; }
+.is-compact .trending-sources { margin-bottom: 2px; padding: 0; background: transparent; }
+.is-compact .trending-sources button { flex: none; padding: 3px 5px; }
+.is-compact .trending-sources .trending-refresh { margin-left: auto; }
+.is-compact .trending-list { flex: 1; grid-template-rows: repeat(4, minmax(0, 1fr)); overflow: hidden; gap: 0; }
+.is-compact .trending-list li { padding: 0; }
+.is-compact .trending-item { font-size: 12px; line-height: 20px; }
+.is-detail .trending-list { flex: 1; grid-template-columns: minmax(0, 1fr); gap: 5px; }
+.is-detail .trending-list li { padding: 10px 8px; border-radius: 10px; }
+.is-detail .trending-list li:hover { background: var(--pn-color-surface-hover); }
+.is-detail .trending-item { white-space: normal; font-size: 15px; line-height: 1.6; }
+.is-detail .trending-rank { width: 28px; font-size: 15px; }
+.is-detail .trending-score { font-size: 13px; }
 
 .trending-header {
   display: flex;
