@@ -59,7 +59,7 @@ export async function saveAndSyncExtensionWallpaper(config: Panel.panelConfig): 
     if (response.code !== 0 || !response.data || response.data.account.id !== accountId)
       return { status: 'failed', message: response.msg || '无法读取云端壁纸设置' }
     baseline = response.data
-    setSyncRevision(baseline.revision)
+    setSyncRevision(baseline.revision, { authoritative: true })
     const result = await mutationPost('/panel/userConfig/set', { panel: mergeWallpaper(baseline.panel.config, wallpaper) }, {
       queuePayload: { wallpaper, wallpaperBase: pickWallpaper(baseline.panel.config) },
     })

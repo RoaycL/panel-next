@@ -1,6 +1,6 @@
 import type { Response } from '@/utils/request'
 import { HttpRequestError, post } from '@/utils/request'
-import { getSyncRevision, notifySyncConflict, setSyncRevision } from '@/sync/revision'
+import { clearSyncRevision, getSyncRevision, notifySyncConflict, setSyncRevision } from '@/sync/revision'
 import { isSyncRevision } from '@/sync/bootstrapSnapshot'
 import { getBootstrap } from '@/api/sync'
 import { getRuntime } from '@/runtime'
@@ -8,7 +8,7 @@ import { useAuthStore } from '@/store/modules/auth'
 import { enqueueOfflineMutation } from '@/sync/offlineQueue'
 import type { OfflineMutation, OfflineMutationAction } from '@/sync/offlineQueue'
 import { fetchChangesSince } from '@/sync/changes'
-import { trackSyncActivity } from '@/sync/activity'
+import { beginSyncActivity, clearSyncFailure, reportSyncFailure } from '@/sync/activity'
 
 interface MutationEnvelope<T> {
   revision: Sync.Revision
@@ -80,15 +80,19 @@ export interface MutationOptions {
 }
 
 /** Whether a change written by someone else touches what this write changes. */
-function changeOverlaps(descriptor: QueueDescriptor, change: Sync.ChangeV1) {
+function changeOverlaps(descriptor: QueueDescriptor, data: any, change: Sync.ChangeV1) {
   if (change.resourceType !== descriptor.resourceType)
     return false
   switch (descriptor.action) {
     case 'item.edit':
-    case 'item.delete':
     case 'group.edit':
-    case 'group.delete':
       return change.resourceId === String(descriptor.resourceId)
+    case 'item.delete':
+    case 'group.delete': {
+      // A delete may cover several ids; any of them changing is a conflict.
+      const ids: unknown[] = Array.isArray(data?.ids) ? data.ids : [descriptor.resourceId]
+      return ids.some(id => String(id) === change.resourceId)
+    }
     case 'item.sort':
       // A sort rewrites every item of one group; deletes carry no group id.
       return change.operation === 'delete'
@@ -114,7 +118,7 @@ async function rebaseRevision(url: string, data: unknown, expectedRevision: Sync
     return null
   try {
     const page = await fetchChangesSince(expectedRevision)
-    if (!page || page.hasMore || page.changes.some(change => changeOverlaps(descriptor, change)))
+    if (!page || page.hasMore || page.changes.some(change => changeOverlaps(descriptor, data, change)))
       return null
     return page.currentRevision
   }
@@ -123,20 +127,78 @@ async function rebaseRevision(url: string, data: unknown, expectedRevision: Sync
   }
 }
 
-let mutationTail: Promise<unknown> = Promise.resolve()
+function mutationScope() {
+  return `${getRuntime().getServerOrigin() ?? ''}:${useAuthStore().userInfo?.id ?? ''}`
+}
+
+type SendOutcome<T> =
+  | { kind: 'done', response: Response<T> }
+  | { kind: 'queue', baseRevision: Sync.Revision | null, conflict: boolean, response?: Response<T>, error?: unknown }
+
+let sendTail: Promise<unknown> = Promise.resolve()
+let durableTail: Promise<unknown> = Promise.resolve()
 
 /**
  * Writes from one page are sent one at a time. Two writes in flight with the
  * same expected revision would make the second one look like a change from
  * another device.
+ *
+ * A user write also holds its place until a failed request is saved to the
+ * offline queue, so an older intent can never be queued after a newer write.
+ * Writes that never queue (offline replay, the settings flush) only wait for
+ * the request line: replay holds the queue lock, and waiting for another
+ * write's queue save would deadlock with it.
  */
-export function mutationPost<T>(url: string, data: unknown, options: MutationOptions = {}): Promise<Response<T>> {
-  const run = mutationTail.then(() => trackSyncActivity(() => mutationPostInternal<T>(url, data, options)))
-  mutationTail = run.catch(() => undefined)
-  return run
+export async function mutationPost<T>(url: string, data: unknown, options: MutationOptions = {}): Promise<Response<T>> {
+  const endActivity = beginSyncActivity()
+  const scope = mutationScope()
+  const run = async () => {
+    const step = sendTail.then(() => sendMutation<T>(url, data, options, scope))
+    sendTail = step.catch(() => undefined)
+    const outcome = await step
+    return outcome.kind === 'done' ? outcome.response : await settleQueuedMutation<T>(url, data, options, outcome)
+  }
+  try {
+    let response: Response<T>
+    if (options.queueOnFailure !== false) {
+      const durable = durableTail.then(run)
+      durableTail = durable.catch(() => undefined)
+      response = await durable
+    }
+    else {
+      response = await run()
+    }
+    if (response.code === 0)
+      clearSyncFailure()
+    else
+      reportSyncFailure(response.msg || '同步失败')
+    return response
+  }
+  catch (error) {
+    reportSyncFailure(error instanceof Error ? error.message : '同步失败')
+    throw error
+  }
+  finally {
+    endActivity()
+  }
 }
 
-async function mutationPostInternal<T>(url: string, data: unknown, options: MutationOptions): Promise<Response<T>> {
+async function settleQueuedMutation<T>(url: string, data: unknown, options: MutationOptions, outcome: Extract<SendOutcome<T>, { kind: 'queue' }>): Promise<Response<T>> {
+  const queued = await enqueueIfSupported(options.queuePayload ?? data, url, outcome.baseRevision)
+  if (outcome.conflict) {
+    notifySyncConflict()
+    return queued ? queuedResponse<T>(data, true) : outcome.response!
+  }
+  if (!queued)
+    throw outcome.error
+  return queuedResponse<T>(data)
+}
+
+async function sendMutation<T>(url: string, data: unknown, options: MutationOptions, scope: string): Promise<SendOutcome<T>> {
+  // A write captured for one account must never be sent with another
+  // account's token after a logout or server switch.
+  if (mutationScope() !== scope)
+    throw new HttpRequestError('账号或服务器已切换，修改未提交', false)
   const queueOnFailure = options.queueOnFailure !== false
   const queueSupported = queueOnFailure && canQueueMutation(data, url)
   let expectedRevision: Sync.Revision
@@ -148,7 +210,7 @@ async function mutationPostInternal<T>(url: string, data: unknown, options: Muta
   catch {
     const bootstrap = await getBootstrap()
     if (bootstrap.code === 0 && bootstrap.data) {
-      setSyncRevision(bootstrap.data.revision)
+      setSyncRevision(bootstrap.data.revision, { authoritative: true })
       expectedRevision = bootstrap.data.revision
     }
     else {
@@ -167,38 +229,40 @@ async function mutationPostInternal<T>(url: string, data: unknown, options: Muta
   })
 
   let response: Response<MutationEnvelope<T>>
+  // The revision the last request was based on; a rebased one has already
+  // been checked against the changes in between.
+  let sentRevision = expectedRevision
   try {
-    response = await send(expectedRevision)
+    response = await send(sentRevision)
     if (response.code === 1502 && revisionTrusted) {
-      const rebased = await rebaseRevision(url, data, expectedRevision)
+      const rebased = await rebaseRevision(url, data, sentRevision)
       if (rebased) {
-        setSyncRevision(rebased)
+        setSyncRevision(rebased, { authoritative: true })
+        sentRevision = rebased
         response = await send(rebased)
       }
     }
   }
   catch (error) {
-    if (queueOnFailure && error instanceof HttpRequestError && error.retryable && await enqueueIfSupported(options.queuePayload ?? data, url, revisionTrusted ? expectedRevision : null))
-      return queuedResponse<T>(data)
+    if (queueSupported && error instanceof HttpRequestError && error.retryable)
+      return { kind: 'queue', baseRevision: revisionTrusted ? sentRevision : null, conflict: false, error }
     throw error
   }
 
   // Never replay a stale write automatically: doing so with a fresh revision
   // would silently overwrite a concurrent edit made on another device.
   if (response.code === 1502) {
-    if (queueOnFailure && await enqueueIfSupported(options.queuePayload ?? data, url, revisionTrusted ? expectedRevision : null)) {
-      notifySyncConflict()
-      return queuedResponse<T>(data, true)
-    }
+    // The cursor may be stale or from a reset server: read it again next time.
+    clearSyncRevision()
     if (queueOnFailure)
-      notifySyncConflict()
-    return response as unknown as Response<T>
+      return { kind: 'queue', baseRevision: revisionTrusted ? sentRevision : null, conflict: true, response: response as unknown as Response<T> }
+    return { kind: 'done', response: response as unknown as Response<T> }
   }
 
   if (response.code !== 0)
-    return response as unknown as Response<T>
+    return { kind: 'done', response: response as unknown as Response<T> }
   if (!response.data || !isSyncRevision(response.data.revision))
     throw new Error('Server returned an invalid mutation revision.')
   setSyncRevision(response.data.revision)
-  return { ...response, data: response.data.result }
+  return { kind: 'done', response: { ...response, data: response.data.result } }
 }
