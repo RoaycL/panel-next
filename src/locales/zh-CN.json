@@ -449,6 +449,7 @@
   },
   "widgetDetails": {
     "expand": "展开{title}",
+    "close": "关闭",
     "fullscreen": "全屏查看",
     "exitFullscreen": "退出全屏"
   },

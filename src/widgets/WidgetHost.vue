@@ -155,13 +155,27 @@ function openDetails(event?: MouseEvent) {
       ⤢
     </button>
   </div>
-  <NModal v-model:show="showDetails" preset="card" :title="detailTitle" :to="getRuntime().kind === 'extension' ? '.pn-theme-root' : undefined" class="widget-detail-modal" :class="{ 'is-fullscreen': detailFullscreen }" :style="{ width: detailFullscreen ? 'calc(100vw - 24px)' : 'min(1120px, calc(100vw - 32px))' }" @after-leave="detailFullscreen = false">
-    <template #header-extra>
-      <button type="button" class="widget-fullscreen-button" :aria-label="t(detailFullscreen ? 'widgetDetails.exitFullscreen' : 'widgetDetails.fullscreen')" @click="detailFullscreen = !detailFullscreen">
-        ⤢
-      </button>
-    </template>
-    <div ref="detailTarget" class="widget-detail-body" :class="{ 'is-fullscreen': detailFullscreen }" />
+  <!-- No card chrome: the enlarged widget is its own surface, like it is on the grid. -->
+  <NModal v-model:show="showDetails" :to="getRuntime().kind === 'extension' ? '.pn-theme-root' : undefined" @after-leave="detailFullscreen = false">
+    <div
+      class="widget-detail-sheet"
+      :class="{ 'is-fullscreen': detailFullscreen }"
+      :data-widget="theme.variants.widget"
+      role="dialog"
+      aria-modal="true"
+      :aria-label="detailTitle"
+      :style="{ width: detailFullscreen ? 'calc(100vw - 24px)' : 'min(1120px, calc(100vw - 32px))' }"
+    >
+      <div class="widget-detail-actions">
+        <button type="button" class="widget-detail-action" :aria-label="t(detailFullscreen ? 'widgetDetails.exitFullscreen' : 'widgetDetails.fullscreen')" :title="t(detailFullscreen ? 'widgetDetails.exitFullscreen' : 'widgetDetails.fullscreen')" @click="detailFullscreen = !detailFullscreen">
+          ⤢
+        </button>
+        <button type="button" class="widget-detail-action" :aria-label="t('widgetDetails.close')" :title="t('widgetDetails.close')" @click="showDetails = false">
+          ✕
+        </button>
+      </div>
+      <div ref="detailTarget" class="widget-detail-body" :class="{ 'is-fullscreen': detailFullscreen }" />
+    </div>
   </NModal>
 </template>
 
@@ -180,12 +194,18 @@ function openDetails(event?: MouseEvent) {
 .widget-render-stage > :deep(*) { box-sizing: border-box; width: 100%; height: 100%; max-width: 100%; overflow: auto; }
 .pn-widget-shell > .widget-expand-button { position: absolute; right: 6px; bottom: 5px; z-index: 3; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 7px; color: var(--pn-widget-text-color, inherit); background: var(--pn-widget-background, transparent); cursor: pointer; opacity: 0; font-size: 18px; }
 .pn-widget-shell:hover > .widget-expand-button, .widget-expand-button:focus-visible { opacity: 1; }
-.widget-expand-button:focus-visible, .widget-fullscreen-button:focus-visible { outline: 2px solid var(--pn-color-accent); outline-offset: 2px; }
-.widget-fullscreen-button { width: 28px; height: 28px; border: 0; border-radius: 8px; background: var(--pn-color-surface-hover); color: var(--pn-color-text-primary); cursor: pointer; font-size: 20px; }
-.widget-detail-body { container-type: inline-size; height: min(640px, 72dvh); min-height: 0; }
-.widget-detail-body.is-fullscreen { height: calc(100dvh - 132px); }
-:global(.widget-detail-modal) { border-radius: 24px; background: var(--pn-modal-background, var(--pn-color-surface)); color: var(--pn-color-text-primary); }
-@media (max-width: 640px) { .pn-widget-shell > .widget-expand-button { opacity: .7; } .widget-detail-body { height: 72dvh; } }
+.widget-expand-button:focus-visible, .widget-detail-action:focus-visible { outline: 2px solid var(--pn-color-accent); outline-offset: 2px; }
+.widget-detail-sheet { position: relative; max-width: 100%; margin: 56px auto 24px; border-radius: 26px; box-shadow: 0 30px 80px -20px rgb(0 0 0 / 45%); }
+.widget-detail-actions { position: absolute; right: 0; bottom: calc(100% + 10px); display: flex; gap: 8px; }
+.widget-detail-action { display: grid; width: 34px; height: 34px; padding: 0; place-items: center; border: 1px solid rgb(255 255 255 / 28%); border-radius: 50%; color: white; background: rgb(30 30 34 / 42%); backdrop-filter: blur(16px) saturate(160%); cursor: pointer; font-size: 15px; line-height: 1; transition: background .15s ease; }
+.widget-detail-action:hover { background: rgb(30 30 34 / 62%); }
+.widget-detail-body { container-type: inline-size; height: min(640px, calc(100dvh - 110px)); min-height: 0; border-radius: inherit; overflow: hidden; }
+.widget-detail-body.is-fullscreen { height: calc(100dvh - 92px); }
+.widget-detail-sheet.is-fullscreen { margin: 52px auto 12px; }
+/* The enlarged widget keeps the grid's surface (frosted glass over the wallpaper), not an opaque card. */
+.widget-detail-body :deep(.widget-render-stage > *) { border-radius: 26px; }
+.widget-detail-sheet[data-widget='solid'] { --pn-widget-background: var(--pn-color-surface); --pn-widget-border: var(--pn-color-border); }
+@media (max-width: 640px) { .pn-widget-shell > .widget-expand-button { opacity: .7; } .widget-detail-sheet { margin-top: 52px; } .widget-detail-body { height: calc(100dvh - 90px); } }
 
 .pn-widget-shell > :deep(*) {
   box-sizing: border-box;

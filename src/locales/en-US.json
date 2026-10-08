@@ -448,6 +448,7 @@
   },
   "widgetDetails": {
     "expand": "Expand {title}",
+    "close": "Close",
     "fullscreen": "View fullscreen",
     "exitFullscreen": "Exit fullscreen"
   },

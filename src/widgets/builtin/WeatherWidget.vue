@@ -356,17 +356,22 @@ onUnmounted(() => {
         </ol>
       </div>
 
-      <!-- Enlarged: the Apple Weather app. -->
+      <!-- Enlarged: the medium widget's headline scaled up, then the Weather app's panels. -->
       <div v-else class="wx-detail">
         <header class="wx-hero">
-          <span class="wx-hero-city" :title="locationLabel">{{ weather.location.name }}</span>
-          <strong class="wx-hero-temp">{{ round(weather.current.temperature) }}°</strong>
-          <span class="wx-hero-condition">{{ condition }}</span>
-          <span v-if="highLow" class="wx-hero-range">{{ highLow }}</span>
-          <span class="wx-hero-meta">
-            {{ locationLabel }}
-            <span v-if="weather.stale" class="weather-stale">· {{ t('weather.stale') }}</span>
-          </span>
+          <div class="wx-hero-main">
+            <span class="wx-hero-city" :title="locationLabel">{{ weather.location.name }}</span>
+            <strong class="wx-hero-temp">{{ round(weather.current.temperature) }}°</strong>
+            <span class="wx-hero-meta">
+              {{ locationLabel }}
+              <span v-if="weather.stale" class="weather-stale">· {{ t('weather.stale') }}</span>
+            </span>
+          </div>
+          <div class="wx-hero-summary">
+            <WeatherGlyph class="wx-hero-icon" :kind="weatherKind" :is-day="isDay" />
+            <span class="wx-hero-condition">{{ condition }}</span>
+            <span v-if="highLow" class="wx-hero-range">{{ highLow }}</span>
+          </div>
         </header>
 
         <section v-if="hours.length" class="wx-panel wx-hourly">
@@ -631,21 +636,24 @@ onUnmounted(() => {
 }
 
 /* Detail (enlarged) */
-.weather-card.is-detail { --wx-fall: 1100px; display: block; overflow-y: auto; padding: 24px; border-radius: 22px; scrollbar-width: none; }
+.weather-card.is-detail { --wx-fall: 1100px; display: block; overflow-y: auto; padding: 28px; border-radius: 26px; scrollbar-width: none; }
 .weather-card.is-detail::-webkit-scrollbar { display: none; }
 .wx-detail {
   display: grid;
-  grid-template-areas: 'hero hourly' 'daily tiles' 'footer footer';
-  grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
+  grid-template-areas: 'hero hero' 'hourly hourly' 'daily tiles' 'footer footer';
+  grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
   gap: 14px;
   align-items: start;
 }
-.wx-hero { display: flex; grid-area: hero; flex-direction: column; align-items: center; align-self: center; min-width: 0; text-align: center; }
-.wx-hero-city { max-width: 100%; overflow: hidden; font-size: 30px; font-weight: 400; line-height: 1.2; white-space: nowrap; text-overflow: ellipsis; }
-.wx-hero-temp { margin: 2px 0 0 .25em; font-size: 92px; font-weight: 200; line-height: 1; letter-spacing: -.03em; }
-.wx-hero-condition { font-size: 18px; font-weight: 500; line-height: 24px; color: var(--wx-muted); }
-.wx-hero-range { font-size: 18px; font-weight: 500; line-height: 24px; }
-.wx-hero-meta { margin-top: 6px; color: var(--wx-muted); font-size: 12px; line-height: 16px; }
+.wx-hero { display: flex; grid-area: hero; align-items: flex-start; justify-content: space-between; gap: 20px; min-width: 0; padding: 6px 6px 4px; }
+.wx-hero-main { display: flex; flex-direction: column; min-width: 0; }
+.wx-hero-city { max-width: 100%; overflow: hidden; font-size: 26px; font-weight: 600; line-height: 1.2; white-space: nowrap; text-overflow: ellipsis; }
+.wx-hero-temp { margin-top: 4px; font-size: 104px; font-weight: 200; line-height: 1; letter-spacing: -.03em; }
+.wx-hero-summary { display: flex; flex: none; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; }
+.wx-hero-icon { width: 64px; height: 64px; margin-bottom: 6px; }
+.wx-hero-condition { font-size: 20px; font-weight: 600; line-height: 26px; }
+.wx-hero-range { font-size: 18px; font-weight: 500; line-height: 24px; color: var(--wx-muted); }
+.wx-hero-meta { margin-top: 8px; color: var(--wx-muted); font-size: 12px; line-height: 16px; }
 .wx-panel { min-width: 0; padding: 10px 14px 12px; border-radius: 16px; background: var(--wx-panel); backdrop-filter: blur(18px); box-shadow: inset 0 0 0 1px rgb(255 255 255 / 8%); }
 .wx-panel-title { margin: 0 0 8px; padding-bottom: 7px; border-bottom: 1px solid var(--wx-divider); color: var(--wx-muted); font-size: 12px; font-weight: 600; line-height: 16px; letter-spacing: .02em; text-transform: uppercase; }
 .wx-hourly { grid-area: hourly; align-self: stretch; display: flex; flex-direction: column; justify-content: center; }
@@ -689,8 +697,10 @@ onUnmounted(() => {
 @container (max-width: 760px) {
   .weather-card.is-detail { padding: 18px 14px; }
   .wx-detail { grid-template-areas: 'hero' 'hourly' 'daily' 'tiles' 'footer'; grid-template-columns: minmax(0, 1fr); }
-  .wx-hero { padding: 8px 0 6px; }
-  .wx-hero-temp { font-size: 80px; }
+  .wx-hero { padding: 4px 2px; }
+  .wx-hero-temp { font-size: 76px; }
+  .wx-hero-icon { width: 48px; height: 48px; }
+  .wx-hero-condition { font-size: 17px; }
   .wx-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 }
 

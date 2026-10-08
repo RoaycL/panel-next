@@ -52,7 +52,7 @@ const numerals = Array.from({ length: 12 }, (_, index) => {
 </template>
 
 <style scoped>
-.clock-detail { display: grid; grid-template-columns: minmax(200px, 300px) minmax(0, 1fr); align-items: center; gap: 48px; height: 100%; padding: 32px 48px; border-radius: 22px; color: var(--pn-widget-text-color, white); background: var(--pn-widget-background, rgb(18 25 39 / 42%)); }
+.clock-detail { display: grid; grid-template-columns: minmax(200px, 300px) minmax(0, 1fr); align-items: center; gap: 48px; height: 100%; padding: 32px 48px; border-radius: 22px; color: var(--pn-widget-text-color, white); border: 1px solid var(--pn-widget-border, rgb(255 255 255 / 16%)); background: var(--pn-widget-background, rgb(18 25 39 / 42%)); box-shadow: var(--pn-widget-shadow, 0 10px 30px rgb(0 0 0 / 14%)); backdrop-filter: blur(var(--pn-effect-blur, 14px)); }
 .clock-face { width: 100%; height: auto; }
 .face-bg { fill: var(--pn-widget-retry-background, rgb(255 255 255 / 8%)); stroke: var(--pn-widget-border, rgb(255 255 255 / 16%)); stroke-width: 1.5; }
 .face-tick { stroke: var(--pn-widget-muted-text, rgb(255 255 255 / 45%)); stroke-width: 1; stroke-linecap: round; }
