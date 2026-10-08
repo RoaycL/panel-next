@@ -58,3 +58,13 @@ func TestItemIconSurfaceRoundTrip(t *testing.T) {
 		t.Fatal("empty surface must not be sent to clients")
 	}
 }
+
+func TestItemIconSurfaceDropsUnknownValues(t *testing.T) {
+	var icon ItemIconIconInfo
+	if err := json.Unmarshal([]byte(`{"itemType":2,"src":"/uploads/a.png","surface":"neon","scale":1.5}`), &icon); err != nil {
+		t.Fatal(err)
+	}
+	if icon.Surface != "" || icon.Scale != 1.5 || icon.Src != "/uploads/a.png" {
+		t.Fatalf("unexpected icon: %+v", icon)
+	}
+}

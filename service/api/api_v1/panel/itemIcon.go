@@ -45,10 +45,6 @@ func (a *ItemIcon) Edit(c *gin.Context) {
 		apiReturn.ErrorParamFomat(c, "Icon scale must be between 0.5 and 2")
 		return
 	}
-	if req.Icon.Surface != "" && req.Icon.Surface != "glass" {
-		apiReturn.ErrorParamFomat(c, "Icon surface must be empty or glass")
-		return
-	}
 
 	// json转字符串
 	if j, err := json.Marshal(req.Icon); err == nil {

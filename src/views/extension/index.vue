@@ -1202,9 +1202,10 @@ const activeCanvasItems = computed<ExtensionCanvasItem[]>({
     isWidgetLayoutDirty.value = true
   },
 })
+// Offer tidy only when it would change something.
 const canTidyCanvas = computed(() => {
-  const kinds = activeCanvasItems.value.map(item => item.kind)
-  return kinds.includes('widget') && kinds.lastIndexOf('bookmark') > kinds.indexOf('widget')
+  const items = activeCanvasItems.value
+  return tidyCanvasOrder(items).some((item, index) => item.key !== items[index].key)
 })
 
 // Widgets lead, tallest then widest first, so the dense grid packs them into
