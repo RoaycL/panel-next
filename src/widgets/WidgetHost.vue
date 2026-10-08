@@ -325,8 +325,6 @@ function openDetails(event?: MouseEvent) {
 .pn-widget-shell[data-widget-columns='2'] :deep(.todo-header > div > small) { display: none; }
 .pn-widget-shell[data-widget-columns='2'] :deep(.notes-header small),
 .pn-widget-shell[data-widget-columns='2'] :deep(.todo-header > small) { font-size: 9px; }
-.pn-widget-shell[data-widget-columns='2'] :deep(.workday-card) { padding: 10px; gap: 8px; }
-.pn-widget-shell[data-widget-columns='2'] :deep(.workday-main strong) { font-size: clamp(20px, 14cqw, 30px); }
 .pn-widget-shell[data-widget-columns='2'] :deep(.countdown-card) { padding: 10px; }
 .pn-widget-shell[data-widget-rows='1'] :deep(.countdown-card) { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; }
 .pn-widget-shell[data-widget-rows='1'] :deep(.countdown-header) { flex: 1; overflow: hidden; }
@@ -336,12 +334,6 @@ function openDetails(event?: MouseEvent) {
 .pn-widget-shell[data-widget-rows='1'] :deep(.countdown-remaining) { flex-direction: column; align-items: center; gap: 2px; }
 .pn-widget-shell[data-widget-rows='1'] :deep(.countdown-remaining strong) { font-size: 24px; }
 .pn-widget-shell[data-widget-rows='1'] :deep(.countdown-unit) { font-size: 9px; line-height: 12px; white-space: nowrap; }
-.pn-widget-shell[data-widget-rows='1'] :deep(.workday-card) { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; }
-.pn-widget-shell[data-widget-rows='1'] :deep(.workday-card header) { min-width: 0; }
-.pn-widget-shell[data-widget-rows='1'] :deep(.workday-icon),
-.pn-widget-shell[data-widget-rows='1'] :deep(.workday-main span) { display: none; }
-.pn-widget-shell[data-widget-rows='1'] :deep(.workday-main strong) { font-size: clamp(14px, 8cqw, 24px); white-space: nowrap; }
-.pn-widget-shell[data-widget-rows='1'] :deep(.workday-main) { flex: none; }
 .pn-widget-shell[data-widget-rows='1'] :deep(.trending-card) { padding: 5px 10px; }
 .pn-widget-shell[data-widget-rows='1'] :deep(.trending-header) { margin-bottom: 2px; }
 .pn-widget-shell[data-widget-rows='1'] :deep(.trending-brand) { width: 18px; height: 18px; }

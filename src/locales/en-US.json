@@ -562,17 +562,73 @@
   },
   "workdayWidget": {
     "title": "End-of-day countdown",
-    "done": "Workday finished",
-    "rest": "Day off",
-    "invalid": "Invalid time",
     "until": "Until {time}",
-    "localTime": "Based on local time",
+    "untilStart": "Work starts at {time}",
+    "doneHint": "Good work today",
+    "restHint": "Enjoy your day off",
     "timeHint": "24-hour format, e.g. 18:00",
     "hours": "Hours",
     "minutes": "Minutes",
     "seconds": "Seconds",
-    "offAt": "Off at {time}",
-    "week": "This week"
+    "week": "This week",
+    "offAt": "off at {time}",
+    "startsAt": "starts {time}",
+    "today": "today",
+    "days": "{count}d",
+    "money": "¥{amount}",
+    "state": {
+      "before": "Not started",
+      "working": "Working",
+      "done": "Off work",
+      "rest": "Day off",
+      "invalid": "Invalid time"
+    },
+    "extras": {
+      "payday": "Payday",
+      "friday": "Friday",
+      "earned": "Earned"
+    },
+    "fonts": {
+      "system": "System",
+      "rounded": "Rounded",
+      "harmony": "HarmonyOS",
+      "serif": "Serif",
+      "mono": "Monospace"
+    },
+    "settings": {
+      "name": "Name",
+      "workdays": "Workdays",
+      "weekday1": "M",
+      "weekday2": "T",
+      "weekday3": "W",
+      "weekday4": "T",
+      "weekday5": "F",
+      "weekday6": "S",
+      "weekday7": "S",
+      "weekdaysPreset": "Weekdays",
+      "everydayPreset": "Every day",
+      "hours": "Hours",
+      "to": "to",
+      "background": "Background",
+      "color": "Colour",
+      "image": "Image",
+      "imagePlaceholder": "Image URL, https://…",
+      "followTheme": "Follow theme",
+      "auto": "Auto",
+      "custom": "Custom colour",
+      "textColor": "Text colour",
+      "font": "Font",
+      "more": "Show more",
+      "extra": {
+        "payday": "Payday",
+        "friday": "Until Friday",
+        "holiday": "Next festival",
+        "income": "Today's income"
+      },
+      "payday": "Payday",
+      "paydayOption": "Day {day} each month",
+      "income": "Daily income"
+    }
   },
   "extensionCanvas": {
     "summary": "{bookmarks} bookmarks · {widgets} widgets",
@@ -814,7 +870,10 @@
       "empty": "This widget has no editable settings.",
       "invalid": "Invalid widget configuration",
       "save": "Save settings",
-      "title": "Widget settings"
+      "title": "Widget settings",
+      "preview": "Live preview",
+      "previousSize": "Previous size",
+      "nextSize": "Next size"
     },
     "fields": {
       "background": "Background color",

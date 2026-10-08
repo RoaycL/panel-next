@@ -1,6 +1,8 @@
 import type { TrendingSource } from '@/api/trending'
 import type { WidgetConfigSchema, WidgetInstance } from './types'
+import type { WorkdayFont } from './builtin/workday'
 import { TRENDING_SOURCES } from '@/api/trending'
+import { TIME_PATTERN, WORKDAYS_PATTERN, WORKDAY_FONTS } from './builtin/workday'
 import * as field from './schema'
 import { defineConfigSchema } from './schema'
 import { defineWidget } from './define'
@@ -44,8 +46,19 @@ export interface NotesWidgetConfig {
 
 export interface WorkdayWidgetConfig {
   title: string
+  /** ISO weekdays that are workdays, e.g. '12345' for Monday to Friday. */
+  workdays: string
+  startTime: string
   endTime: string
-  weekdaysOnly: boolean
+  /** 'theme' follows the dashboard widget style; otherwise a CSS colour. */
+  background: string
+  backgroundImage: string
+  textColor: string
+  font: WorkdayFont
+  /** Comma-separated chips to show under the timer (see WORKDAY_EXTRAS). */
+  extras: string
+  payday: number
+  dailyIncome: number
 }
 
 const clockSchema = defineConfigSchema<ClockWidgetConfig>({
@@ -83,9 +96,24 @@ const notesSchema = defineConfigSchema<NotesWidgetConfig>({
 
 const workdaySchema = defineConfigSchema<WorkdayWidgetConfig>({
   title: field.string({ default: '', max: 40, label: 'widgetLayout.fields.title' }),
-  endTime: field.string({ default: '18:00', pattern: /^(?:[01]\d|2[0-3]):[0-5]\d$/, label: 'widgetLayout.fields.endTime', description: 'workdayWidget.timeHint' }),
-  weekdaysOnly: field.boolean(true, { label: 'widgetLayout.fields.weekdaysOnly' }),
+  workdays: field.string({ default: '12345', pattern: WORKDAYS_PATTERN }),
+  startTime: field.string({ default: '09:00', pattern: TIME_PATTERN }),
+  endTime: field.string({ default: '18:00', pattern: TIME_PATTERN, label: 'widgetLayout.fields.endTime', description: 'workdayWidget.timeHint' }),
+  background: field.color({ default: 'theme', max: 32 }),
+  backgroundImage: field.string({ default: '', max: 2000, pattern: /^(?:https?:\/\/\S+)?$/ }),
+  textColor: field.color({ default: 'theme', max: 32 }),
+  font: field.enumeration<WorkdayFont>({ values: WORKDAY_FONTS, default: 'system' }),
+  extras: field.string({ default: 'payday,friday,holiday,income', max: 64, pattern: /^(?:(?:payday|friday|holiday|income)(?:,(?=[a-z])|$))*$/ }),
+  payday: field.integer({ default: 10, min: 1, max: 31 }),
+  dailyIncome: field.number({ default: 400, min: 0, max: 1000000 }),
 })
+
+export function defaultWorkdayConfig(): WorkdayWidgetConfig {
+  return {
+    title: '', workdays: '12345', startTime: '09:00', endTime: '18:00', background: 'theme', backgroundImage: '',
+    textColor: 'theme', font: 'system', extras: 'payday,friday,holiday,income', payday: 10, dailyIncome: 400,
+  }
+}
 
 if (!widgetRegistry.get('core.clock')) {
   widgetRegistry.register(defineWidget({
@@ -144,11 +172,20 @@ if (!widgetRegistry.get('core.clock')) {
     capabilities: ['storage'],
     load: () => import('./builtin/TodoWidget.vue').then(module => module.default),
   })).register(defineWidget({
-    type: 'core.workday', currentVersion: 1, configSchema: workdaySchema,
-    defaultConfig: () => ({ title: '', endTime: '18:00', weekdaysOnly: true }),
+    type: 'core.workday', currentVersion: 2, configSchema: workdaySchema,
+    defaultConfig: defaultWorkdayConfig,
+    migrations: {
+      // v1 only had "weekdays only"; keep each instance's title and end time.
+      1: (config) => {
+        const previous = (typeof config === 'object' && config !== null ? config : {}) as Record<string, unknown>
+        const { weekdaysOnly, ...rest } = previous
+        return { ...rest, workdays: weekdaysOnly === false ? '1234567' : '12345' }
+      },
+    },
     size: { default: { columns: 4, rows: 2 }, min: { columns: 2, rows: 1 }, max: { columns: 4, rows: 2 } },
     meta: { title: 'widgetLayout.types.core.workday' },
     load: () => import('./builtin/WorkdayWidget.vue').then(module => module.default),
+    settings: () => import('./builtin/WorkdaySettings.vue').then(module => module.default),
   }))
 }
 

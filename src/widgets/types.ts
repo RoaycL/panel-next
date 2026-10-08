@@ -99,6 +99,8 @@ export interface WidgetDefinition<TConfig = unknown> {
   size: WidgetSizeConstraints
   migrations?: Readonly<Record<number, WidgetMigration>>
   load: () => Promise<Component>
+  /** 可选的自定义设置面板：接收 v-model 配置草稿，替代按 schema 生成的表单。 */
+  settings?: () => Promise<Component>
   meta?: WidgetMeta
   capabilities?: readonly WidgetCapability[]
   surfaces?: readonly WidgetSurface[]

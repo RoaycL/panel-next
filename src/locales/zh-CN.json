@@ -563,17 +563,73 @@
   },
   "workdayWidget": {
     "title": "下班倒计时",
-    "done": "今天已下班",
-    "rest": "今天休息",
-    "invalid": "时间无效",
     "until": "距离 {time} 下班",
-    "localTime": "按本地时间计算",
+    "untilStart": "距离 {time} 上班",
+    "doneHint": "今天辛苦了",
+    "restHint": "好好休息一下",
     "timeHint": "24 小时制，例如 18:00",
     "hours": "时",
     "minutes": "分",
     "seconds": "秒",
+    "week": "本周",
     "offAt": "{time} 下班",
-    "week": "本周"
+    "startsAt": "{time} 上班",
+    "today": "今天",
+    "days": "{count}天",
+    "money": "{amount} ¥",
+    "state": {
+      "before": "还没上班",
+      "working": "工作中",
+      "done": "下班啦",
+      "rest": "休息时间",
+      "invalid": "时间无效"
+    },
+    "extras": {
+      "payday": "发薪",
+      "friday": "周五",
+      "earned": "今天赚了"
+    },
+    "fonts": {
+      "system": "跟随系统",
+      "rounded": "圆体",
+      "harmony": "HarmonyOS",
+      "serif": "宋体",
+      "mono": "等宽"
+    },
+    "settings": {
+      "name": "组件名称",
+      "workdays": "工作日",
+      "weekday1": "一",
+      "weekday2": "二",
+      "weekday3": "三",
+      "weekday4": "四",
+      "weekday5": "五",
+      "weekday6": "六",
+      "weekday7": "日",
+      "weekdaysPreset": "工作日",
+      "everydayPreset": "每天",
+      "hours": "工作时间",
+      "to": "至",
+      "background": "背景",
+      "color": "颜色",
+      "image": "图片",
+      "imagePlaceholder": "图片地址，https://…",
+      "followTheme": "跟随主题",
+      "auto": "自动",
+      "custom": "自定义颜色",
+      "textColor": "字体颜色",
+      "font": "字体",
+      "more": "显示更多",
+      "extra": {
+        "payday": "发薪日",
+        "friday": "距离周五",
+        "holiday": "下一个节日",
+        "income": "今天收入"
+      },
+      "payday": "发薪日",
+      "paydayOption": "每月 {day} 日",
+      "income": "每天的收入"
+    }
   },
   "extensionCanvas": {
     "summary": "{bookmarks} 个书签 · {widgets} 个组件",
@@ -815,7 +871,10 @@
       "empty": "该组件没有可编辑配置。",
       "invalid": "组件配置无效",
       "save": "保存配置",
-      "title": "组件设置"
+      "title": "组件设置",
+      "preview": "实时预览",
+      "previousSize": "上一个尺寸",
+      "nextSize": "下一个尺寸"
     },
     "fields": {
       "background": "背景颜色",
