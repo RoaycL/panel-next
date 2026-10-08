@@ -4,6 +4,7 @@ import {
   NButton,
   NInput,
   NInputGroup,
+  NModal,
   NPagination,
   NSelect,
   NSpin,
@@ -226,6 +227,34 @@ async function fetchWallhaven() {
   }
 }
 
+// 壁纸库点击图片先放大预览，确认后再设为壁纸
+const previewIndex = ref(-1)
+const previewItem = computed(() => wallhavenList.value[previewIndex.value])
+const previewRawLoaded = ref(false)
+const showPreview = computed({
+  get: () => !!previewItem.value,
+  set: value => { if (!value) previewIndex.value = -1 },
+})
+function openPreview(index: number) {
+  previewRawLoaded.value = false
+  previewIndex.value = index
+}
+function stepPreview(delta: number) {
+  const next = previewIndex.value + delta
+  if (next < 0 || next >= wallhavenList.value.length) return
+  openPreview(next)
+}
+function handlePreviewKeydown(event: KeyboardEvent) {
+  if (event.key === 'ArrowLeft') stepPreview(-1)
+  else if (event.key === 'ArrowRight') stepPreview(1)
+}
+async function applyPreview() {
+  const item = previewItem.value
+  if (!item) return
+  if (await handleSelect(item.rawUrl) && previewItem.value === item) previewIndex.value = -1
+}
+watch(wallhavenList, () => { previewIndex.value = -1 })
+
 function handleQuickTagClick(tag: typeof quickTags[number]) {
   wallhavenQuery.value = tag.q
   wallhavenCategories.value = tag.cat
@@ -243,16 +272,20 @@ function handlePageChange(page: number) {
   void fetchWallhaven()
 }
 
-async function handleSelect(url: string) {
+async function handleSelect(url: string): Promise<boolean> {
   const generation = ++selectionGeneration
   selectingUrl.value = url
   try {
     await preloadWallpaper(runtime.resolveUrl(url))
-    if (generation !== selectionGeneration) return
+    if (generation !== selectionGeneration) return false
     emit('select', url)
     ms.success(props.type === 'wallpaper' ? '壁纸已加载并选择' : '已选择图片')
+    return true
   }
-  catch (error) { if (generation === selectionGeneration) ms.error(error instanceof Error ? error.message : '图片加载失败') }
+  catch (error) {
+    if (generation === selectionGeneration) ms.error(error instanceof Error ? error.message : '图片加载失败')
+    return false
+  }
   finally { if (generation === selectionGeneration) selectingUrl.value = '' }
 }
 
@@ -302,6 +335,7 @@ onMounted(() => {
         </button>
 
         <button
+          v-if="!isWallpaperPicker"
           type="button"
           class="source-tab-btn"
           :class="{ active: source === 'public' }"
@@ -474,10 +508,15 @@ onMounted(() => {
 
       <div v-else class="wallhaven-grid">
         <div
-          v-for="item in wallhavenList"
+          v-for="(item, index) in wallhavenList"
           :key="item.id"
+          role="button"
+          tabindex="0"
+          :aria-label="`预览壁纸：Wallhaven ${item.id}`"
           class="wallhaven-card group relative rounded-xl overflow-hidden border border-slate-200 dark:border-zinc-800 hover:border-emerald-500 cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 bg-zinc-900"
-          @click="handleSelect(item.rawUrl)"
+          @click="openPreview(index)"
+          @keydown.enter.self.prevent="openPreview(index)"
+          @keydown.space.self.prevent="openPreview(index)"
         >
           <!-- 缩略图 -->
           <img
@@ -507,6 +546,8 @@ onMounted(() => {
             <button
               type="button"
               class="w-full py-1 bg-emerald-500 hover:bg-emerald-600 rounded-lg text-xs font-bold text-white shadow transition-colors"
+              :disabled="!!selectingUrl"
+              @click.stop="handleSelect(item.rawUrl)"
             >
               设为壁纸
             </button>
@@ -525,6 +566,41 @@ onMounted(() => {
         />
       </div>
     </div>
+
+    <NModal v-model:show="showPreview" :auto-focus="false">
+      <div v-if="previewItem" class="wallhaven-preview" role="dialog" aria-modal="true" :aria-label="`壁纸预览：Wallhaven ${previewItem.id}`" tabindex="-1" @keydown="handlePreviewKeydown">
+        <div class="wallhaven-preview-stage">
+          <img v-if="!previewRawLoaded" :src="previewItem.thumbUrl" alt="" aria-hidden="true" class="wallhaven-preview-image is-thumb">
+          <img :key="previewItem.rawUrl" :src="previewItem.rawUrl" :alt="`Wallhaven ${previewItem.id}`" class="wallhaven-preview-image" :class="{ 'is-loaded': previewRawLoaded }" @load="previewRawLoaded = true">
+          <span v-if="!previewRawLoaded" class="wallhaven-preview-loading">正在加载原图…</span>
+          <button type="button" class="wallhaven-preview-nav is-prev" aria-label="上一张" :disabled="previewIndex <= 0" @click="stepPreview(-1)">
+            <SvgIcon icon="material-symbols:chevron-left-rounded" />
+          </button>
+          <button type="button" class="wallhaven-preview-nav is-next" aria-label="下一张" :disabled="previewIndex >= wallhavenList.length - 1" @click="stepPreview(1)">
+            <SvgIcon icon="material-symbols:chevron-right-rounded" />
+          </button>
+          <button type="button" class="wallhaven-preview-close" aria-label="关闭预览" @click="showPreview = false">
+            <SvgIcon icon="material-symbols:close-rounded" />
+          </button>
+        </div>
+        <div class="wallhaven-preview-bar">
+          <div class="wallhaven-preview-meta">
+            <strong>{{ previewItem.resolution }}</strong>
+            <span class="capitalize">{{ previewItem.category }}</span>
+            <span><SvgIcon icon="material-symbols:favorite" class="text-rose-400" /> {{ previewItem.favorites }}</span>
+            <a :href="previewItem.url" target="_blank" rel="noopener noreferrer">在 Wallhaven 查看</a>
+          </div>
+          <div class="wallhaven-preview-actions">
+            <NButton v-if="isWallpaperPicker" secondary :disabled="savingFavorite" @click="toggleFavorite({ url: previewItem.rawUrl, thumbnail: previewItem.thumbUrl || previewItem.rawUrl, title: `Wallhaven ${previewItem.id}`, source: 'wallhaven' })">
+              {{ isFavorite(previewItem.rawUrl) ? '取消喜欢' : '加入喜欢' }}
+            </NButton>
+            <NButton type="primary" :loading="selectingUrl === previewItem.rawUrl" :disabled="!!selectingUrl && selectingUrl !== previewItem.rawUrl" @click="applyPreview">
+              {{ isWallpaperPicker ? '设为壁纸' : '使用这张图' }}
+            </NButton>
+          </div>
+        </div>
+      </div>
+    </NModal>
   </div>
 </template>
 
@@ -575,6 +651,27 @@ onMounted(() => {
 .quick-tags { gap: 8px; }
 .wallhaven-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 18px; align-content: start; }
 .wallhaven-thumbnail { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; }
+.wallhaven-card:focus-visible { outline: 2px solid var(--pn-color-accent); outline-offset: 2px; }
+.wallhaven-preview { display: flex; width: min(1100px, calc(100vw - 32px)); max-height: calc(100vh - 48px); flex-direction: column; overflow: hidden; border: 1px solid rgb(255 255 255 / 12%); border-radius: 16px; background: #0b0b0f; color: #f4f4f5; outline: none; box-shadow: 0 24px 80px rgb(0 0 0 / 55%); }
+.wallhaven-preview-stage { position: relative; display: grid; min-height: 240px; place-items: center; background: #000; }
+.wallhaven-preview-image { grid-area: 1 / 1; display: block; max-width: 100%; max-height: calc(100vh - 140px); object-fit: contain; opacity: 0; transition: opacity .3s ease; }
+.wallhaven-preview-image.is-thumb { width: 100%; opacity: 1; filter: blur(6px); }
+.wallhaven-preview-image.is-loaded { opacity: 1; filter: none; }
+.wallhaven-preview-loading { position: absolute; bottom: 12px; left: 50%; padding: 4px 12px; border-radius: 999px; background: rgb(0 0 0 / 60%); font-size: 12px; transform: translateX(-50%); }
+.wallhaven-preview-nav, .wallhaven-preview-close { position: absolute; display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid rgb(255 255 255 / 25%); border-radius: 50%; background: rgb(0 0 0 / 50%); color: white; cursor: pointer; backdrop-filter: blur(12px); }
+.wallhaven-preview-nav :deep(svg), .wallhaven-preview-close :deep(svg) { width: 24px; height: 24px; }
+.wallhaven-preview-nav { top: 50%; transform: translateY(-50%); }
+.wallhaven-preview-nav.is-prev { left: 12px; }
+.wallhaven-preview-nav.is-next { right: 12px; }
+.wallhaven-preview-nav:disabled { cursor: default; opacity: .3; }
+.wallhaven-preview-close { top: 12px; right: 12px; }
+.wallhaven-preview-nav:focus-visible, .wallhaven-preview-close:focus-visible { outline: 2px solid var(--pn-color-accent); }
+.wallhaven-preview-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; }
+.wallhaven-preview-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; font-size: 13px; color: #d4d4d8; }
+.wallhaven-preview-meta strong { color: #34d399; }
+.wallhaven-preview-meta span { display: inline-flex; align-items: center; gap: 4px; }
+.wallhaven-preview-meta a { color: #a1a1aa; text-decoration: underline; }
+.wallhaven-preview-actions { display: flex; gap: 8px; }
 @container (max-width: 580px) {
   .wallhaven-filters { grid-template-columns: 1fr; gap: 12px; }
   .wallhaven-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
