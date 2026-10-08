@@ -19,12 +19,32 @@ export interface WeatherResponse {
     isDay: boolean
     temperatureUnit: string
     windSpeedUnit: string
+    // Added for the detail view; older cached responses may not carry them.
+    windDirection?: number
+    pressure?: number
+    visibility?: number
+    visibilityUnit?: string
+    uvIndex?: number
+    precipitation?: number
+    precipitationUnit?: string
+    dewPoint?: number
   }
+  hourly?: Array<{
+    time: string
+    temperature: number
+    weatherCode: number
+    isDay: boolean
+    precipitationProbability: number
+  }>
   daily?: Array<{
     date: string
     weatherCode: number
     temperatureMax: number
     temperatureMin: number
+    sunrise?: string
+    sunset?: string
+    uvIndexMax?: number
+    precipitationProbability?: number
   }>
   units: 'metric' | 'imperial'
   fetchedAt: string

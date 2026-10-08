@@ -24,10 +24,10 @@ func TestClientFetchesAndCachesWeather(t *testing.T) {
 			_, _ = response.Write([]byte(`{"results":[{"name":"北京","admin1":"北京市","country":"中国","latitude":39.9042,"longitude":116.4074,"timezone":"Asia/Shanghai"}]}`))
 		case "/forecast":
 			forecastCalls.Add(1)
-			if request.URL.Query().Get("forecast_days") != "6" || request.URL.Query().Get("daily") != "weather_code,temperature_2m_max,temperature_2m_min" {
+			if request.URL.Query().Get("forecast_days") != "10" || request.URL.Query().Get("daily") != "weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max,precipitation_probability_max" {
 				t.Fatalf("unexpected forecast query: %s", request.URL.RawQuery)
 			}
-			_, _ = response.Write([]byte(`{"current":{"time":"2026-08-13T12:00","temperature_2m":31.5,"relative_humidity_2m":52,"apparent_temperature":33.1,"is_day":1,"weather_code":2,"wind_speed_10m":8.4},"current_units":{"temperature_2m":"°C","wind_speed_10m":"km/h"},"daily":{"time":["2026-08-13","2026-08-14"],"weather_code":[2,61],"temperature_2m_max":[34,29],"temperature_2m_min":[25,23]}}`))
+			_, _ = response.Write([]byte(`{"current":{"time":"2026-08-13T12:00","temperature_2m":31.5,"relative_humidity_2m":52,"apparent_temperature":33.1,"is_day":1,"weather_code":2,"wind_speed_10m":8.4},"current_units":{"temperature_2m":"°C","wind_speed_10m":"km/h"},"hourly":{"time":["2026-08-13T10:00","2026-08-13T11:00","2026-08-13T12:00","2026-08-13T13:00"],"temperature_2m":[29,30,31.5,32],"weather_code":[1,2,2,3],"is_day":[1,1,1,1],"precipitation_probability":[0,5,null,20]},"daily":{"time":["2026-08-13","2026-08-14"],"weather_code":[2,61],"temperature_2m_max":[34,29],"temperature_2m_min":[25,23],"sunrise":["2026-08-13T05:23","2026-08-14T05:24"],"sunset":["2026-08-13T19:15","2026-08-14T19:14"],"uv_index_max":[8.1,null],"precipitation_probability_max":[10,80]}}`))
 		default:
 			http.NotFound(response, request)
 		}
@@ -39,8 +39,12 @@ func TestClientFetchesAndCachesWeather(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if first.Cached || first.Stale || first.Current.Temperature != 31.5 || first.Location.Country != "中国" || len(first.Daily) != 2 || first.Daily[1].WeatherCode != 61 {
+	if first.Cached || first.Stale || first.Current.Temperature != 31.5 || first.Location.Country != "中国" || len(first.Daily) != 2 || first.Daily[1].WeatherCode != 61 ||
+		first.Daily[0].Sunrise != "2026-08-13T05:23" || first.Daily[1].PrecipitationProbability != 80 || first.Daily[1].UVIndexMax != 0 {
 		t.Fatalf("unexpected first result: %#v", first)
+	}
+	if len(first.Hourly) != 2 || first.Hourly[0].Time != "2026-08-13T12:00" || first.Hourly[0].PrecipitationProbability != 0 || first.Hourly[1].PrecipitationProbability != 20 {
+		t.Fatalf("expected hourly slots from the current hour: %#v", first.Hourly)
 	}
 	second, err := client.Get(context.Background(), "北京", "metric", "zh-CN")
 	if err != nil {
