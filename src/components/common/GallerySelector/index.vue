@@ -126,7 +126,23 @@ const wallhavenTotalPages = ref(1)
 const wallhavenTotal = ref(0)
 const wallhavenQuery = ref('')
 const wallhavenSorting = ref<'toplist' | 'hot' | 'views' | 'random' | 'date_added'>('toplist')
-const wallhavenCategories = ref('110') // 110: General + Anime
+const wallhavenCategories = ref('111') // 位串：综合 / 动漫 / 人物，默认全选
+const wallhavenCategoryOptions = [
+  { label: '综合', bit: 0 },
+  { label: '动漫', bit: 1 },
+  { label: '人物', bit: 2 },
+]
+function isCategoryOn(bit: number) {
+  return wallhavenCategories.value[bit] === '1'
+}
+// 可多选，但至少保留一个分类
+function toggleCategory(bit: number) {
+  const bits = wallhavenCategories.value.split('')
+  bits[bit] = bits[bit] === '1' ? '0' : '1'
+  if (!bits.includes('1')) return
+  wallhavenCategories.value = bits.join('')
+  handleWallhavenSearch()
+}
 
 const wallhavenSortingOptions = [
   { label: '最热榜单', value: 'toplist' },
@@ -138,7 +154,7 @@ const wallhavenSortingOptions = [
 
 // cat 为 Wallhaven 分类位：General / Anime / People；内容分级仍由 purity 决定
 const quickTags = [
-  { label: '🌟 精选推荐', q: '', cat: '110' },
+  { label: '🌟 精选推荐', q: '', cat: '111' },
   { label: '🎨 动漫二次元', q: 'anime', cat: '010' },
   { label: '🌄 自然风光', q: 'nature landscape', cat: '100' },
   { label: '🏙️ 赛博朋克', q: 'cyberpunk', cat: '110' },
@@ -268,9 +284,6 @@ function afterSelectChange(handler: () => unknown) {
 }
 
 function handleWallhavenSearch() {
-  // 快捷标签自带分类；手动输入的关键词在全部分类中搜索
-  const tag = quickTags.find(item => item.q === wallhavenQuery.value.trim())
-  wallhavenCategories.value = tag ? tag.cat : '111'
   wallhavenPage.value = 1
   void fetchWallhaven()
 }
@@ -423,6 +436,22 @@ onMounted(() => {
         <label class="wallhaven-filter"><span>内容分级</span>
           <NSelect v-model:value="wallhavenPurity" :options="purityOptions" aria-label="Wallhaven 内容范围" @update-value="afterSelectChange(handleWallhavenSearch)" />
         </label>
+        <div class="wallhaven-filter" role="group" aria-label="壁纸分类，可多选">
+          <span>壁纸分类 · 可多选</span>
+          <div class="category-toggles">
+            <button
+              v-for="option in wallhavenCategoryOptions"
+              :key="option.bit"
+              type="button"
+              class="tag-btn category-toggle"
+              :class="{ active: isCategoryOn(option.bit) }"
+              :aria-pressed="isCategoryOn(option.bit)"
+              @click="toggleCategory(option.bit)"
+            >
+              {{ option.label }}
+            </button>
+          </div>
+        </div>
       </div>
       <p v-if="!wallhavenApiKey" class="wallhaven-rating-hint">NSFW 需要配置有效的 Wallhaven 账号 API Key。</p>
 
@@ -648,7 +677,9 @@ onMounted(() => {
 .gallery-selection-status { font-size: 12px; color: var(--pn-color-text-secondary); }
 .wallhaven-toolbar { display: flex; flex-direction: column; gap: 16px; margin: 4px 0 18px; }
 .wallhaven-search-row { width: 100%; }
-.wallhaven-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.wallhaven-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.category-toggles { display: flex; min-height: 34px; align-items: center; gap: 8px; }
+.category-toggle { flex: 1 1 0; padding: 8px 0; font-size: 12px; }
 .wallhaven-filter { display: flex; min-width: 0; flex-direction: column; gap: 8px; }
 .wallhaven-filter > span { font-size: 12px; color: var(--pn-color-text-secondary); }
 .wallhaven-rating-hint { margin: -6px 0 0; font-size: 11px; color: var(--pn-color-text-secondary); }
