@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   NButton,
   NInput,
@@ -80,9 +80,9 @@ watch(apiKeyStorageKey, key => {
   wallhavenPurity.value = '100'
 }, { immediate: true })
 const purityOptions = computed(() => [
-  { label: 'SFW · 安全', value: '100' },
-  { label: 'Sketchy · 中间级', value: '010' },
-  { label: 'NSFW · 成人', value: '001', disabled: !wallhavenApiKey.value },
+  { label: 'SFW', value: '100' },
+  { label: 'Sketchy', value: '010' },
+  { label: 'NSFW', value: '001', disabled: !wallhavenApiKey.value },
 ])
 async function saveApiKey() {
   const key = apiKeyDraft.value.trim()
@@ -262,7 +262,15 @@ function handleQuickTagClick(tag: typeof quickTags[number]) {
   void fetchWallhaven()
 }
 
+// naive-ui 先调用 @update-value 再更新 v-model，等值写入后再请求，否则会用旧筛选条件
+function afterSelectChange(handler: () => unknown) {
+  void nextTick(handler)
+}
+
 function handleWallhavenSearch() {
+  // 快捷标签自带分类；手动输入的关键词在全部分类中搜索
+  const tag = quickTags.find(item => item.q === wallhavenQuery.value.trim())
+  wallhavenCategories.value = tag ? tag.cat : '111'
   wallhavenPage.value = 1
   void fetchWallhaven()
 }
@@ -363,7 +371,7 @@ onMounted(() => {
         :options="sourceOptions"
         size="small"
         style="width: 140px"
-        @update-value="fetchImages"
+        @update-value="afterSelectChange(fetchImages)"
       />
       <NButton v-if="source === 'private' || source === 'public'" size="small" secondary @click="fetchImages">
         刷新图库
@@ -409,14 +417,11 @@ onMounted(() => {
             v-model:value="wallhavenSorting"
             :options="wallhavenSortingOptions"
             aria-label="Wallhaven 排序方式"
-            @update-value="handleWallhavenSearch"
+            @update-value="afterSelectChange(handleWallhavenSearch)"
           />
         </label>
         <label class="wallhaven-filter"><span>内容分级</span>
-          <NSelect v-model:value="wallhavenPurity" :options="purityOptions" aria-label="Wallhaven 内容范围" @update-value="handleWallhavenSearch" />
-        </label>
-        <label class="wallhaven-filter"><span>壁纸分类</span>
-          <NSelect v-model:value="wallhavenCategories" :options="[{ label: '全部分类', value: '111' }, { label: '综合 + 动漫', value: '110' }, { label: '综合', value: '100' }, { label: '动漫', value: '010' }, { label: '人物', value: '001' }]" aria-label="Wallhaven 分类" @update-value="handleWallhavenSearch" />
+          <NSelect v-model:value="wallhavenPurity" :options="purityOptions" aria-label="Wallhaven 内容范围" @update-value="afterSelectChange(handleWallhavenSearch)" />
         </label>
       </div>
       <p v-if="!wallhavenApiKey" class="wallhaven-rating-hint">NSFW 需要配置有效的 Wallhaven 账号 API Key。</p>
@@ -643,7 +648,7 @@ onMounted(() => {
 .gallery-selection-status { font-size: 12px; color: var(--pn-color-text-secondary); }
 .wallhaven-toolbar { display: flex; flex-direction: column; gap: 16px; margin: 4px 0 18px; }
 .wallhaven-search-row { width: 100%; }
-.wallhaven-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.wallhaven-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .wallhaven-filter { display: flex; min-width: 0; flex-direction: column; gap: 8px; }
 .wallhaven-filter > span { font-size: 12px; color: var(--pn-color-text-secondary); }
 .wallhaven-rating-hint { margin: -6px 0 0; font-size: 11px; color: var(--pn-color-text-secondary); }
