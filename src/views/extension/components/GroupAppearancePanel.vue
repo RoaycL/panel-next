@@ -196,7 +196,7 @@ async function save() {
 .group-image-editor, .group-text-editor { display: grid; gap: 10px; }
 .group-image-actions, .group-appearance-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .group-image-actions :deep(.n-upload) { width: auto; }
-button:disabled { cursor: not-allowed; opacity: .6; }
-button:focus-visible { outline: 2px solid var(--pn-color-accent); outline-offset: 2px; }
+button:not(.n-button):disabled { cursor: not-allowed; opacity: .6; }
+button:not(.n-button):focus-visible { outline: 2px solid var(--pn-color-accent); outline-offset: 2px; }
 @media (max-width: 760px) { .group-appearance-layout { grid-template-columns: minmax(0, 1fr); } .group-icon-preview { grid-row: 1; grid-template-columns: 1fr auto 1fr; align-items: center; } .group-icon-presets { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 </style>
