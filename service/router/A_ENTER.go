@@ -46,6 +46,8 @@ func InitRouters(addr string) error {
 		router.Static("/custom", webPath+"/custom")
 		router.StaticFile("/favicon.ico", webPath+"/favicon.ico")
 		router.StaticFile("/favicon.svg", webPath+"/favicon.svg")
+		router.StaticFile("/pwa-192x192.png", webPath+"/pwa-192x192.png")
+		router.StaticFile("/pwa-512x512.png", webPath+"/pwa-512x512.png")
 	}
 
 	// 上传的文件
