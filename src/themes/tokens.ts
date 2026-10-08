@@ -223,8 +223,8 @@ export function extensionDefaultTokens(mode: ResolvedThemeMode, overrides?: Them
   const text = dark ? '#f5f5f5' : '#171717'
   const secondary = dark ? '#d4d4d4' : '#404040'
   const muted = dark ? '#a3a3a3' : '#737373'
-  // Night glass is a cool, see-through smoke tint: the blurred wallpaper keeps its colour.
-  const surface = dark ? 'rgba(20,24,34,0.56)' : 'rgba(255,255,255,0.7)'
+  // Day and night glass share one opacity; night is a cool smoke tint, day a white one.
+  const surface = dark ? 'rgba(20,24,34,0.56)' : 'rgba(255,255,255,0.56)'
   const raised = dark ? '#262626' : '#f5f5f5'
   const border = dark ? '#383838' : '#e5e5e5'
   const accent = dark ? '#e5e5e5' : '#262626'
@@ -246,8 +246,8 @@ export function extensionDefaultTokens(mode: ResolvedThemeMode, overrides?: Them
     bookmark: { cardBackground: surface, cardBorder: border, cardShadow: shadow, titleColor: text, descriptionColor: muted, iconBackground: dark ? '#141414' : '#ffffff', iconRadius: '16px' },
     widget: { background: surface, border, shadow, textColor: text, mutedText: muted, loadingColor: muted, retryBackground: raised, retryBorder: border, chartColors: ['#72977e', '#9aaca0', '#b4a788', '#758c92', '#b3867f'] },
     sidebar: { background: surface, border, hoverBackground: raised, activeBackground: soft, textColor: secondary, activeTextColor: accent },
-    modal: { background: dark ? 'rgba(22,26,38,0.5)' : surface, overlay: 'rgba(0,0,0,0.28)', border, titleTextColor: text, contentTextColor: secondary },
-    notification: { background: dark ? 'rgba(24,28,40,0.8)' : 'rgba(255,255,255,0.9)', titleTextColor: text, contentTextColor: secondary, boxShadow: shadow },
+    modal: { background: dark ? 'rgba(22,26,38,0.5)' : 'rgba(255,255,255,0.5)', overlay: 'rgba(0,0,0,0.28)', border, titleTextColor: text, contentTextColor: secondary },
+    notification: { background: dark ? 'rgba(24,28,40,0.8)' : 'rgba(255,255,255,0.8)', titleTextColor: text, contentTextColor: secondary, boxShadow: shadow },
     icon: { defaultColor: secondary, activeColor: accent },
   }
   const base = completeTokens(dark ? DEFAULT_DARK_TOKENS : DEFAULT_LIGHT_TOKENS, palette)

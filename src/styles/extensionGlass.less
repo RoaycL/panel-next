@@ -10,8 +10,8 @@ body:is([data-panel-runtime='extension'], [data-panel-runtime='web']),
   --pn-glass-detail: color-mix(in srgb, var(--pn-glass-panel) 50%, var(--pn-glass-control));
   --pn-glass-floating: var(--pn-notification-background, rgba(255,255,255,.9));
   --pn-glass-border: var(--pn-color-border, rgba(255,255,255,.58));
-  --pn-glass-filter: blur(var(--pn-effect-blur, 32px)) saturate(125%);
-  --pn-glass-control-filter: blur(calc(var(--pn-effect-blur, 32px) * .5625)) saturate(115%);
+  --pn-glass-filter: blur(calc(var(--pn-effect-blur, 32px) * 1.25)) saturate(170%);
+  --pn-glass-control-filter: blur(calc(var(--pn-effect-blur, 32px) * .75)) saturate(160%);
   --pn-glass-sheen: linear-gradient(145deg, color-mix(in srgb, var(--pn-glass-border) 28%, transparent), transparent 55%);
   --pn-glass-highlight: inset 0 1px 0 var(--pn-glass-border);
   --pn-glass-shadow: var(--pn-effect-shadow-high, 0 20px 64px rgba(0,0,0,.15));
@@ -33,12 +33,9 @@ body:is([data-panel-runtime='extension'], [data-panel-runtime='web']),
 
 }
 
-/* Night: stronger saturation lets wallpaper colour through the smoke tint, and
-   a fainter sheen keeps the glass from washing out to grey. */
+/* Night: a fainter sheen keeps the smoke tint from washing out to grey. */
 html.dark body:is([data-panel-runtime='extension'], [data-panel-runtime='web']),
 html.dark .pn-theme-root:is([data-surface='extension'], [data-surface='web']) {
-  --pn-glass-filter: blur(calc(var(--pn-effect-blur, 32px) * 1.25)) saturate(170%);
-  --pn-glass-control-filter: blur(calc(var(--pn-effect-blur, 32px) * .75)) saturate(160%);
   --pn-glass-sheen: linear-gradient(145deg, rgba(255,255,255,.06), transparent 50%);
 }
 
