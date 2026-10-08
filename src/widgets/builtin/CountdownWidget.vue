@@ -6,6 +6,7 @@ const props = withDefaults(defineProps<{
   title?: string
   date?: string
   repeat?: 'none' | 'yearly'
+  expanded?: boolean
 }>(), {
   title: '',
   date: '',
@@ -58,6 +59,17 @@ const statusIcon = computed(() => {
   return status.value.kind === 'remaining' ? '⏳' : '📅'
 })
 const formattedDate = computed(() => status.value ? status.value.date.toLocaleDateString(locale.value) : '')
+const fullDate = computed(() => status.value ? new Intl.DateTimeFormat(locale.value, { dateStyle: 'full' }).format(status.value.date) : '')
+const stats = computed(() => {
+  if (!status.value || status.value.kind === 'today')
+    return []
+  const days = status.value.days
+  return [
+    { label: t('countdown.inWeeks'), value: t('countdown.weeksDays', { weeks: Math.floor(days / 7), days: days % 7 }) },
+    { label: t('countdown.inMonths'), value: t('countdown.months', { count: (days / 30.44).toFixed(days < 305 ? 1 : 0) }) },
+    { label: t('countdown.inHours'), value: t('countdown.hours', { count: (days * 24).toLocaleString(locale.value) }) },
+  ]
+})
 
 function parseLocalDate(value: string): Date | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value))
@@ -94,7 +106,31 @@ function clampToMonthEnd(year: number, month: number, day: number) {
 </script>
 
 <template>
-  <section class="countdown-card" :aria-label="t('countdown.title')">
+  <section v-if="expanded" class="countdown-card countdown-detail" :class="status ? `is-${status.kind}` : 'is-invalid'" :aria-label="t('countdown.title')">
+    <header class="cd-header">
+      <span class="cd-icon" aria-hidden="true">{{ statusIcon }}</span>
+      <span class="cd-title" :title="displayTitle">{{ displayTitle }}</span>
+      <span v-if="repeat === 'yearly'" class="cd-badge">{{ t('countdown.yearly') }}</span>
+    </header>
+    <div v-if="status" class="cd-hero">
+      <strong v-if="status.kind === 'today'" class="cd-today">{{ t('countdown.today') }}</strong>
+      <template v-else>
+        <strong class="cd-number">{{ status.days }}</strong>
+        <span class="cd-unit">{{ status.kind === 'remaining' ? t('countdown.daysRemaining') : t('countdown.daysPassed') }}</span>
+      </template>
+      <span class="cd-date">{{ fullDate }}</span>
+    </div>
+    <div v-else class="cd-hero">
+      <span class="cd-unit">{{ t('countdown.invalid') }}</span>
+    </div>
+    <dl v-if="stats.length" class="cd-stats">
+      <div v-for="stat in stats" :key="stat.label" class="cd-stat">
+        <dt>{{ stat.label }}</dt>
+        <dd>{{ stat.value }}</dd>
+      </div>
+    </dl>
+  </section>
+  <section v-else class="countdown-card" :aria-label="t('countdown.title')">
     <header class="countdown-header">
       <span class="countdown-icon" aria-hidden="true">{{ statusIcon }}</span>
       <span class="countdown-name" :title="displayTitle">{{ displayTitle }}</span>
@@ -213,6 +249,30 @@ function clampToMonthEnd(year: number, month: number, day: number) {
   flex: 1;
   display: grid;
   place-items: center;
+}
+
+/* Enlarged: one bold colour card, big number, and the same span in other units. */
+.countdown-detail { --cd-from: #ff9f0a; --cd-to: #ff375f; justify-content: flex-start; gap: 0; height: 100%; padding: 26px 30px 24px; border: 0; border-radius: 22px; color: white; background: radial-gradient(circle at 85% 0%, rgb(255 255 255 / 22%), transparent 45%), linear-gradient(150deg, var(--cd-from), var(--cd-to)); }
+.countdown-detail.is-passed { --cd-from: #5e5ce6; --cd-to: #0a84ff; }
+.countdown-detail.is-today { --cd-from: #ffd60a; --cd-to: #ff9f0a; }
+.countdown-detail.is-invalid { --cd-from: #636366; --cd-to: #3a3a3c; }
+.cd-header { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.cd-icon { display: grid; flex: none; width: 36px; height: 36px; place-items: center; border-radius: 12px; background: rgb(255 255 255 / 22%); font-size: 20px; }
+.cd-title { overflow: hidden; font-size: 22px; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; }
+.cd-badge { flex: none; padding: 3px 10px; border-radius: 999px; background: rgb(255 255 255 / 22%); font-size: 12px; font-weight: 600; }
+.cd-hero { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 0; text-align: center; }
+.cd-number { font-size: clamp(88px, 18cqw, 168px); font-weight: 700; line-height: .95; letter-spacing: -.05em; font-variant-numeric: tabular-nums; text-shadow: 0 6px 30px rgb(0 0 0 / 15%); }
+.cd-unit { font-size: 22px; font-weight: 600; opacity: .9; }
+.cd-today { font-size: clamp(48px, 9cqw, 88px); font-weight: 800; line-height: 1.1; }
+.cd-date { margin-top: 10px; padding: 6px 14px; border-radius: 999px; background: rgb(0 0 0 / 14%); font-size: 15px; font-weight: 500; }
+.cd-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0; }
+.cd-stat { padding: 14px 16px; border-radius: 16px; background: rgb(255 255 255 / 16%); backdrop-filter: blur(12px); }
+.cd-stat dt { font-size: 12px; font-weight: 600; opacity: .8; }
+.cd-stat dd { margin: 4px 0 0; font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+@container (max-width: 560px) {
+  .countdown-detail { padding: 18px 16px; }
+  .cd-stats { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .cd-stat { display: flex; align-items: baseline; justify-content: space-between; padding: 10px 14px; }
 }
 
 @media (max-width: 640px) {

@@ -533,7 +533,14 @@
     "daysRemaining": "天后",
     "daysPassed": "天前",
     "today": "就是今天",
-    "invalid": "日期无效"
+    "invalid": "日期无效",
+    "weeksDays": "{weeks} 周 {days} 天",
+    "hours": "约 {count} 小时",
+    "months": "约 {count} 个月",
+    "yearly": "每年重复",
+    "inWeeks": "按周",
+    "inHours": "按小时",
+    "inMonths": "按月"
   },
   "workdayWidget": {
     "title": "下班倒计时",
@@ -542,7 +549,12 @@
     "invalid": "时间无效",
     "until": "距离 {time} 下班",
     "localTime": "按本地时间计算",
-    "timeHint": "24 小时制，例如 18:00"
+    "timeHint": "24 小时制，例如 18:00",
+    "hours": "时",
+    "minutes": "分",
+    "seconds": "秒",
+    "offAt": "{time} 下班",
+    "week": "本周"
   },
   "extensionCanvas": {
     "summary": "{bookmarks} 个书签 · {widgets} 个组件",
@@ -694,13 +706,18 @@
     "placeholder": "记下此刻的想法…",
     "saved": "已保存",
     "saving": "保存中…",
-    "error": "保存失败"
+    "error": "保存失败",
+    "characters": "{count} 字"
   },
   "calendarWidget": {
     "title": "月历",
     "previous": "上个月",
     "next": "下个月",
-    "today": "今天"
+    "today": "今天",
+    "weekNumber": "第 {week} 周",
+    "daysAhead": "{count} 天后",
+    "daysAgo": "{count} 天前",
+    "lunar": "农历{value}"
   },
   "todoWidget": {
     "title": "待办事项",
@@ -709,7 +726,12 @@
     "newItem": "新待办事项",
     "add": "添加待办",
     "remove": "删除待办：{item}",
-    "empty": "暂时没有待办，开始添加吧"
+    "empty": "暂时没有待办，开始添加吧",
+    "completed": "已完成 {count} 项",
+    "show": "显示",
+    "hide": "隐藏",
+    "allDone": "全部完成，干得漂亮",
+    "progress": "{done}/{total} 已完成"
   },
   "widgetLayout": {
     "edit": "编辑组件",

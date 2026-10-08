@@ -532,7 +532,14 @@
     "daysRemaining": "days to go",
     "daysPassed": "days ago",
     "today": "It's today",
-    "invalid": "Invalid date"
+    "invalid": "Invalid date",
+    "weeksDays": "{weeks} wk {days} d",
+    "hours": "About {count} hours",
+    "months": "About {count} months",
+    "yearly": "Repeats yearly",
+    "inWeeks": "In weeks",
+    "inHours": "In hours",
+    "inMonths": "In months"
   },
   "workdayWidget": {
     "title": "End-of-day countdown",
@@ -541,7 +548,12 @@
     "invalid": "Invalid time",
     "until": "Until {time}",
     "localTime": "Based on local time",
-    "timeHint": "24-hour format, e.g. 18:00"
+    "timeHint": "24-hour format, e.g. 18:00",
+    "hours": "Hours",
+    "minutes": "Minutes",
+    "seconds": "Seconds",
+    "offAt": "Off at {time}",
+    "week": "This week"
   },
   "extensionCanvas": {
     "summary": "{bookmarks} bookmarks · {widgets} widgets",
@@ -693,13 +705,18 @@
     "placeholder": "Write down a thought…",
     "saved": "Saved",
     "saving": "Saving…",
-    "error": "Save failed"
+    "error": "Save failed",
+    "characters": "{count} characters"
   },
   "calendarWidget": {
     "title": "Calendar",
     "previous": "Previous month",
     "next": "Next month",
-    "today": "Today"
+    "today": "Today",
+    "weekNumber": "Week {week}",
+    "daysAhead": "In {count} days",
+    "daysAgo": "{count} days ago",
+    "lunar": "Lunar {value}"
   },
   "todoWidget": {
     "title": "To-do",
@@ -708,7 +725,12 @@
     "newItem": "New task",
     "add": "Add task",
     "remove": "Remove task: {item}",
-    "empty": "No tasks yet. Add one above."
+    "empty": "No tasks yet. Add one above.",
+    "completed": "Completed ({count})",
+    "show": "Show",
+    "hide": "Hide",
+    "allDone": "All done. Nice work!",
+    "progress": "{done}/{total} done"
   },
   "widgetLayout": {
     "edit": "Edit widgets",
