@@ -1162,7 +1162,9 @@ const activeCanvasItems = computed<ExtensionCanvasItem[]>({
     const bookmarks = activeGroupItems.value
       .map(card => ({ key: bookmarkCanvasKey(card), kind: 'bookmark' as const, card }))
     const savedOrder = pageKey ? widgetPreferences.value.pageLayouts[pageKey]?.itemOrder ?? [] : []
-    return orderedCanvasItems([...widgetGroups, ...bookmarks], savedOrder)
+    // Unsorted pages list bookmarks first: widgets placed ahead of them leave
+    // narrow grid gaps that the dense flow fills with a column of bookmarks.
+    return orderedCanvasItems([...bookmarks, ...widgetGroups], savedOrder)
   },
   set: (items) => {
     const pageKey = readyPageLayoutKey.value
@@ -1191,6 +1193,42 @@ const activeCanvasItems = computed<ExtensionCanvasItem[]>({
     isWidgetLayoutDirty.value = true
   },
 })
+const canTidyCanvas = computed(() => {
+  const kinds = activeCanvasItems.value.map(item => item.kind)
+  return kinds.includes('widget') && kinds.lastIndexOf('bookmark') > kinds.indexOf('widget')
+})
+
+async function tidyActiveCanvas() {
+  if (!readyPageLayoutKey.value)
+    return
+  const items = activeCanvasItems.value
+  activeCanvasItems.value = [...items.filter(item => item.kind === 'bookmark'), ...items.filter(item => item.kind === 'widget')]
+  if (await persistExtensionWidgets())
+    ms.success('已整理：书签在前，小组件在后')
+}
+
+const longPressKey = ref<string | null>(null)
+let longPressOrigin: { x: number, y: number } | null = null
+
+function startLongPressHint(event: PointerEvent, key: string) {
+  if (extensionWidgetEditMode.value || event.button !== 0 || activeCanvasItems.value.length < 2)
+    return
+  if ((event.target as Element | null)?.closest('input, textarea, button, a, select, [contenteditable="true"], [data-no-drag]'))
+    return
+  longPressKey.value = key
+  longPressOrigin = { x: event.clientX, y: event.clientY }
+}
+
+function moveLongPressHint(event: PointerEvent) {
+  if (longPressOrigin && Math.hypot(event.clientX - longPressOrigin.x, event.clientY - longPressOrigin.y) > 8)
+    endLongPressHint()
+}
+
+function endLongPressHint() {
+  longPressKey.value = null
+  longPressOrigin = null
+}
+
 const bookmarkLayoutChoices: readonly ExtensionBookmarkLayout[] = [
   { columns: 1, rows: 1 },
   { columns: 1, rows: 2 },
@@ -1352,6 +1390,7 @@ function goToIconLogin() {
 }
 
 function handleBookmarkDragStart() {
+  endLongPressHint()
   bookmarkSortSnapshot = activeGroupItems.value.map(item => ({ ...item }))
   dashboardOrderSnapshot = activeCanvasItems.value.map(item => item.key)
   suppressCardClickAfterDrag()
@@ -2091,11 +2130,19 @@ onUnmounted(() => {
                   <strong>正在编辑当前页面</strong>
                   <small>拖动调整位置，拖拽边缘改变大小</small>
                 </div>
+                <button v-if="canTidyCanvas" type="button" class="modal-secondary-action flex items-center gap-1" title="书签排在前面，小组件依次排在后面" @click="tidyActiveCanvas">
+                  <SvgIcon icon="mdi:view-dashboard-outline" class="w-4 h-4" />
+                  <span>一键整理</span>
+                </button>
                 <button type="button" class="modal-secondary-action flex items-center gap-1" :title="t('widgetLayout.done')" :aria-label="t('widgetLayout.done')" @click="extensionWidgetEditMode = false">
                   <SvgIcon icon="material-symbols:check-rounded" class="w-4 h-4" />
                   <span>{{ t('widgetLayout.done') }}</span>
                 </button>
               </div>
+              <button v-else-if="groupsReady && activeCanvasItems.length" type="button" class="dashboard-edit-entry" title="拖动排序、调整组件大小" @click="extensionWidgetEditMode = true">
+                <SvgIcon icon="material-symbols:edit-outline-rounded" />
+                <span>编辑布局</span>
+              </button>
             </div>
 
             <div ref="extensionWidgetGridRef" class="extension-dashboard-grid" :class="{ 'is-editing': extensionWidgetEditMode }">
@@ -2120,13 +2167,18 @@ onUnmounted(() => {
                   v-for="item in activeCanvasItems"
                   :key="item.key"
                   class="dashboard-canvas-item"
-                  :class="item.kind === 'widget' ? ['extension-widget-cell', { 'is-widget-hidden': item.group.members[0].hidden, 'is-resizing': resizingExtensionWidgetId === item.group.members[0].id }] : ['speed-card', { 'is-expanded': bookmarkLayout(item.card).columns > 1 || bookmarkLayout(item.card).rows > 1 }]"
+                  :class="[item.kind === 'widget' ? ['extension-widget-cell', { 'is-widget-hidden': item.group.members[0].hidden, 'is-resizing': resizingExtensionWidgetId === item.group.members[0].id }] : ['speed-card', { 'is-expanded': bookmarkLayout(item.card).columns > 1 || bookmarkLayout(item.card).rows > 1 }], { 'is-long-pressing': longPressKey === item.key }]"
                   :style="item.kind === 'widget' ? extensionWidgetCellStyle(item.group) : bookmarkCardStyle(item.card)"
                   :title="item.kind === 'bookmark' ? item.card.description || item.card.title : undefined"
                   :aria-label="item.kind === 'bookmark' ? item.card.title : `${widgetDefinitionTitle(widgetRegistry.get(item.group.members[0].type) ?? { type: item.group.members[0].type })} 小组件`"
                   :role="item.kind === 'bookmark' ? 'link' : undefined"
                   tabindex="0"
                   @click="item.kind === 'bookmark' && handleCardClick(item.card)"
+                  @pointerdown="startLongPressHint($event, item.key)"
+                  @pointermove="moveLongPressHint"
+                  @pointerup="endLongPressHint"
+                  @pointercancel="endLongPressHint"
+                  @pointerleave="endLongPressHint"
                   @contextmenu="item.kind === 'bookmark' ? handleCardContextMenu($event, item.card) : handleWidgetContextMenu($event, item.group.members[0])"
                   @keydown.enter.prevent="item.kind === 'bookmark' && handleCardClick(item.card)"
                   @keydown.space.prevent="item.kind === 'bookmark' && handleCardClick(item.card)"
@@ -3624,4 +3676,58 @@ onUnmounted(() => {
   backdrop-filter: var(--pn-glass-control-filter);
   box-shadow: var(--pn-glass-highlight);
 }
+/* Edit chrome lives in the caption strip under each widget, so it never covers the widget's own header. */
+.extension-dashboard-grid.is-editing .dashboard-widget-caption { visibility: hidden; }
+.extension-dashboard-grid .extension-widget-editor {
+  top: auto;
+  right: var(--dashboard-icon-inset);
+  bottom: 3px;
+  left: var(--dashboard-icon-inset);
+  max-width: none;
+  height: calc(var(--dashboard-caption-space) - 6px);
+  min-height: 0;
+  padding: 0 4px 0 2px;
+  overflow: hidden;
+  border-radius: 10px;
+  box-shadow: none;
+}
+.extension-dashboard-grid .extension-widget-editor .extension-widget-actions { margin-left: auto; }
+.extension-dashboard-grid .extension-widget-editor .extension-widget-actions button { height: 24px; }
+.extension-dashboard-grid .extension-widget-editor .extension-widget-actions button:not(.is-labelled) { width: 24px; min-width: 24px; }
+.extension-dashboard-grid .extension-widget-editor .extension-widget-handle { align-self: stretch; }
+@media (pointer: coarse), (max-width: 720px) {
+  .extension-dashboard-grid .extension-widget-editor { min-height: 0; padding: 0 4px; }
+  .extension-dashboard-grid .extension-widget-editor .extension-widget-actions button { height: 28px; }
+  .extension-dashboard-grid .extension-widget-editor .extension-widget-handle { min-height: 0; }
+}
+
+.dashboard-edit-entry {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--ext-border);
+  border-radius: 999px;
+  color: var(--ext-text-muted);
+  background: var(--ext-surface);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+}
+.dashboard-edit-entry svg { width: 15px; height: 15px; }
+.dashboard-edit-entry:hover { color: var(--ext-accent); border-color: var(--ext-accent); background: var(--ext-accent-soft); }
+.dashboard-edit-entry:focus-visible { outline: 2px solid var(--ext-accent); outline-offset: 2px; }
+
+/* Shrinks over the 480ms hold so a long press visibly turns into a drag. */
+.dashboard-canvas-item.is-long-pressing { transform: scale(.94); transition: transform 480ms cubic-bezier(.2,.8,.2,1); }
+.dashboard-canvas-item.is-long-pressing .card-icon-box { box-shadow: 0 0 0 3px color-mix(in srgb, var(--ext-accent) 70%, transparent), 0 10px 24px var(--ext-shadow); }
+
+/* The add tile matches a bookmark: same box, a visible dashed edge and the same label line. */
+.extension-dashboard-grid .dashboard-add-icon-symbol { border: 1.5px dashed color-mix(in srgb, var(--ext-text-muted) 55%, transparent); }
+.extension-dashboard-grid .dashboard-add-icon > span:last-child { line-height: 16px; }
+.extension-dashboard-grid .dashboard-add-icon:hover .dashboard-add-icon-symbol { border-color: var(--ext-accent); }
+.extension-dashboard-grid .dashboard-add-icon:hover .dashboard-add-icon-symbol svg { color: var(--ext-accent); }
 </style>
