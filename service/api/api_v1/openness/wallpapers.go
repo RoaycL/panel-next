@@ -11,12 +11,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Wallpapers 代理 Wallhaven 以外的壁纸源（Bing 每日、Unsplash、Pexels、Konachan、yande.re）。
+// Wallpapers 代理 Wallhaven 以外的壁纸源（Bing 每日、Konachan、yande.re）。
 func (a *Openness) Wallpapers(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	params := wallsource.SearchParams{
 		Source:  c.Query("source"),
-		APIKey:  c.GetHeader("X-Wallpaper-Api-Key"),
 		Query:   c.Query("q"),
 		Purity:  c.Query("purity"),
 		Sorting: c.Query("sorting"),

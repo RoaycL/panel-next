@@ -57,8 +57,6 @@ const favoriteSourceLabels: Record<FavoriteWallpaper['source'], string> = {
   imgbed: '外部图床',
   wallhaven: 'Wallhaven',
   bing: 'Bing 每日',
-  unsplash: 'Unsplash',
-  pexels: 'Pexels',
   konachan: 'Konachan',
   yandere: 'yande.re',
 }
@@ -105,20 +103,12 @@ const booruPurity = ref('100')
 const onlineError = ref('')
 
 const apiKeyStorageKey = computed(() => `WALLHAVEN_API_KEY_V1:${auth.userInfo?.id ?? 'guest'}`)
-const extraKeyStorageKey = (name: WallpaperProvider) => `WALLPAPER_API_KEY_V1:${name}:${auth.userInfo?.id ?? 'guest'}`
 const apiKeyDraft = ref('')
 const wallhavenApiKey = ref('')
 const wallhavenPurity = ref('100')
-const extraApiKeys = ref<Partial<Record<WallpaperProvider, string>>>({})
-const currentApiKey = computed(() => provider.value === 'wallhaven' ? wallhavenApiKey.value : extraApiKeys.value[provider.value] || '')
 watch(apiKeyStorageKey, key => {
   wallhavenApiKey.value = runtime.storage.getItem(key) || ''
-  const keys: Partial<Record<WallpaperProvider, string>> = {}
-  for (const item of wallpaperProviders) {
-    if (item.keyUrl && item.value !== 'wallhaven') keys[item.value] = runtime.storage.getItem(extraKeyStorageKey(item.value)) || ''
-  }
-  extraApiKeys.value = keys
-  apiKeyDraft.value = currentApiKey.value
+  apiKeyDraft.value = wallhavenApiKey.value
   wallhavenPurity.value = '100'
 }, { immediate: true })
 // 位串：SFW / Sketchy / NSFW，可多选；NSFW 需要 API Key
@@ -146,7 +136,6 @@ function toggleBooruPurity(bit: number) {
   handleOnlineSearch()
 }
 async function saveApiKey() {
-  if (provider.value !== 'wallhaven') { await saveExtraApiKey(); return }
   const key = apiKeyDraft.value.trim()
   const storageKey = apiKeyStorageKey.value
   if (key && !/^[a-z0-9]{16,128}$/i.test(key)) { ms.error('API Key 格式无效，请从 Wallhaven 账号设置复制'); return }
@@ -165,23 +154,6 @@ async function saveApiKey() {
   }
   ms.success(key ? 'API Key 已保存在本机' : 'API Key 已清除')
   handleWallhavenSearch()
-}
-async function saveExtraApiKey() {
-  const name = provider.value
-  const label = providerInfo.value.label
-  const key = apiKeyDraft.value.trim()
-  const storageKey = extraKeyStorageKey(name)
-  if (key && !/^[\w-]{16,128}$/.test(key)) { ms.error(`API Key 格式无效，请从 ${label} 开发者页面复制`); return }
-  try {
-    if (key) runtime.storage.setItem(storageKey, key)
-    else runtime.storage.removeItem(storageKey)
-    await runtime.storage.flush?.()
-  }
-  catch { ms.error('API Key 本机保存失败，请重试'); return }
-  if (storageKey !== extraKeyStorageKey(provider.value)) return
-  extraApiKeys.value = { ...extraApiKeys.value, [name]: key }
-  ms.success(key ? 'API Key 已保存在本机' : 'API Key 已清除')
-  handleOnlineSearch()
 }
 let requestGeneration = 0
 let selectionGeneration = 0
@@ -340,11 +312,6 @@ async function fetchExtraWallpapers() {
   onlineError.value = ''
   onlineTotal.value = 0
   onlineTotalPages.value = 1
-  if (info.keyUrl && !currentApiKey.value) {
-    loading.value = false
-    onlineError.value = `${info.label} 需要你自己的免费 API Key，请在「高级设置」中填写`
-    return
-  }
   loading.value = true
   try {
     const res = await getOnlineWallpapers({
@@ -353,7 +320,7 @@ async function fetchExtraWallpapers() {
       purity: info.ratings ? booruPurity.value : undefined,
       sorting: info.sortingOptions ? extraSorting.value : undefined,
       page: onlinePage.value,
-    }, currentApiKey.value)
+    })
     if (generation !== requestGeneration) return
     if (res.code !== 0 || !res.data) { onlineError.value = res.msg || `获取 ${info.label} 壁纸失败`; return }
     onlineList.value = res.data.items || []
@@ -371,7 +338,6 @@ function selectProvider(value: WallpaperProvider) {
   catch { /* 只是记住上次的选择，失败不影响使用 */ }
   onlineQuery.value = ''
   extraSorting.value = providerInfo.value.sortingOptions?.[0]?.value ?? ''
-  apiKeyDraft.value = currentApiKey.value
   handleOnlineSearch()
 }
 
@@ -616,8 +582,8 @@ onMounted(() => {
         </button>
       </div>
       <!-- 搜索与排序 -->
-      <div v-if="providerInfo.searchable || providerInfo.keyUrl" class="wallhaven-search-row">
-        <NInputGroup v-if="providerInfo.searchable">
+      <div v-if="providerInfo.searchable" class="wallhaven-search-row">
+        <NInputGroup>
           <NInput
             v-model:value="onlineQuery"
             :placeholder="providerInfo.searchPlaceholder || '搜索壁纸，发现喜欢的风景…'"
@@ -631,7 +597,7 @@ onMounted(() => {
             搜索
           </NButton>
         </NInputGroup>
-        <NPopover v-if="providerInfo.keyUrl" trigger="click" placement="bottom-end" :width="340" class="wallhaven-advanced-popover">
+        <NPopover v-if="provider === 'wallhaven'" trigger="click" placement="bottom-end" :width="340" class="wallhaven-advanced-popover">
           <template #trigger>
             <NButton secondary>
               高级设置
@@ -639,9 +605,9 @@ onMounted(() => {
           </template>
           <div class="wallhaven-advanced-content">
             <div class="wallhaven-account-settings">
-              <strong>{{ providerInfo.label }} API Key · {{ currentApiKey ? '已配置' : '未配置' }}</strong>
+              <strong>Wallhaven 账号 API Key · {{ wallhavenApiKey ? '已配置' : '未配置' }}</strong>
               <div class="wallhaven-key-controls">
-                <NInput v-model:value="apiKeyDraft" type="password" show-password-on="click" :placeholder="provider === 'wallhaven' ? '从 Wallhaven 账号设置复制 API Key' : `粘贴 ${providerInfo.label} 的 API Key（Access Key）`" autocomplete="off" :maxlength="128" :aria-label="`${providerInfo.label} API Key`" />
+                <NInput v-model:value="apiKeyDraft" type="password" show-password-on="click" placeholder="从 Wallhaven 账号设置复制 API Key" autocomplete="off" :maxlength="128" aria-label="Wallhaven API Key" />
                 <NButton size="small" @click="saveApiKey">
                   保存到本机
                 </NButton>
@@ -649,9 +615,8 @@ onMounted(() => {
                   清除
                 </NButton>
               </div>
-              <small v-if="provider !== 'wallhaven'">{{ providerInfo.label }} 的 API Key 可免费申请，申请后粘贴到这里即可浏览和搜索。</small>
-              <small>仅保存在当前浏览器和当前账号下，不随布局同步。搜索时交由你连接的 Panel Next 服务转发至 {{ providerInfo.label }}，不放入 URL。请使用可信的 HTTPS 服务。</small>
-              <a :href="providerInfo.keyUrl" target="_blank" rel="noopener noreferrer">{{ provider === 'wallhaven' ? '打开 Wallhaven 账号设置' : `申请 ${providerInfo.label} API Key` }}</a>
+              <small>仅保存在当前浏览器和当前账号下，不随布局同步。搜索时交由你连接的 Panel Next 服务转发至 Wallhaven，不放入 URL。请使用可信的 HTTPS 服务。</small>
+              <a href="https://wallhaven.cc/settings/account" target="_blank" rel="noopener noreferrer">打开 Wallhaven 账号设置</a>
             </div>
           </div>
         </NPopover>
@@ -760,7 +725,7 @@ onMounted(() => {
         </button>
       </div>
       <div v-if="onlineTotal > 0 && provider !== 'bing'" class="wallhaven-results-summary">
-        找到约 {{ onlineTotal }} 张壁纸 · 第 {{ onlinePage }} 页{{ provider === 'wallhaven' && wallhavenRelaxNote ? ` · ${wallhavenRelaxNote}` : '' }}{{ provider === 'unsplash' || provider === 'pexels' ? ` · 图片来自 ${providerInfo.label}，版权归摄影师所有` : '' }}
+        找到约 {{ onlineTotal }} 张壁纸 · 第 {{ onlinePage }} 页{{ provider === 'wallhaven' && wallhavenRelaxNote ? ` · ${wallhavenRelaxNote}` : '' }}
       </div>
     </div>
     <p v-if="selectingUrl" role="status" class="gallery-selection-status">
@@ -859,8 +824,7 @@ onMounted(() => {
         <div v-if="onlineError" class="favorites-empty">
           <SvgIcon icon="mdi:image-off-outline" />
           <strong>{{ onlineError }}</strong>
-          <span v-if="providerInfo.keyUrl && !currentApiKey"><a :href="providerInfo.keyUrl" target="_blank" rel="noopener noreferrer">免费申请 {{ providerInfo.label }} API Key</a>，申请后填到「高级设置」</span>
-          <NButton v-else secondary @click="fetchOnline">
+          <NButton secondary @click="fetchOnline">
             重试
           </NButton>
         </div>
@@ -896,7 +860,7 @@ onMounted(() => {
             <!-- 悬浮操作与信息面板 -->
             <div class="wallhaven-card-overlay absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-2 text-white">
               <div class="flex items-center justify-between text-[11px] mb-1">
-                <span class="capitalize text-zinc-300 truncate">{{ provider === 'unsplash' || provider === 'pexels' ? item.author : provider === 'bing' ? item.title : item.category }}</span>
+                <span class="capitalize text-zinc-300 truncate">{{ provider === 'bing' ? item.title : item.category }}</span>
                 <span v-if="provider === 'wallhaven' || providerInfo.scoreLabel" class="flex items-center gap-0.5 text-zinc-300">
                   <SvgIcon icon="material-symbols:favorite" class="text-rose-400 text-xs" />
                   {{ item.favorites }}
@@ -944,7 +908,6 @@ onMounted(() => {
             <span v-if="previewItem.category" class="capitalize">{{ previewItem.category }}</span>
             <span v-if="provider === 'wallhaven' || providerInfo.scoreLabel"><SvgIcon icon="material-symbols:favorite" class="text-rose-400" /> {{ previewItem.favorites }}</span>
             <span v-if="provider === 'bing' && previewItem.author" class="wallhaven-preview-credit">{{ previewItem.author }}</span>
-            <span v-else-if="previewItem.author && previewItem.authorUrl" class="wallhaven-preview-credit">摄影：<a :href="previewItem.authorUrl" target="_blank" rel="noopener noreferrer">{{ previewItem.author }}</a> · {{ providerInfo.label }}</span>
             <a :href="previewItem.url" target="_blank" rel="noopener noreferrer">在 {{ providerInfo.label.replace(' 每日', '') }} 查看</a>
           </div>
           <div class="wallhaven-preview-actions">

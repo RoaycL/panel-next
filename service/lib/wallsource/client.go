@@ -1,5 +1,5 @@
 // Package wallsource proxies the wallpaper sources shown next to Wallhaven in
-// the wallpaper library (Bing daily, Unsplash, Pexels, Konachan, yande.re) and
+// the wallpaper library (Bing daily, Konachan, yande.re) and
 // normalizes their results into one item shape.
 package wallsource
 
@@ -28,22 +28,12 @@ const (
 var (
 	ErrInvalidParams      = errors.New("invalid wallpaper search parameters")
 	ErrUpstreamRateLimit  = errors.New("壁纸源请求次数已达上限，请稍后再试")
-	apiKeyPattern         = regexp.MustCompile(`^[A-Za-z0-9_-]{16,128}$`)
 	bitsetPattern         = regexp.MustCompile(`^[01]{3}$`)
 	reservedBooruMetatags = regexp.MustCompile(`^-?(rating|order|limit|width|height):`)
 )
 
-// KeyError explains which source needs a (valid) API key.
-type KeyError struct{ Source string }
-
-func (e *KeyError) Error() string {
-	return fmt.Sprintf("%s API Key 未配置或无效，请在「高级设置」中填写", sourceLabels[e.Source])
-}
-
 var sourceLabels = map[string]string{
 	"bing":     "Bing",
-	"unsplash": "Unsplash",
-	"pexels":   "Pexels",
 	"konachan": "Konachan",
 	"yandere":  "yande.re",
 }
@@ -79,7 +69,6 @@ type Result struct {
 
 type SearchParams struct {
 	Source  string
-	APIKey  string
 	Query   string
 	Purity  string // booru ratings: safe / questionable / explicit
 	Sorting string
@@ -89,16 +78,12 @@ type SearchParams struct {
 // Endpoints are the upstream base URLs; tests point them at httptest servers.
 type Endpoints struct {
 	Bing     string
-	Unsplash string
-	Pexels   string
 	Konachan string
 	Yandere  string
 }
 
 var DefaultEndpoints = Endpoints{
 	Bing:     "https://cn.bing.com",
-	Unsplash: "https://api.unsplash.com",
-	Pexels:   "https://api.pexels.com",
 	Konachan: "https://konachan.com",
 	Yandere:  "https://yande.re",
 }
@@ -130,8 +115,6 @@ var DefaultClient = NewClient(&http.Client{Timeout: 12 * time.Second}, DefaultEn
 
 var validSorting = map[string]map[string]bool{
 	"bing":     {"": true},
-	"pexels":   {"": true},
-	"unsplash": {"": true, "popular": true, "latest": true},
 	"konachan": {"": true, "date": true, "score": true, "random": true},
 	"yandere":  {"": true, "date": true, "score": true, "random": true},
 }
@@ -141,13 +124,6 @@ func validate(params *SearchParams) error {
 	if !known || !sortings[params.Sorting] || params.Page < 1 || params.Page > 100 ||
 		utf8.RuneCountInString(params.Query) > 100 {
 		return ErrInvalidParams
-	}
-	if params.Source == "unsplash" || params.Source == "pexels" {
-		if !apiKeyPattern.MatchString(params.APIKey) {
-			return &KeyError{Source: params.Source}
-		}
-	} else {
-		params.APIKey = ""
 	}
 	if params.Source == "konachan" || params.Source == "yandere" {
 		if params.Purity == "" {
@@ -198,10 +174,6 @@ func (client *Client) Search(ctx context.Context, params SearchParams) (Result, 
 	switch params.Source {
 	case "bing":
 		result, err = client.searchBing(ctx)
-	case "unsplash":
-		result, err = client.searchUnsplash(ctx, params)
-	case "pexels":
-		result, err = client.searchPexels(ctx, params)
 	case "konachan":
 		result, err = client.searchBooru(ctx, client.endpoints.Konachan, "Konachan", params)
 	case "yandere":
@@ -241,15 +213,8 @@ func (client *Client) get(ctx context.Context, source, fullURL string, headers m
 	}
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
 	resp.Body.Close()
-	switch {
-	case resp.StatusCode == http.StatusUnauthorized:
-		return nil, &KeyError{Source: source}
-	case resp.StatusCode == http.StatusTooManyRequests,
-		// Unsplash answers 403 "Rate Limit Exceeded" once the hourly quota is spent.
-		resp.StatusCode == http.StatusForbidden && source == "unsplash":
+	if resp.StatusCode == http.StatusTooManyRequests {
 		return nil, ErrUpstreamRateLimit
-	case resp.StatusCode == http.StatusForbidden:
-		return nil, &KeyError{Source: source}
 	}
 	return nil, fmt.Errorf("%s 返回异常状态 %d，请稍后重试", sourceLabels[source], resp.StatusCode)
 }
@@ -264,17 +229,6 @@ func resolution(width, height int) string {
 		return ""
 	}
 	return fmt.Sprintf("%dx%d", width, height)
-}
-
-func lastPageFor(total, page int) int {
-	last := (total + perPage - 1) / perPage
-	if last > 100 {
-		last = 100
-	}
-	if last < page {
-		last = page
-	}
-	return last
 }
 
 func (client *Client) pruneCacheLocked(now time.Time) {

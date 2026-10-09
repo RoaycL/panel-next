@@ -5,18 +5,15 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 )
 
 func newTestClient(handler http.HandlerFunc) (*Client, *httptest.Server) {
 	server := httptest.NewServer(handler)
-	endpoints := Endpoints{Bing: server.URL, Unsplash: server.URL, Pexels: server.URL, Konachan: server.URL, Yandere: server.URL}
+	endpoints := Endpoints{Bing: server.URL, Konachan: server.URL, Yandere: server.URL}
 	return NewClient(server.Client(), endpoints, time.Minute), server
 }
-
-var testKey = strings.Repeat("k", 43)
 
 func TestValidationRejectsBadParams(t *testing.T) {
 	client, server := newTestClient(func(w http.ResponseWriter, r *http.Request) { t.Error("upstream must not be called") })
@@ -24,7 +21,8 @@ func TestValidationRejectsBadParams(t *testing.T) {
 	for _, params := range []SearchParams{
 		{Source: "flickr"},
 		{Source: "bing", Page: 101},
-		{Source: "pexels", APIKey: testKey, Sorting: "popular"},
+		{Source: "unsplash"},
+		{Source: "bing", Sorting: "popular"},
 		{Source: "konachan", Purity: "000"},
 		{Source: "konachan", Purity: "1x0"},
 		{Source: "yandere", Query: "a b c d e"},
@@ -36,12 +34,6 @@ func TestValidationRejectsBadParams(t *testing.T) {
 			t.Fatalf("%+v: expected invalid params, got %v", params, err)
 		}
 	}
-	for _, source := range []string{"unsplash", "pexels"} {
-		var keyErr *KeyError
-		if _, err := client.Search(context.Background(), SearchParams{Source: source, APIKey: "short"}); !errors.As(err, &keyErr) {
-			t.Fatalf("%s without a valid key: got %v", source, err)
-		}
-	}
 }
 
 func TestBingMergesBothWindows(t *testing.T) {
@@ -50,7 +42,7 @@ func TestBingMergesBothWindows(t *testing.T) {
 		_, _ = w.Write([]byte(`{"images":[{"startdate":"` + day + `","urlbase":"/th?id=OHR.A_` + day + `","title":"T","copyright":"C","copyrightlink":"https://www.bing.com/search?q=x"},{"startdate":"20261001","urlbase":"/th?id=OHR.A_20261001"},{"startdate":"20261000","urlbase":"//evil.example/x"}]}`))
 	})
 	defer server.Close()
-	result, err := client.Search(context.Background(), SearchParams{Source: "bing", APIKey: testKey})
+	result, err := client.Search(context.Background(), SearchParams{Source: "bing"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,55 +54,11 @@ func TestBingMergesBothWindows(t *testing.T) {
 	}
 }
 
-func TestUnsplashSendsKeyAndAttribution(t *testing.T) {
-	var paths []string
-	client, server := newTestClient(func(w http.ResponseWriter, r *http.Request) {
-		paths = append(paths, r.URL.Path+"?"+r.URL.RawQuery)
-		if r.Header.Get("Authorization") != "Client-ID "+testKey || r.URL.Query().Get("client_id") != "" {
-			t.Error("key must travel in the Authorization header only")
-		}
-		photo := `{"id":"p1","width":6000,"height":4000,"likes":7,"urls":{"raw":"https://images.unsplash.com/photo-1?ixid=x","small":"https://images.unsplash.com/photo-1?w=400"},"links":{"html":"https://unsplash.com/photos/p1"},"user":{"name":"Ann","links":{"html":"https://unsplash.com/@ann"}}}`
-		if r.URL.Path == "/search/photos" {
-			_, _ = w.Write([]byte(`{"total":30,"results":[` + photo + `]}`))
-			return
-		}
-		w.Header().Set("X-Total", "100")
-		_, _ = w.Write([]byte(`[` + photo + `]`))
-	})
+func TestUpstreamRateLimitMapsToMessage(t *testing.T) {
+	client, server := newTestClient(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusTooManyRequests) })
 	defer server.Close()
-	feed, err := client.Search(context.Background(), SearchParams{Source: "unsplash", APIKey: testKey, Sorting: "popular"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if feed.Meta.Total != 100 || feed.Meta.LastPage != 5 || !strings.HasPrefix(paths[0], "/topics/wallpapers/photos?") || !strings.Contains(paths[0], "order_by=popular") {
-		t.Fatalf("feed: %+v %v", feed.Meta, paths)
-	}
-	item := feed.Items[0]
-	if item.RawURL != "https://images.unsplash.com/photo-1?ixid=x&w=3840&q=85&fm=jpg&fit=max" || item.Author != "Ann" ||
-		item.AuthorURL != "https://unsplash.com/@ann?"+unsplashReferral || item.Resolution != "6000x4000" {
-		t.Fatalf("unexpected item: %+v", item)
-	}
-	search, err := client.Search(context.Background(), SearchParams{Source: "unsplash", APIKey: testKey, Query: "sea"})
-	if err != nil || search.Meta.Total != 30 || !strings.HasPrefix(paths[1], "/search/photos?") {
-		t.Fatalf("search: %+v %v %v", search.Meta, err, paths)
-	}
-}
-
-func TestUpstreamErrorsMapToMessages(t *testing.T) {
-	status := http.StatusUnauthorized
-	client, server := newTestClient(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(status) })
-	defer server.Close()
-	var keyErr *KeyError
-	if _, err := client.Search(context.Background(), SearchParams{Source: "pexels", APIKey: testKey}); !errors.As(err, &keyErr) || keyErr.Source != "pexels" {
-		t.Fatalf("401: %v", err)
-	}
-	status = http.StatusTooManyRequests
-	if _, err := client.Search(context.Background(), SearchParams{Source: "pexels", APIKey: testKey, Page: 2}); !errors.Is(err, ErrUpstreamRateLimit) {
+	if _, err := client.Search(context.Background(), SearchParams{Source: "yandere"}); !errors.Is(err, ErrUpstreamRateLimit) {
 		t.Fatalf("429: %v", err)
-	}
-	status = http.StatusForbidden
-	if _, err := client.Search(context.Background(), SearchParams{Source: "unsplash", APIKey: testKey}); !errors.Is(err, ErrUpstreamRateLimit) {
-		t.Fatalf("unsplash 403: %v", err)
 	}
 }
 

@@ -13,7 +13,7 @@ import (
 
 const (
 	allowMethods  = "GET, POST, PATCH, DELETE, OPTIONS"
-	allowHeaders  = "Accept, Accept-Language, Authorization, Content-Type, Lang, Token, X-Panel-API-Version, X-Requested-With, X-Wallhaven-Api-Key, X-Wallpaper-Api-Key"
+	allowHeaders  = "Accept, Accept-Language, Authorization, Content-Type, Lang, Token, X-Panel-API-Version, X-Requested-With, X-Wallhaven-Api-Key"
 	exposeHeaders = "Content-Disposition, X-Panel-API-Min-Version, X-Panel-API-Version"
 )
 

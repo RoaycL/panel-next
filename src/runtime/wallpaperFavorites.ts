@@ -5,12 +5,12 @@ export interface FavoriteWallpaper {
   url: string
   thumbnail: string
   title: string
-  source: 'private' | 'public' | 'imgbed' | 'wallhaven' | 'bing' | 'unsplash' | 'pexels' | 'konachan' | 'yandere'
+  source: 'private' | 'public' | 'imgbed' | 'wallhaven' | 'bing' | 'konachan' | 'yandere'
   savedAt: string
 }
 
 export const MAX_WALLPAPER_FAVORITES = 200
-const FAVORITE_SOURCES: FavoriteWallpaper['source'][] = ['private', 'public', 'imgbed', 'wallhaven', 'bing', 'unsplash', 'pexels', 'konachan', 'yandere']
+const FAVORITE_SOURCES: FavoriteWallpaper['source'][] = ['private', 'public', 'imgbed', 'wallhaven', 'bing', 'konachan', 'yandere']
 
 export function wallpaperFavoritesKey(origin: string | null, accountId?: number): string {
   return `PANEL_NEXT_WALLPAPER_FAVORITES_V1:${encodeURIComponent(origin || 'local')}:${accountId ?? 'guest'}`
