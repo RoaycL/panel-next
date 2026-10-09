@@ -76,7 +76,9 @@ assert.deepEqual(filterDashboardGroups(groupsWithSystem, 'internal', true), filt
 assert.equal(groupsWithSystem.length, 2, 'Hiding the old settings page must not delete its data')
 assert.match(extensionView, /groups\.value\.filter\(isDesktopGroup\)/)
 assert.match(extensionView, /<Transition :name="`group-slide-\$\{groupSlideDirection\}`" mode="out-in">/)
-assert.match(extensionView, /:key="activeTabId \?\? 'empty'"/)
+// Only user page changes bump the key; startup/sync swap the page in place.
+assert.match(extensionView, /:key="groupPageKey"/)
+assert.match(extensionView, /followFirstGroup = false\n {2}groupPageKey\.value\+\+/)
 assert.match(extensionView, /selectGroup\(groupTabs\.value\[nextIndex\]\.id, direction > 0 \? 'next' : 'previous'\)/)
 assert.match(extensionView, /@media \(prefers-reduced-motion: reduce\)/)
 

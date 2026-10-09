@@ -818,7 +818,9 @@ const extensionSyncPresentation = computed(() => {
   return states[extensionSyncStatus.value]
 })
 // The web panel never shows starter sites; its visitors see the server's public account.
-const groups = ref<DashboardGroup[]>(isWebRuntime ? [] : defaultPresetGroups)
+// A signed-in extension paints its cached groups on mount, so starter sites
+// would only flash (and slide away) before the user's own pages appear.
+const groups = ref<DashboardGroup[]>(isWebRuntime || authStore.token ? [] : defaultPresetGroups)
 // Until the user picks a page, startup and sync always land on the first group.
 let followFirstGroup = true
 function showPresetGroups() {
@@ -1093,6 +1095,9 @@ async function loadDirectFromApi() {
 // 5. 分组 Tab 切换与卡片过滤（告别堆叠）
 const activeTabId = ref<number | null>(null)
 const groupSlideDirection = ref<'next' | 'previous'>('next')
+// Keys the sliding page. Only page changes the user asked for bump it, so
+// startup and sync swap the content in place instead of sliding.
+const groupPageKey = ref(0)
 const sideRailRevealed = ref(!sidebarAutoHide.value)
 const settingsModalVisible = ref(false)
 const editCardModalVisible = ref(false)
@@ -1414,6 +1419,7 @@ function selectGroup(id: number, direction?: 'next' | 'previous') {
   const nextIndex = groupTabs.value.findIndex(group => group.id === id)
   groupSlideDirection.value = direction ?? (nextIndex >= currentIndex ? 'next' : 'previous')
   followFirstGroup = false
+  groupPageKey.value++
   activeTabId.value = id
 }
 
@@ -1462,6 +1468,7 @@ async function removeEmptyGroups(candidateIds?: number[]) {
       return
     if (activeTabId.value !== null && ids.includes(activeTabId.value)) {
       groupSlideDirection.value = 'previous'
+      groupPageKey.value++
       activeTabId.value = homeId
     }
     groups.value = groups.value.filter(group => !ids.includes(group.id as number))
@@ -2332,7 +2339,7 @@ onUnmounted(() => {
 
       <section class="dashboard-canvas-section w-full max-w-[1120px]">
         <Transition :name="`group-slide-${groupSlideDirection}`" mode="out-in">
-          <div :key="activeTabId ?? 'empty'" class="dashboard-group-page">
+          <div :key="groupPageKey" class="dashboard-group-page">
             <div class="dashboard-canvas-header">
               <div class="active-group-meta">
                 <span>{{ activeGroup?.title }}</span>
