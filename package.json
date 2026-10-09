@@ -1,6 +1,6 @@
 {
   "name": "panel-next",
-  "version": "0.0.55",
+  "version": "0.0.56",
   "packageManager": "pnpm@11.20.0",
   "engines": {
     "node": ">=22.13"
