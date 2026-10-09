@@ -1,0 +1,40 @@
+diff --git a/es/focus-trap/src/index.js b/es/focus-trap/src/index.js
+index c2b1608f5065b1c1e41148dd137edf2cf1e3c354..a095987771a106655f0d7bc95026f8694f8db9d7 100644
+--- a/es/focus-trap/src/index.js
++++ b/es/focus-trap/src/index.js
+@@ -199,7 +199,6 @@ export const FocusTrap = defineComponent({
+         const { active, focusableStyle } = this;
+         return h(Fragment, null, [
+             h('div', {
+-                'aria-hidden': 'true',
+                 tabindex: active ? '0' : '-1',
+                 ref: 'focusableStartRef',
+                 style: focusableStyle,
+@@ -207,7 +206,6 @@ export const FocusTrap = defineComponent({
+             }),
+             defaultSlot(),
+             h('div', {
+-                'aria-hidden': 'true',
+                 style: focusableStyle,
+                 ref: 'focusableEndRef',
+                 tabindex: active ? '0' : '-1',
+diff --git a/lib/focus-trap/src/index.js b/lib/focus-trap/src/index.js
+index 77bcee3825692518c71c425be2f4e3d38a2ff1d9..2dbe804de13f927d10f0d7e1dd4f8def9d2a8140 100644
+--- a/lib/focus-trap/src/index.js
++++ b/lib/focus-trap/src/index.js
+@@ -202,7 +202,6 @@ exports.FocusTrap = (0, vue_1.defineComponent)({
+         const { active, focusableStyle } = this;
+         return (0, vue_1.h)(vue_1.Fragment, null, [
+             (0, vue_1.h)('div', {
+-                'aria-hidden': 'true',
+                 tabindex: active ? '0' : '-1',
+                 ref: 'focusableStartRef',
+                 style: focusableStyle,
+@@ -210,7 +209,6 @@ exports.FocusTrap = (0, vue_1.defineComponent)({
+             }),
+             defaultSlot(),
+             (0, vue_1.h)('div', {
+-                'aria-hidden': 'true',
+                 style: focusableStyle,
+                 ref: 'focusableEndRef',
+                 tabindex: active ? '0' : '-1',

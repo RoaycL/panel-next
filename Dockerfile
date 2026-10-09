@@ -9,6 +9,10 @@ COPY ./package.json /build
 
 COPY ./pnpm-lock.yaml /build
 
+COPY ./pnpm-workspace.yaml /build
+
+COPY ./patches /build/patches
+
 RUN pnpm install
 
 COPY . /build

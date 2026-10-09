@@ -10,3 +10,7 @@ enableGlobalVirtualStore: false
 overrides:
   # GHSA-68fv-2mgg-jv7q; pulled in by the Vue compiler.
   source-map-js: ^1.2.2
+# vueuc's focus trap put aria-hidden on its focusable sentinels, so Chrome
+# warned "Blocked aria-hidden" whenever a modal focused one.
+patchedDependencies:
+  vueuc@0.4.65: patches/vueuc@0.4.65.patch
