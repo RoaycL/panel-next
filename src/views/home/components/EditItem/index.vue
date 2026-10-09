@@ -157,11 +157,8 @@ async function getIconByUrl(url: string, loadingIndex: number) {
   if (getIconLoading.value.some(Boolean))
     return
   const generation = ++iconRequestGeneration
+  // Always ask the site first; the bundled mark is only a fallback.
   const preset = findIconPresetForUrl(url)
-  if (preset) {
-    model.value.icon = createPresetIcon(preset)
-    return
-  }
   getIconLoading.value[loadingIndex] = true
   try {
     const { code, data, msg } = await getSiteFavicon<{ iconUrl: string; iconUrls?: string[] }>(url)
@@ -174,13 +171,24 @@ async function getIconByUrl(url: string, loadingIndex: number) {
       }
       ms.success('已获取网站图标')
     }
+    else if (preset) {
+      model.value.icon = createPresetIcon(preset)
+      ms.warning('网站图标获取失败，已使用内置图标')
+    }
     else {
       ms.error(msg || t('iconItem.geticonFail'))
     }
   }
   catch {
-    if (generation === iconRequestGeneration && props.visible)
+    if (generation !== iconRequestGeneration || !props.visible)
+      return
+    if (preset) {
+      model.value.icon = createPresetIcon(preset)
+      ms.warning('网站图标获取失败，已使用内置图标')
+    }
+    else {
       ms.error('获取图标超时或服务不可达，请重试，也可以上传图片。内网地址需要服务器能够访问。')
+    }
   }
   finally {
     if (generation === iconRequestGeneration)
