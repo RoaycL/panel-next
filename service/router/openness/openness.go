@@ -23,5 +23,6 @@ func InitWidgets(router *gin.RouterGroup) {
 		widgets.GET("weather", api.Weather)
 		widgets.GET("trending", api.Trending)
 		widgets.GET("wallhaven", api.Wallhaven)
+		widgets.GET("wallpapers", api.Wallpapers)
 	}
 }

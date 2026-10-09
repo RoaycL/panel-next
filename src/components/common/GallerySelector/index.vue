@@ -15,8 +15,10 @@ import { getList as getPrivateList } from '@/api/system/file'
 import { getList as getPublicList } from '@/api/system/publicFile'
 import { getImgbedList, getImgbedStatus } from '@/api/imgbed'
 import type { ImgbedListItem } from '@/api/imgbed'
-import { getWallhavenWallpapers   } from '@/api/wallhaven'
-import type {WallhavenItem, WallhavenSearchParams} from '@/api/wallhaven';
+import { getWallhavenWallpapers } from '@/api/wallhaven'
+import type { WallhavenSearchParams } from '@/api/wallhaven'
+import { getOnlineWallpapers, wallpaperProviders } from '@/api/wallpapers'
+import type { OnlineWallpaperItem, WallpaperProvider } from '@/api/wallpapers'
 import { SvgIcon } from '@/components/common'
 import { t } from '@/locales'
 import { getRuntime } from '@/runtime'
@@ -49,6 +51,20 @@ const stopFavoritesSubscription = runtime.storage.subscribe?.(change => {
 })
 onBeforeUnmount(() => stopFavoritesSubscription?.())
 
+const favoriteSourceLabels: Record<FavoriteWallpaper['source'], string> = {
+  private: '个人图库',
+  public: '公共图库',
+  imgbed: '外部图床',
+  wallhaven: 'Wallhaven',
+  bing: 'Bing 每日',
+  unsplash: 'Unsplash',
+  pexels: 'Pexels',
+  konachan: 'Konachan',
+  yandere: 'yande.re',
+}
+function favoriteSourceLabel(value: FavoriteWallpaper['source']) {
+  return favoriteSourceLabels[value] ?? '个人图库'
+}
 function isFavorite(url: string) {
   const id = wallpaperIdentity(url, runtime.getServerOrigin())
   return favoriteWallpapers.value.some(item => wallpaperIdentity(item.url, runtime.getServerOrigin()) === id)
@@ -73,20 +89,43 @@ async function toggleFavorite(item: Omit<FavoriteWallpaper, 'savedAt'>) {
   catch { ms.error('喜欢列表保存失败，请重试') }
   finally { savingFavorite.value = false }
 }
+// 在线壁纸库的壁纸源：Wallhaven 之外的源都由服务端统一代理；上次选的源记在本机
+const PROVIDER_STORAGE_KEY = 'PANEL_NEXT_WALLPAPER_PROVIDER_V1'
+function readSavedProvider(): WallpaperProvider {
+  try {
+    const saved = runtime.storage.getItem(PROVIDER_STORAGE_KEY)
+    return wallpaperProviders.find(item => item.value === saved)?.value ?? 'wallhaven'
+  }
+  catch { return 'wallhaven' }
+}
+const provider = ref<WallpaperProvider>(readSavedProvider())
+const providerInfo = computed(() => wallpaperProviders.find(item => item.value === provider.value) ?? wallpaperProviders[0])
+const extraSorting = ref(providerInfo.value.sortingOptions?.[0]?.value ?? '')
+const booruPurity = ref('100')
+const onlineError = ref('')
+
 const apiKeyStorageKey = computed(() => `WALLHAVEN_API_KEY_V1:${auth.userInfo?.id ?? 'guest'}`)
+const extraKeyStorageKey = (name: WallpaperProvider) => `WALLPAPER_API_KEY_V1:${name}:${auth.userInfo?.id ?? 'guest'}`
 const apiKeyDraft = ref('')
 const wallhavenApiKey = ref('')
 const wallhavenPurity = ref('100')
+const extraApiKeys = ref<Partial<Record<WallpaperProvider, string>>>({})
+const currentApiKey = computed(() => provider.value === 'wallhaven' ? wallhavenApiKey.value : extraApiKeys.value[provider.value] || '')
 watch(apiKeyStorageKey, key => {
   wallhavenApiKey.value = runtime.storage.getItem(key) || ''
-  apiKeyDraft.value = wallhavenApiKey.value
+  const keys: Partial<Record<WallpaperProvider, string>> = {}
+  for (const item of wallpaperProviders) {
+    if (item.keyUrl && item.value !== 'wallhaven') keys[item.value] = runtime.storage.getItem(extraKeyStorageKey(item.value)) || ''
+  }
+  extraApiKeys.value = keys
+  apiKeyDraft.value = currentApiKey.value
   wallhavenPurity.value = '100'
 }, { immediate: true })
 // 位串：SFW / Sketchy / NSFW，可多选；NSFW 需要 API Key
 const purityOptions = computed(() => [
   { label: 'SFW', bit: 0 },
   { label: 'Sketchy', bit: 1 },
-  { label: 'NSFW', bit: 2, disabled: !wallhavenApiKey.value },
+  { label: 'NSFW', bit: 2, disabled: !wallhavenApiKey.value && provider.value === 'wallhaven' },
 ])
 function isPurityOn(bit: number) {
   return wallhavenPurity.value[bit] === '1'
@@ -99,7 +138,15 @@ function togglePurity(bit: number) {
   wallhavenPurity.value = bits.join('')
   handleWallhavenSearch()
 }
+function toggleBooruPurity(bit: number) {
+  const bits = booruPurity.value.split('')
+  bits[bit] = bits[bit] === '1' ? '0' : '1'
+  if (!bits.includes('1')) return
+  booruPurity.value = bits.join('')
+  handleOnlineSearch()
+}
 async function saveApiKey() {
+  if (provider.value !== 'wallhaven') { await saveExtraApiKey(); return }
   const key = apiKeyDraft.value.trim()
   const storageKey = apiKeyStorageKey.value
   if (key && !/^[a-z0-9]{16,128}$/i.test(key)) { ms.error('API Key 格式无效，请从 Wallhaven 账号设置复制'); return }
@@ -119,6 +166,23 @@ async function saveApiKey() {
   ms.success(key ? 'API Key 已保存在本机' : 'API Key 已清除')
   handleWallhavenSearch()
 }
+async function saveExtraApiKey() {
+  const name = provider.value
+  const label = providerInfo.value.label
+  const key = apiKeyDraft.value.trim()
+  const storageKey = extraKeyStorageKey(name)
+  if (key && !/^[\w-]{16,128}$/.test(key)) { ms.error(`API Key 格式无效，请从 ${label} 开发者页面复制`); return }
+  try {
+    if (key) runtime.storage.setItem(storageKey, key)
+    else runtime.storage.removeItem(storageKey)
+    await runtime.storage.flush?.()
+  }
+  catch { ms.error('API Key 本机保存失败，请重试'); return }
+  if (storageKey !== extraKeyStorageKey(provider.value)) return
+  extraApiKeys.value = { ...extraApiKeys.value, [name]: key }
+  ms.success(key ? 'API Key 已保存在本机' : 'API Key 已清除')
+  handleOnlineSearch()
+}
 let requestGeneration = 0
 let selectionGeneration = 0
 const selectingUrl = ref('')
@@ -126,7 +190,7 @@ const failedImages = ref(new Set<string>())
 onBeforeUnmount(() => { requestGeneration++; selectionGeneration++ })
 const loading = ref(false)
 const resultsRef = ref<HTMLElement | null>(null)
-const source = ref<'private' | 'public' | 'wallhaven' | 'favorites' | 'imgbed'>('private')
+const source = ref<'private' | 'public' | 'online' | 'favorites' | 'imgbed'>('private')
 
 // 外部图床：仅在服务端已配置图床（且当前账号是管理员）时显示这一栏
 const imgbedAvailable = ref(false)
@@ -161,12 +225,12 @@ const sourceOptions = [
 ]
 
 // 2. Wallhaven 壁纸库
-const wallhavenList = ref<WallhavenItem[]>([])
-const wallhavenPage = ref(1)
-watch([source, wallhavenPage, imgbedPage], () => { resultsRef.value?.scrollTo({ top: 0 }) }, { flush: 'post' })
-const wallhavenTotalPages = ref(1)
-const wallhavenTotal = ref(0)
-const wallhavenQuery = ref('')
+const onlineList = ref<OnlineWallpaperItem[]>([])
+const onlinePage = ref(1)
+watch([source, onlinePage, imgbedPage], () => { resultsRef.value?.scrollTo({ top: 0 }) }, { flush: 'post' })
+const onlineTotalPages = ref(1)
+const onlineTotal = ref(0)
+const onlineQuery = ref('')
 const wallhavenSorting = ref<'toplist' | 'hot' | 'views' | 'random' | 'date_added'>('toplist')
 const wallhavenCategories = ref('111') // 位串：综合 / 动漫 / 人物，默认全选
 const wallhavenCategoryOptions = [
@@ -234,7 +298,7 @@ function imgbedTitle(item: ImgbedListItem) {
 async function fetchImages() {
   if (source.value === 'favorites') { requestGeneration++; loading.value = false; return }
   if (source.value === 'imgbed') { await fetchImgbed(); return }
-  if (source.value === 'wallhaven') { await fetchWallhaven(); return }
+  if (source.value === 'online') { await fetchOnline(); return }
   const generation = ++requestGeneration
   const selectedSource = source.value
   loading.value = true
@@ -265,23 +329,75 @@ const WALLHAVEN_RELAX_STEPS = [
 const wallhavenRelaxLevel = ref(0)
 const wallhavenRelaxNote = computed(() => WALLHAVEN_RELAX_STEPS[wallhavenRelaxLevel.value].note)
 
+function fetchOnline() {
+  return provider.value === 'wallhaven' ? fetchWallhaven() : fetchExtraWallpapers()
+}
+
+async function fetchExtraWallpapers() {
+  const info = providerInfo.value
+  const generation = ++requestGeneration
+  onlineList.value = []
+  onlineError.value = ''
+  onlineTotal.value = 0
+  onlineTotalPages.value = 1
+  if (info.keyUrl && !currentApiKey.value) {
+    loading.value = false
+    onlineError.value = `${info.label} 需要你自己的免费 API Key，请在「高级设置」中填写`
+    return
+  }
+  loading.value = true
+  try {
+    const res = await getOnlineWallpapers({
+      source: info.value as Exclude<WallpaperProvider, 'wallhaven'>,
+      q: info.searchable ? onlineQuery.value.trim() || undefined : undefined,
+      purity: info.ratings ? booruPurity.value : undefined,
+      sorting: info.sortingOptions ? extraSorting.value : undefined,
+      page: onlinePage.value,
+    }, currentApiKey.value)
+    if (generation !== requestGeneration) return
+    if (res.code !== 0 || !res.data) { onlineError.value = res.msg || `获取 ${info.label} 壁纸失败`; return }
+    onlineList.value = res.data.items || []
+    onlineTotalPages.value = res.data.meta.lastPage || 1
+    onlineTotal.value = res.data.meta.total || 0
+  }
+  catch { if (generation === requestGeneration) onlineError.value = `请求 ${info.label} 失败，请检查网络后重试` }
+  finally { if (generation === requestGeneration) loading.value = false }
+}
+
+function selectProvider(value: WallpaperProvider) {
+  if (provider.value === value) return
+  provider.value = value
+  try { runtime.storage.setItem(PROVIDER_STORAGE_KEY, value) }
+  catch { /* 只是记住上次的选择，失败不影响使用 */ }
+  onlineQuery.value = ''
+  extraSorting.value = providerInfo.value.sortingOptions?.[0]?.value ?? ''
+  apiKeyDraft.value = currentApiKey.value
+  handleOnlineSearch()
+}
+
+function onlineItemTitle(item: OnlineWallpaperItem) {
+  if (provider.value === 'bing' && item.title) return item.title
+  return `${providerInfo.value.label} ${item.id}`
+}
+
 async function fetchWallhaven() {
   const generation = ++requestGeneration
   loading.value = true
-  wallhavenList.value = []
-  if (wallhavenPage.value === 1) wallhavenRelaxLevel.value = 0
+  onlineList.value = []
+  onlineError.value = ''
+  if (onlinePage.value === 1) wallhavenRelaxLevel.value = 0
   try {
     while (true) {
       const step = WALLHAVEN_RELAX_STEPS[wallhavenRelaxLevel.value]
       const params: WallhavenSearchParams = {
-        q: wallhavenQuery.value.trim() || undefined,
+        q: onlineQuery.value.trim() || undefined,
         categories: wallhavenCategories.value,
         purity: wallhavenPurity.value,
         sorting: wallhavenSorting.value,
         topRange: step.topRange,
         atleast: '1920x1080',
         ratios: step.ratios,
-        page: wallhavenPage.value,
+        page: onlinePage.value,
       }
       const res = await getWallhavenWallpapers(params, wallhavenApiKey.value)
       if (generation !== requestGeneration) return
@@ -289,16 +405,16 @@ async function fetchWallhaven() {
         ms.error(res.msg || '获取 Wallhaven 壁纸失败')
         return
       }
-      const canRelax = wallhavenPage.value === 1 && !res.data.items?.length && wallhavenRelaxLevel.value < WALLHAVEN_RELAX_STEPS.length - 1
+      const canRelax = onlinePage.value === 1 && !res.data.items?.length && wallhavenRelaxLevel.value < WALLHAVEN_RELAX_STEPS.length - 1
       // 非榜单排序不受时间范围影响，跳过只改 topRange 的那一级
       if (canRelax) {
         wallhavenRelaxLevel.value++
         if (wallhavenSorting.value !== 'toplist' && wallhavenRelaxLevel.value === 1) wallhavenRelaxLevel.value++
         continue
       }
-      wallhavenList.value = res.data.items || []
-      wallhavenTotalPages.value = res.data.meta.lastPage || 1
-      wallhavenTotal.value = res.data.meta.total || 0
+      onlineList.value = res.data.items || []
+      onlineTotalPages.value = res.data.meta.lastPage || 1
+      onlineTotal.value = res.data.meta.total || 0
       return
     }
   }
@@ -312,7 +428,7 @@ async function fetchWallhaven() {
 
 // 壁纸库点击图片先放大预览，确认后再设为壁纸
 const previewIndex = ref(-1)
-const previewItem = computed(() => wallhavenList.value[previewIndex.value])
+const previewItem = computed(() => onlineList.value[previewIndex.value])
 const previewRawLoaded = ref(false)
 const previewRawFailed = ref(false)
 const previewAttempt = ref(0)
@@ -334,7 +450,7 @@ function retryPreviewRaw() {
 }
 function stepPreview(delta: number) {
   const next = previewIndex.value + delta
-  if (next < 0 || next >= wallhavenList.value.length) return
+  if (next < 0 || next >= onlineList.value.length) return
   openPreview(next)
 }
 function handlePreviewKeydown(event: KeyboardEvent) {
@@ -346,12 +462,12 @@ async function applyPreview() {
   if (!item) return
   if (await handleSelect(item.rawUrl) && previewItem.value === item) previewIndex.value = -1
 }
-watch(wallhavenList, () => { previewIndex.value = -1 })
+watch(onlineList, () => { previewIndex.value = -1 })
 
 function handleQuickTagClick(tag: typeof quickTags[number]) {
-  wallhavenQuery.value = tag.q
+  onlineQuery.value = tag.q
   wallhavenCategories.value = tag.cat
-  wallhavenPage.value = 1
+  onlinePage.value = 1
   void fetchWallhaven()
 }
 
@@ -361,13 +477,23 @@ function afterSelectChange(handler: () => unknown) {
 }
 
 function handleWallhavenSearch() {
-  wallhavenPage.value = 1
+  onlinePage.value = 1
   void fetchWallhaven()
 }
 
+function handleOnlineSearch() {
+  onlinePage.value = 1
+  void fetchOnline()
+}
+
+function handleExtraTagClick(q: string) {
+  onlineQuery.value = q
+  handleOnlineSearch()
+}
+
 function handlePageChange(page: number) {
-  wallhavenPage.value = page
-  void fetchWallhaven()
+  onlinePage.value = page
+  void fetchOnline()
 }
 
 async function handleSelect(url: string): Promise<boolean> {
@@ -390,28 +516,20 @@ async function handleSelect(url: string): Promise<boolean> {
 watch(source, () => {
   selectionGeneration++
   selectingUrl.value = ''
-  if (source.value === 'wallhaven') {
-    void fetchWallhaven()
-  }
-  else {
-    void fetchImages()
-  }
+  void fetchImages()
 })
 watch(() => [auth.token, auth.userInfo?.id], () => { void refreshImgbedStatus() })
 watch(apiKeyStorageKey, () => {
   requestGeneration++
   selectionGeneration++
   selectingUrl.value = ''
-  wallhavenList.value = []
+  onlineList.value = []
   void fetchImages()
 })
 
 onMounted(() => {
   void refreshImgbedStatus()
-  if (source.value === 'wallhaven')
-    void fetchWallhaven()
-  else
-    void fetchImages()
+  void fetchImages()
 })
 </script>
 
@@ -459,11 +577,11 @@ onMounted(() => {
         <button
           type="button"
           class="source-tab-btn wallhaven-tab"
-          :class="{ active: source === 'wallhaven' }"
-          @click="source = 'wallhaven'"
+          :class="{ active: source === 'online' }"
+          @click="source = 'online'"
         >
           <span class="wallhaven-badge">4K</span>
-          <span>Wallhaven 壁纸库</span>
+          <span>在线壁纸库</span>
         </button>
       </div>
 
@@ -481,25 +599,39 @@ onMounted(() => {
       </NButton>
     </div>
 
-    <!-- Wallhaven 专属快捷工具栏 -->
-    <div v-if="source === 'wallhaven'" class="wallhaven-toolbar">
+    <!-- 在线壁纸库工具栏：先选壁纸源，再按源显示搜索与筛选 -->
+    <div v-if="source === 'online'" class="wallhaven-toolbar">
+      <div class="provider-tabs" role="tablist" aria-label="壁纸源">
+        <button
+          v-for="item in wallpaperProviders"
+          :key="item.value"
+          type="button"
+          role="tab"
+          class="tag-btn provider-tab"
+          :class="{ active: provider === item.value }"
+          :aria-selected="provider === item.value"
+          @click="selectProvider(item.value)"
+        >
+          {{ item.label }}
+        </button>
+      </div>
       <!-- 搜索与排序 -->
-      <div class="wallhaven-search-row">
-        <NInputGroup>
+      <div v-if="providerInfo.searchable || providerInfo.keyUrl" class="wallhaven-search-row">
+        <NInputGroup v-if="providerInfo.searchable">
           <NInput
-            v-model:value="wallhavenQuery"
-            placeholder="搜索壁纸，发现喜欢的风景…"
+            v-model:value="onlineQuery"
+            :placeholder="providerInfo.searchPlaceholder || '搜索壁纸，发现喜欢的风景…'"
             clearable
-            @keydown.enter="handleWallhavenSearch"
+            @keydown.enter="handleOnlineSearch"
           />
-          <NButton type="primary" class="wallhaven-search-btn" @click="handleWallhavenSearch">
+          <NButton type="primary" class="wallhaven-search-btn" @click="handleOnlineSearch">
             <template #icon>
               <SvgIcon icon="material-symbols:search-rounded" />
             </template>
             搜索
           </NButton>
         </NInputGroup>
-        <NPopover trigger="click" placement="bottom-end" :width="340" class="wallhaven-advanced-popover">
+        <NPopover v-if="providerInfo.keyUrl" trigger="click" placement="bottom-end" :width="340" class="wallhaven-advanced-popover">
           <template #trigger>
             <NButton secondary>
               高级设置
@@ -507,9 +639,9 @@ onMounted(() => {
           </template>
           <div class="wallhaven-advanced-content">
             <div class="wallhaven-account-settings">
-              <strong>Wallhaven 账号 API Key · {{ wallhavenApiKey ? '已配置' : '未配置' }}</strong>
+              <strong>{{ providerInfo.label }} API Key · {{ currentApiKey ? '已配置' : '未配置' }}</strong>
               <div class="wallhaven-key-controls">
-                <NInput v-model:value="apiKeyDraft" type="password" show-password-on="click" placeholder="从 Wallhaven 账号设置复制 API Key" autocomplete="off" :maxlength="128" aria-label="Wallhaven API Key" />
+                <NInput v-model:value="apiKeyDraft" type="password" show-password-on="click" :placeholder="provider === 'wallhaven' ? '从 Wallhaven 账号设置复制 API Key' : `粘贴 ${providerInfo.label} 的 API Key（Access Key）`" autocomplete="off" :maxlength="128" :aria-label="`${providerInfo.label} API Key`" />
                 <NButton size="small" @click="saveApiKey">
                   保存到本机
                 </NButton>
@@ -517,13 +649,17 @@ onMounted(() => {
                   清除
                 </NButton>
               </div>
-              <small>仅保存在当前浏览器和当前账号下，不随布局同步。搜索时交由你连接的 Panel Next 服务转发至 Wallhaven，不放入 URL。请使用可信的 HTTPS 服务。</small>
-              <a href="https://wallhaven.cc/settings/account" target="_blank" rel="noopener noreferrer">打开 Wallhaven 账号设置</a>
+              <small v-if="provider !== 'wallhaven'">{{ providerInfo.label }} 的 API Key 可免费申请，申请后粘贴到这里即可浏览和搜索。</small>
+              <small>仅保存在当前浏览器和当前账号下，不随布局同步。搜索时交由你连接的 Panel Next 服务转发至 {{ providerInfo.label }}，不放入 URL。请使用可信的 HTTPS 服务。</small>
+              <a :href="providerInfo.keyUrl" target="_blank" rel="noopener noreferrer">{{ provider === 'wallhaven' ? '打开 Wallhaven 账号设置' : `申请 ${providerInfo.label} API Key` }}</a>
             </div>
           </div>
         </NPopover>
       </div>
-      <div class="wallhaven-filters">
+      <p v-if="provider === 'bing'" class="wallhaven-results-summary">
+        Bing 每日一图，最近 15 天，4K 原图，每天更新
+      </p>
+      <div v-if="provider === 'wallhaven'" class="wallhaven-filters">
         <label class="wallhaven-filter"><span>排序方式</span>
           <NSelect
             v-model:value="wallhavenSorting"
@@ -571,21 +707,60 @@ onMounted(() => {
       </div>
 
 
+      <div v-else-if="providerInfo.sortingOptions || providerInfo.ratings" class="wallhaven-filters extra-filters">
+        <label v-if="providerInfo.sortingOptions" class="wallhaven-filter"><span>排序方式</span>
+          <NSelect
+            v-model:value="extraSorting"
+            :options="providerInfo.sortingOptions"
+            :aria-label="`${providerInfo.label} 排序方式`"
+            @update-value="afterSelectChange(handleOnlineSearch)"
+          />
+        </label>
+        <div v-if="providerInfo.ratings" class="wallhaven-filter" role="group" aria-label="内容分级，可多选">
+          <span>内容分级 · 可多选</span>
+          <div class="category-toggles">
+            <button
+              v-for="option in purityOptions"
+              :key="option.bit"
+              type="button"
+              class="tag-btn category-toggle"
+              :class="{ active: booruPurity[option.bit] === '1' }"
+              :aria-pressed="booruPurity[option.bit] === '1'"
+              @click="toggleBooruPurity(option.bit)"
+            >
+              {{ option.label }}
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- 热门快捷标签 -->
-      <div class="quick-tags flex items-center gap-1.5 flex-wrap">
+      <div v-if="providerInfo.quickTags" class="quick-tags flex items-center gap-1.5 flex-wrap">
+        <button
+          v-for="tag in providerInfo.quickTags"
+          :key="tag.label"
+          type="button"
+          class="tag-btn"
+          :class="{ active: onlineQuery === tag.q }"
+          @click="handleExtraTagClick(tag.q)"
+        >
+          {{ isWallpaperPicker ? tag.label.replace(/^\S+\s/, '') : tag.label }}
+        </button>
+      </div>
+      <div v-else-if="provider === 'wallhaven'" class="quick-tags flex items-center gap-1.5 flex-wrap">
         <button
           v-for="tag in quickTags"
           :key="tag.label"
           type="button"
           class="tag-btn"
-          :class="{ active: wallhavenQuery === tag.q }"
+          :class="{ active: onlineQuery === tag.q }"
           @click="handleQuickTagClick(tag)"
         >
           {{ isWallpaperPicker ? tag.label.replace(/^\S+\s/, '') : tag.label }}
         </button>
       </div>
-      <div v-if="wallhavenTotal > 0" class="wallhaven-results-summary">
-        找到约 {{ wallhavenTotal }} 张壁纸 · 第 {{ wallhavenPage }} 页{{ wallhavenRelaxNote ? ` · ${wallhavenRelaxNote}` : '' }}
+      <div v-if="onlineTotal > 0 && provider !== 'bing'" class="wallhaven-results-summary">
+        找到约 {{ onlineTotal }} 张壁纸 · 第 {{ onlinePage }} 页{{ provider === 'wallhaven' && wallhavenRelaxNote ? ` · ${wallhavenRelaxNote}` : '' }}{{ provider === 'unsplash' || provider === 'pexels' ? ` · 图片来自 ${providerInfo.label}，版权归摄影师所有` : '' }}
       </div>
     </div>
     <p v-if="selectingUrl" role="status" class="gallery-selection-status">
@@ -607,7 +782,7 @@ onMounted(() => {
           <SvgIcon icon="mdi:heart-outline" />
           <strong>还没有喜欢的壁纸</strong>
           <span>去图库点击壁纸右上角的爱心，即可收藏到这里。</span>
-          <NButton secondary @click="source = 'wallhaven'">
+          <NButton secondary @click="source = 'online'">
             浏览壁纸库
           </NButton>
         </div>
@@ -621,7 +796,7 @@ onMounted(() => {
               <SvgIcon icon="material-symbols:favorite" />
             </button>
             <div class="favorite-card-caption">
-              <span>{{ item.title }}</span><small>{{ item.source === 'wallhaven' ? 'Wallhaven' : item.source === 'public' ? '公共图库' : item.source === 'imgbed' ? '外部图床' : '个人图库' }}</small>
+              <span>{{ item.title }}</span><small>{{ favoriteSourceLabel(item.source) }}</small>
             </div>
           </div>
         </div>
@@ -652,7 +827,7 @@ onMounted(() => {
           </div>
         </div>
       </div>
-      <div v-else-if="source !== 'wallhaven'" class="flex-1">
+      <div v-else-if="source !== 'online'" class="flex-1">
         <div v-if="imageList.length === 0" class="text-center text-slate-400 py-12">
           {{ t('apps.uploadsFileManager.nothingText') }}
         </div>
@@ -679,42 +854,50 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- 2. Wallhaven 壁纸网格 -->
+      <!-- 2. 在线壁纸网格 -->
       <div v-else class="flex-1 flex flex-col">
-        <div v-if="wallhavenList.length === 0" class="text-center text-slate-400 py-12">
-          已放宽时间范围和屏幕比例仍未找到壁纸，可以换个关键词，或把内容范围、排序方式换一下试试
+        <div v-if="onlineError" class="favorites-empty">
+          <SvgIcon icon="mdi:image-off-outline" />
+          <strong>{{ onlineError }}</strong>
+          <span v-if="providerInfo.keyUrl && !currentApiKey"><a :href="providerInfo.keyUrl" target="_blank" rel="noopener noreferrer">免费申请 {{ providerInfo.label }} API Key</a>，申请后填到「高级设置」</span>
+          <NButton v-else secondary @click="fetchOnline">
+            重试
+          </NButton>
+        </div>
+        <div v-else-if="onlineList.length === 0" class="text-center text-slate-400 py-12">
+          {{ provider === 'wallhaven' ? '已放宽时间范围和屏幕比例仍未找到壁纸，可以换个关键词，或把内容范围、排序方式换一下试试' : '没有找到壁纸，换个关键词或筛选条件试试' }}
         </div>
 
         <div v-else class="wallhaven-grid">
           <div
-            v-for="(item, index) in wallhavenList"
+            v-for="(item, index) in onlineList"
             :key="item.id"
             class="wallhaven-card group relative rounded-xl overflow-hidden border border-slate-200 dark:border-zinc-800 hover:border-emerald-500 cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 bg-zinc-900"
             @click="openPreview(index)"
           >
             <!-- 缩略图：独立按钮承担键盘/读屏的「预览」入口，点击冒泡到卡片打开预览 -->
-            <button type="button" class="wallhaven-preview-trigger" :aria-label="`预览壁纸：Wallhaven ${item.id}`">
+            <button type="button" class="wallhaven-preview-trigger" :aria-label="`预览壁纸：${onlineItemTitle(item)}`">
               <img
                 :src="item.thumbUrl"
-                :alt="item.id"
+                :alt="onlineItemTitle(item)"
                 loading="lazy"
                 class="wallhaven-thumbnail transition-transform duration-500 group-hover:scale-105"
               >
             </button>
 
             <!-- 分辨率与分类浮层徽标 -->
-            <button v-if="isWallpaperPicker" type="button" class="favorite-button" :class="{ 'is-favorite': isFavorite(item.rawUrl) }" :aria-pressed="isFavorite(item.rawUrl)" :aria-label="`${isFavorite(item.rawUrl) ? '取消喜欢' : '喜欢'}：Wallhaven ${item.id}`" :title="isFavorite(item.rawUrl) ? '取消喜欢' : '加入我的喜欢'" :disabled="savingFavorite" @click.stop="toggleFavorite({ url: item.rawUrl, thumbnail: item.thumbUrl || item.rawUrl, title: `Wallhaven ${item.id}`, source: 'wallhaven' })">
+            <button v-if="isWallpaperPicker" type="button" class="favorite-button" :class="{ 'is-favorite': isFavorite(item.rawUrl) }" :aria-pressed="isFavorite(item.rawUrl)" :aria-label="`${isFavorite(item.rawUrl) ? '取消喜欢' : '喜欢'}：${onlineItemTitle(item)}`" :title="isFavorite(item.rawUrl) ? '取消喜欢' : '加入我的喜欢'" :disabled="savingFavorite" @click.stop="toggleFavorite({ url: item.rawUrl, thumbnail: item.thumbUrl || item.rawUrl, title: onlineItemTitle(item), source: provider })">
               <SvgIcon :icon="isFavorite(item.rawUrl) ? 'material-symbols:favorite' : 'mdi:heart-outline'" />
             </button>
-            <div class="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-md bg-black/65 backdrop-blur-md text-[10px] font-semibold text-emerald-400 shadow">
+            <div v-if="item.resolution" class="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-md bg-black/65 backdrop-blur-md text-[10px] font-semibold text-emerald-400 shadow">
               {{ item.resolution }}
             </div>
 
             <!-- 悬浮操作与信息面板 -->
             <div class="wallhaven-card-overlay absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-2 text-white">
               <div class="flex items-center justify-between text-[11px] mb-1">
-                <span class="capitalize text-zinc-300">{{ item.category }}</span>
-                <span class="flex items-center gap-0.5 text-zinc-300">
+                <span class="capitalize text-zinc-300 truncate">{{ provider === 'unsplash' || provider === 'pexels' ? item.author : provider === 'bing' ? item.title : item.category }}</span>
+                <span v-if="provider === 'wallhaven' || providerInfo.scoreLabel" class="flex items-center gap-0.5 text-zinc-300">
                   <SvgIcon icon="material-symbols:favorite" class="text-rose-400 text-xs" />
                   {{ item.favorites }}
                 </span>
@@ -726,10 +909,10 @@ onMounted(() => {
       </div>
     </div>
     <!-- 分页控制 -->
-    <div v-if="source === 'wallhaven' && wallhavenTotalPages > 1" class="gallery-pagination">
+    <div v-if="source === 'online' && onlineTotalPages > 1" class="gallery-pagination">
       <NPagination
-        v-model:page="wallhavenPage"
-        :page-count="wallhavenTotalPages"
+        v-model:page="onlinePage"
+        :page-count="onlineTotalPages"
         :page-slot="5"
         size="small"
         @update-page="handlePageChange"
@@ -739,16 +922,16 @@ onMounted(() => {
       <NPagination :page="imgbedPage" :page-count="imgbedPageCount" :page-slot="5" size="small" @update-page="handleImgbedPageChange" />
     </div>
     <NModal v-if="previewItem" v-model:show="showPreview" :auto-focus="false">
-      <div ref="previewDialog" class="wallhaven-preview" role="dialog" aria-modal="true" :aria-label="`壁纸预览：Wallhaven ${previewItem.id}`" tabindex="-1" @keydown="handlePreviewKeydown">
+      <div ref="previewDialog" class="wallhaven-preview" role="dialog" aria-modal="true" :aria-label="`壁纸预览：${onlineItemTitle(previewItem)}`" tabindex="-1" @keydown="handlePreviewKeydown">
         <div class="wallhaven-preview-stage">
           <img v-if="!previewRawLoaded" :src="previewItem.thumbUrl" alt="" aria-hidden="true" class="wallhaven-preview-image is-thumb">
-          <img v-if="!previewRawFailed" :key="`${previewItem.rawUrl}#${previewAttempt}`" :src="previewItem.rawUrl" :alt="`Wallhaven ${previewItem.id}`" class="wallhaven-preview-image" :class="{ 'is-loaded': previewRawLoaded }" @load="previewRawLoaded = true" @error="previewRawFailed = true">
+          <img v-if="!previewRawFailed" :key="`${previewItem.rawUrl}#${previewAttempt}`" :src="previewItem.rawUrl" :alt="onlineItemTitle(previewItem)" class="wallhaven-preview-image" :class="{ 'is-loaded': previewRawLoaded }" @load="previewRawLoaded = true" @error="previewRawFailed = true">
           <span v-if="previewRawFailed" class="wallhaven-preview-loading" role="alert">原图加载失败，当前显示的是缩略图 <button type="button" class="wallhaven-preview-retry" @click="retryPreviewRaw">重试</button></span>
           <span v-else-if="!previewRawLoaded" class="wallhaven-preview-loading">正在加载原图…</span>
           <button type="button" class="wallhaven-preview-nav is-prev" aria-label="上一张" :disabled="previewIndex <= 0" @click="stepPreview(-1)">
             <SvgIcon icon="material-symbols:chevron-left-rounded" />
           </button>
-          <button type="button" class="wallhaven-preview-nav is-next" aria-label="下一张" :disabled="previewIndex >= wallhavenList.length - 1" @click="stepPreview(1)">
+          <button type="button" class="wallhaven-preview-nav is-next" aria-label="下一张" :disabled="previewIndex >= onlineList.length - 1" @click="stepPreview(1)">
             <SvgIcon icon="material-symbols:chevron-right-rounded" />
           </button>
           <button type="button" class="wallhaven-preview-close" aria-label="关闭预览" @click="showPreview = false">
@@ -757,13 +940,15 @@ onMounted(() => {
         </div>
         <div class="wallhaven-preview-bar">
           <div class="wallhaven-preview-meta">
-            <strong>{{ previewItem.resolution }}</strong>
-            <span class="capitalize">{{ previewItem.category }}</span>
-            <span><SvgIcon icon="material-symbols:favorite" class="text-rose-400" /> {{ previewItem.favorites }}</span>
-            <a :href="previewItem.url" target="_blank" rel="noopener noreferrer">在 Wallhaven 查看</a>
+            <strong v-if="previewItem.resolution">{{ previewItem.resolution }}</strong>
+            <span v-if="previewItem.category" class="capitalize">{{ previewItem.category }}</span>
+            <span v-if="provider === 'wallhaven' || providerInfo.scoreLabel"><SvgIcon icon="material-symbols:favorite" class="text-rose-400" /> {{ previewItem.favorites }}</span>
+            <span v-if="provider === 'bing' && previewItem.author" class="wallhaven-preview-credit">{{ previewItem.author }}</span>
+            <span v-else-if="previewItem.author && previewItem.authorUrl" class="wallhaven-preview-credit">摄影：<a :href="previewItem.authorUrl" target="_blank" rel="noopener noreferrer">{{ previewItem.author }}</a> · {{ providerInfo.label }}</span>
+            <a :href="previewItem.url" target="_blank" rel="noopener noreferrer">在 {{ providerInfo.label.replace(' 每日', '') }} 查看</a>
           </div>
           <div class="wallhaven-preview-actions">
-            <NButton v-if="isWallpaperPicker" secondary :disabled="savingFavorite" @click="toggleFavorite({ url: previewItem.rawUrl, thumbnail: previewItem.thumbUrl || previewItem.rawUrl, title: `Wallhaven ${previewItem.id}`, source: 'wallhaven' })">
+            <NButton v-if="isWallpaperPicker" secondary :disabled="savingFavorite" @click="toggleFavorite({ url: previewItem.rawUrl, thumbnail: previewItem.thumbUrl || previewItem.rawUrl, title: onlineItemTitle(previewItem), source: provider })">
               {{ isFavorite(previewItem.rawUrl) ? '取消喜欢' : '加入喜欢' }}
             </NButton>
             <NButton type="primary" :loading="selectingUrl === previewItem.rawUrl" :disabled="!!selectingUrl && selectingUrl !== previewItem.rawUrl" @click="applyPreview">
@@ -874,6 +1059,11 @@ onMounted(() => {
 .wallhaven-preview-meta strong { color: #34d399; }
 .wallhaven-preview-meta span { display: inline-flex; align-items: center; gap: 4px; }
 .wallhaven-preview-meta a { color: #a1a1aa; text-decoration: underline; }
+.wallhaven-preview-credit { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.provider-tabs { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+.provider-tabs .provider-tab { flex: none; padding: 6px 14px; font-size: 12px; white-space: nowrap; }
+.extra-filters { grid-template-columns: minmax(150px, 1fr) minmax(200px, 1.3fr); }
+.favorites-empty a { text-decoration: underline; }
 .wallhaven-preview-actions { display: flex; gap: 8px; }
 @container (max-width: 720px) {
   .wallhaven-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }

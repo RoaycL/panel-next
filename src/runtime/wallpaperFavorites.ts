@@ -5,11 +5,12 @@ export interface FavoriteWallpaper {
   url: string
   thumbnail: string
   title: string
-  source: 'private' | 'public' | 'wallhaven' | 'imgbed'
+  source: 'private' | 'public' | 'imgbed' | 'wallhaven' | 'bing' | 'unsplash' | 'pexels' | 'konachan' | 'yandere'
   savedAt: string
 }
 
 export const MAX_WALLPAPER_FAVORITES = 200
+const FAVORITE_SOURCES: FavoriteWallpaper['source'][] = ['private', 'public', 'imgbed', 'wallhaven', 'bing', 'unsplash', 'pexels', 'konachan', 'yandere']
 
 export function wallpaperFavoritesKey(origin: string | null, accountId?: number): string {
   return `PANEL_NEXT_WALLPAPER_FAVORITES_V1:${encodeURIComponent(origin || 'local')}:${accountId ?? 'guest'}`
@@ -38,7 +39,7 @@ export function readWallpaperFavorites(storage: StorageAdapter, key: string, ori
     return saved.filter((item): item is FavoriteWallpaper => {
       if (!item || !safeImageUrl(item.url) || !safeImageUrl(item.thumbnail)
         || typeof item.title !== 'string' || item.title.length > 160
-        || !['private', 'public', 'wallhaven', 'imgbed'].includes(item.source)
+        || !FAVORITE_SOURCES.includes(item.source)
         || typeof item.savedAt !== 'string' || !Number.isFinite(Date.parse(item.savedAt))) return false
       const id = wallpaperIdentity(item.url, origin)
       if (seen.has(id)) return false
