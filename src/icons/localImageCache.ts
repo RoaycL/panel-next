@@ -109,7 +109,7 @@ async function loadImage(source: string, refresh: boolean): Promise<LocalIconIma
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), DOWNLOAD_TIMEOUT_MS)
   try {
-    const response = await fetch(source, { cache: 'no-store', credentials: 'same-origin', signal: controller.signal })
+    const response = await fetch(source, { cache: 'no-store', credentials: 'same-origin', referrerPolicy: 'no-referrer', signal: controller.signal })
     const contentType = response.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() ?? ''
     const contentLength = Number(response.headers.get('content-length') || 0)
     if (!response.ok || !contentType.startsWith('image/') || contentLength > MAX_IMAGE_BYTES)

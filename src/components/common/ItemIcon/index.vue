@@ -164,7 +164,8 @@ const iconScale = computed(() => normalizeIconScale(props.itemIcon?.scale))
           <SvgIcon v-else-if="fallbackSprite" :icon="fallbackSprite" class="item-icon-glyph" />
           <span v-else class="item-icon-mark" :style="{ fontSize: markFontSize }">{{ fallbackMark }}</span>
         </template>
-        <img v-if="displayImageSrc && !imageFailed" :src="displayImageSrc" alt="" class="item-icon-image" @load="inspectImage($event)" @error="imageFailed = true">
+        <!-- No Referer: favicon CDNs (e.g. hdslb.com) 403 hotlinks from the web panel's origin; extension pages never send one. -->
+        <img v-if="displayImageSrc && !imageFailed" :src="displayImageSrc" alt="" class="item-icon-image" referrerpolicy="no-referrer" @load="inspectImage($event)" @error="imageFailed = true">
         <SvgIconOnline v-if="onlineIcon" :icon="onlineIcon" class="item-icon-remote" />
       </div>
     </slot>
