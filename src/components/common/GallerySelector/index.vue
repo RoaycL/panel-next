@@ -80,14 +80,21 @@ watch(apiKeyStorageKey, key => {
   apiKeyDraft.value = wallhavenApiKey.value
   wallhavenPurity.value = '100'
 }, { immediate: true })
+// 位串：SFW / Sketchy / NSFW，可多选；NSFW 需要 API Key
 const purityOptions = computed(() => [
-  { label: 'SFW', value: '100' },
-  { label: 'Sketchy', value: '010' },
-  { label: 'NSFW', value: '001', disabled: !wallhavenApiKey.value },
+  { label: 'SFW', bit: 0 },
+  { label: 'Sketchy', bit: 1 },
+  { label: 'NSFW', bit: 2, disabled: !wallhavenApiKey.value },
 ])
-function selectPurity(value: string) {
-  if (wallhavenPurity.value === value) return
-  wallhavenPurity.value = value
+function isPurityOn(bit: number) {
+  return wallhavenPurity.value[bit] === '1'
+}
+// 可多选，但至少保留一个分级
+function togglePurity(bit: number) {
+  const bits = wallhavenPurity.value.split('')
+  bits[bit] = bits[bit] === '1' ? '0' : '1'
+  if (!bits.includes('1')) return
+  wallhavenPurity.value = bits.join('')
   handleWallhavenSearch()
 }
 async function saveApiKey() {
@@ -102,7 +109,11 @@ async function saveApiKey() {
   catch { ms.error('API Key 本机保存失败，请重试'); return }
   if (storageKey !== apiKeyStorageKey.value) return
   wallhavenApiKey.value = key
-  if (!key) wallhavenPurity.value = '100'
+  if (!key) {
+    // 清除 Key 后去掉 NSFW；只剩 NSFW 时回到 SFW
+    const next = `${wallhavenPurity.value.slice(0, 2)}0`
+    wallhavenPurity.value = next === '000' ? '100' : next
+  }
   ms.success(key ? 'API Key 已保存在本机' : 'API Key 已清除')
   handleWallhavenSearch()
 }
@@ -461,20 +472,19 @@ onMounted(() => {
           />
         </label>
 
-        <div class="wallhaven-filter" role="radiogroup" aria-label="内容分级">
-          <span>内容分级</span>
+        <div class="wallhaven-filter" role="group" aria-label="内容分级，可多选">
+          <span>内容分级 · 可多选</span>
           <div class="category-toggles">
             <button
               v-for="option in purityOptions"
-              :key="option.value"
+              :key="option.bit"
               type="button"
-              role="radio"
               class="tag-btn category-toggle"
-              :class="{ active: wallhavenPurity === option.value }"
-              :aria-checked="wallhavenPurity === option.value"
+              :class="{ active: isPurityOn(option.bit) }"
+              :aria-pressed="isPurityOn(option.bit)"
               :disabled="option.disabled"
               :title="option.disabled ? '需在「高级设置」中配置 Wallhaven API Key' : undefined"
-              @click="selectPurity(option.value)"
+              @click="togglePurity(option.bit)"
             >
               {{ option.label }}
             </button>

@@ -61,8 +61,9 @@ assert.match(gallery, /generation !== requestGeneration/)
 assert.match(gallery, /type="password"/)
 const purity = gallery.match(/const purityOptions = computed\(\(\) => \[([\s\S]*?)\]\)/)?.[1]
 assert.ok(purity)
-assert.deepEqual([...purity.matchAll(/value: '([01]+)'/g)].map(match => match[1]), ['100', '010', '001'], 'Each rating must request only its own content tier')
-assert.match(purity, /value: '001', disabled: !wallhavenApiKey.value/)
+assert.deepEqual([...purity.matchAll(/bit: (\d)/g)].map(match => Number(match[1])), [0, 1, 2], 'Each rating must toggle only its own content tier bit')
+assert.match(purity, /bit: 2, disabled: !wallhavenApiKey.value/)
+assert.match(gallery, /if \(!bits\.includes\('1'\)\) return\n  wallhavenPurity\.value = bits\.join\(''\)/, 'At least one rating stays selected')
 const sorting = gallery.match(/const wallhavenSortingOptions = \[([\s\S]*?)\]/)?.[1]
 assert.ok(sorting)
 for (const [, label] of sorting.matchAll(/label: '([^']+)'/g)) assert.doesNotMatch(label, /[A-Z]/i, 'Sorting labels must be Chinese only')
