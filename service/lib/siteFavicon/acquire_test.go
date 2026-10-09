@@ -1,7 +1,10 @@
 package siteFavicon
 
 import (
+	"bytes"
 	"context"
+	"image"
+	"image/png"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -133,4 +136,65 @@ func TestAcquireDeadlineAndOversizedResponse(t *testing.T) {
 			t.Fatal("oversized icon left a file")
 		}
 	})
+}
+
+func pngOfSize(size int) []byte {
+	var buffer bytes.Buffer
+	png.Encode(&buffer, image.NewRGBA(image.Rect(0, 0, size, size)))
+	return buffer.Bytes()
+}
+
+func TestAcquirePrefersLargestIcon(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/":
+			w.Write([]byte(`<link rel="icon" sizes="16x16" href="/16.png"><link rel="icon" sizes="32x32" href="/32.png"><link rel="apple-touch-icon" sizes="152x152" href="/152.png"><link rel="apple-touch-icon" sizes="57x57" href="/57.png">`))
+		case "/16.png":
+			w.Write(pngOfSize(16))
+		case "/32.png":
+			w.Write(pngOfSize(32))
+		case "/152.png":
+			w.Write(pngOfSize(152))
+		case "/57.png":
+			w.Write(pngOfSize(57))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	file, candidates, err := Acquire(context.Background(), server.URL+"/", t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if candidates[0] != server.URL+"/152.png" {
+		t.Fatalf("largest declared icon not first: %v", candidates)
+	}
+	data, _ := os.ReadFile(file.Name())
+	if pixelSize(data) != 152 {
+		t.Fatalf("saved %dpx icon", pixelSize(data))
+	}
+}
+
+func TestAcquireKeepsSharpestWhenDeclarationsLie(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/":
+			w.Write([]byte(`<link rel="icon" sizes="192x192" href="/claims-big.png"><link rel="icon" sizes="16x16" href="/real-64.png">`))
+		case "/claims-big.png":
+			w.Write(pngOfSize(24))
+		case "/real-64.png":
+			w.Write(pngOfSize(64))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	file, _, err := Acquire(context.Background(), server.URL+"/", t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(file.Name())
+	if pixelSize(data) != 64 {
+		t.Fatalf("saved %dpx icon", pixelSize(data))
+	}
 }
