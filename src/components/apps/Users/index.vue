@@ -203,11 +203,15 @@ async function getList(page: number | null) {
   if (keyWord.value !== '')
     req.keyWord = keyWord.value
 
-  const { data } = await usersGetList<Common.ListResponse<User.Info[]>>(req)
-  pagination.itemCount = data.count
-  if (data.list)
-    userList.value = data.list
-  tableIsLoading.value = false
+  try {
+    const { data } = await usersGetList<Common.ListResponse<User.Info[]>>(req)
+    pagination.itemCount = data?.count ?? 0
+    if (data?.list)
+      userList.value = data.list
+  }
+  finally {
+    tableIsLoading.value = false
+  }
 }
 
 async function deletes(ids: number[]) {
@@ -219,8 +223,11 @@ async function deletes(ids: number[]) {
 }
 
 onMounted(() => {
+  // Without a public visitor configured the API answers code -1 with no data.
   getPublicVisitUser<User.Info>().then(({ data }) => {
-    publicVisitUserId.value = data.id || null
+    publicVisitUserId.value = data?.id || null
+  }).catch(() => {
+    publicVisitUserId.value = null
   })
   getList(null)
 })
