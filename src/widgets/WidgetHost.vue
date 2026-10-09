@@ -19,12 +19,23 @@ const loading = ref(false)
 const showDetails = ref(false)
 const detailTarget = ref<HTMLElement | null>(null)
 const detailFullscreen = ref(false)
+// The widget stays in the enlarged sheet until the close animation ends, so the
+// sheet never fades out empty (an outline-only ghost) while the grid redraws.
+const detailOpen = ref(false)
+watch(showDetails, (show) => {
+  if (show)
+    detailOpen.value = true
+})
+function finishDetailsLeave() {
+  detailOpen.value = false
+  detailFullscreen.value = false
+}
 const detailTitle = computed(() => t(widgetRegistry.get(props.instance.type)?.meta?.title || props.instance.type))
 const retryGeneration = ref(0)
 const componentProps = computed(() => ({
   ...(typeof props.instance.config === 'object' && props.instance.config !== null ? props.instance.config : {}),
   ...attrs,
-  expanded: showDetails.value,
+  expanded: detailOpen.value,
 }))
 
 // 主题切片：无 ThemeProvider（独立预览）时自动回退默认主题。
@@ -47,7 +58,7 @@ const widgetContext = reactive({
     return theme.tokens.widget
   },
   get size() {
-    return showDetails.value ? { columns: 12, rows: 6 } : props.instance.size
+    return detailOpen.value ? { columns: 12, rows: 6 } : props.instance.size
   },
 })
 watch(() => props.editMode, (editMode) => {
@@ -112,7 +123,7 @@ function rememberPointer(event: PointerEvent) {
 }
 
 function openDetails(event?: MouseEvent) {
-  if (props.editMode || showDetails.value || loading.value || renderError.value
+  if (props.editMode || detailOpen.value || loading.value || renderError.value
     || props.instance.id.startsWith('header.'))
     return
   if (event && pointerStart && Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y) > 6)
@@ -146,17 +157,17 @@ function openDetails(event?: MouseEvent) {
     <div v-else-if="loading" class="widget-loading" role="status">
       {{ t('widgetLayout.host.loading') }}
     </div>
-    <Teleport v-else-if="component && !instance.hidden" :to="detailTarget || 'body'" :disabled="!showDetails || !detailTarget">
-      <div class="widget-render-stage" :class="{ 'is-detail': showDetails }">
+    <Teleport v-else-if="component && !instance.hidden" :to="detailTarget || 'body'" :disabled="!detailOpen || !detailTarget">
+      <div class="widget-render-stage" :class="{ 'is-detail': detailOpen }">
         <component :is="component" v-bind="componentProps" />
       </div>
     </Teleport>
-    <button v-if="component && !instance.hidden && !editMode && !instance.id.startsWith('header.') && !showDetails" class="widget-expand-button" type="button" :aria-label="t('widgetDetails.expand', { title: detailTitle })" :title="t('widgetDetails.expand', { title: detailTitle })" @click.stop="showDetails = true">
+    <button v-if="component && !instance.hidden && !editMode && !instance.id.startsWith('header.') && !detailOpen" class="widget-expand-button" type="button" :aria-label="t('widgetDetails.expand', { title: detailTitle })" :title="t('widgetDetails.expand', { title: detailTitle })" @click.stop="showDetails = true">
       ⤢
     </button>
   </div>
   <!-- No card chrome: the enlarged widget is its own surface, like it is on the grid. -->
-  <NModal v-model:show="showDetails" :to="getRuntime().kind === 'extension' ? '.pn-theme-root' : undefined" @after-leave="detailFullscreen = false">
+  <NModal v-model:show="showDetails" :to="getRuntime().kind === 'extension' ? '.pn-theme-root' : undefined" @after-leave="finishDetailsLeave">
     <div
       class="widget-detail-sheet"
       :class="{ 'is-fullscreen': detailFullscreen }"
