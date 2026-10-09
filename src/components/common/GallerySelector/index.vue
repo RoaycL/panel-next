@@ -85,6 +85,11 @@ const purityOptions = computed(() => [
   { label: 'Sketchy', value: '010' },
   { label: 'NSFW', value: '001', disabled: !wallhavenApiKey.value },
 ])
+function selectPurity(value: string) {
+  if (wallhavenPurity.value === value) return
+  wallhavenPurity.value = value
+  handleWallhavenSearch()
+}
 async function saveApiKey() {
   const key = apiKeyDraft.value.trim()
   const storageKey = apiKeyStorageKey.value
@@ -415,7 +420,7 @@ onMounted(() => {
             clearable
             @keydown.enter="handleWallhavenSearch"
           />
-          <NButton type="primary" @click="handleWallhavenSearch">
+          <NButton type="primary" class="wallhaven-search-btn" @click="handleWallhavenSearch">
             <template #icon>
               <SvgIcon icon="material-symbols:search-rounded" />
             </template>
@@ -429,9 +434,6 @@ onMounted(() => {
             </NButton>
           </template>
           <div class="wallhaven-advanced-content">
-            <label class="wallhaven-filter"><span>内容分级</span>
-              <NSelect v-model:value="wallhavenPurity" :options="purityOptions" aria-label="Wallhaven 内容范围" @update-value="afterSelectChange(handleWallhavenSearch)" />
-            </label>
             <div class="wallhaven-account-settings">
               <strong>Wallhaven 账号 API Key · {{ wallhavenApiKey ? '已配置' : '未配置' }}</strong>
               <div class="wallhaven-key-controls">
@@ -458,6 +460,26 @@ onMounted(() => {
             @update-value="afterSelectChange(handleWallhavenSearch)"
           />
         </label>
+
+        <div class="wallhaven-filter" role="radiogroup" aria-label="内容分级">
+          <span>内容分级</span>
+          <div class="category-toggles">
+            <button
+              v-for="option in purityOptions"
+              :key="option.value"
+              type="button"
+              role="radio"
+              class="tag-btn category-toggle"
+              :class="{ active: wallhavenPurity === option.value }"
+              :aria-checked="wallhavenPurity === option.value"
+              :disabled="option.disabled"
+              :title="option.disabled ? '需在「高级设置」中配置 Wallhaven API Key' : undefined"
+              @click="selectPurity(option.value)"
+            >
+              {{ option.label }}
+            </button>
+          </div>
+        </div>
 
         <div class="wallhaven-filter" role="group" aria-label="壁纸分类，可多选">
           <span>壁纸分类 · 可多选</span>
@@ -672,8 +694,6 @@ onMounted(() => {
 :global(.wallhaven-advanced-popover) { max-width: calc(100vw - 24px); }
 .is-wallpaper-picker .quick-tags { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
 .is-wallpaper-picker .quick-tags .tag-btn { flex: none; white-space: nowrap; }
-.is-wallpaper-picker .tag-btn.active { background: var(--pn-color-accent, #10b981); }
-.is-wallpaper-picker .source-tab-btn.active { background: var(--pn-color-accent, #10b981); border-color: transparent; color: white; box-shadow: none; }
 .is-wallpaper-results { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; padding: 0 2px 18px; }
 .gallery-pagination { display: flex; flex: none; align-items: center; justify-content: center; padding: 12px 0; border-top: 1px solid var(--pn-glass-border); }
 .is-wallpaper-picker .gallery-local-grid, .is-wallpaper-picker .wallhaven-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
@@ -684,6 +704,7 @@ onMounted(() => {
   .gallery-selector.is-wallpaper-picker { padding: 12px 12px 0; }
   .is-wallpaper-picker .source-tab-btn { padding: 6px 8px; font-size: 11px; }
   .is-wallpaper-picker .wallhaven-filters { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 10px; }
+  .is-wallpaper-picker .wallhaven-filters > :last-child { grid-column: 1 / -1; }
   .is-wallpaper-picker .wallhaven-filter { gap: 4px; }
   .is-wallpaper-picker .wallhaven-filter > span { font-size: 10px; }
   .is-wallpaper-picker .category-toggles { gap: 3px; }
@@ -722,9 +743,9 @@ onMounted(() => {
 .gallery-selection-status { font-size: 12px; color: var(--pn-color-text-secondary); }
 .wallhaven-toolbar { display: flex; flex-direction: column; gap: 16px; margin: 4px 0 18px; }
 .wallhaven-search-row { width: 100%; }
-.wallhaven-filters { display: grid; grid-template-columns: minmax(160px, 1fr) minmax(240px, 2fr); gap: 16px; }
+.wallhaven-filters { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(200px, 1.3fr) minmax(240px, 2fr); gap: 16px; }
 .category-toggles { display: flex; min-height: 34px; align-items: center; gap: 8px; }
-.category-toggle { flex: 1 1 0; padding: 8px 0; font-size: 12px; }
+.category-toggle { flex: 1 1 0; min-width: 0; padding: 8px 0; font-size: 12px; }
 .wallhaven-filter { display: flex; min-width: 0; flex-direction: column; gap: 8px; }
 .wallhaven-filter > span { font-size: 12px; color: var(--pn-color-text-secondary); }
 .wallhaven-results-summary { font-size: 12px; color: var(--pn-color-text-secondary); }
@@ -754,49 +775,70 @@ onMounted(() => {
 .wallhaven-preview-meta span { display: inline-flex; align-items: center; gap: 4px; }
 .wallhaven-preview-meta a { color: #a1a1aa; text-decoration: underline; }
 .wallhaven-preview-actions { display: flex; gap: 8px; }
+@container (max-width: 720px) {
+  .wallhaven-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .wallhaven-filters > :last-child { grid-column: 1 / -1; }
+}
 @container (max-width: 580px) {
-  .wallhaven-filters { grid-template-columns: 1fr; gap: 12px; }
   .wallhaven-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 }
 @container (max-width: 300px) {
   .wallhaven-grid { grid-template-columns: 1fr; }
 }
 
+/* 选中态用亮一级的磨砂玻璃（白色高光 + 细边 + 柔和投影），日夜共用一套结构，
+   不依赖 accent：默认主题的 accent 是近黑色，铺满按钮会显得很重。 */
+.gallery-selector {
+  --gs-chip-bg: rgba(255, 255, 255, .26);
+  --gs-chip-border: rgba(255, 255, 255, .42);
+  --gs-chip-text: var(--pn-color-text-secondary, #475569);
+  --gs-chip-hover-bg: rgba(255, 255, 255, .46);
+  --gs-chip-active-bg: rgba(255, 255, 255, .88);
+  --gs-chip-active-border: rgba(255, 255, 255, .95);
+  --gs-chip-active-text: var(--pn-color-text-primary, #171717);
+  --gs-chip-active-shadow: 0 1px 2px rgba(15, 23, 42, .06), 0 6px 16px rgba(15, 23, 42, .1), inset 0 1px 0 rgba(255, 255, 255, .9);
+}
+.dark .gallery-selector {
+  --gs-chip-bg: rgba(255, 255, 255, .06);
+  --gs-chip-border: rgba(255, 255, 255, .1);
+  --gs-chip-hover-bg: rgba(255, 255, 255, .12);
+  --gs-chip-active-bg: rgba(255, 255, 255, .2);
+  --gs-chip-active-border: rgba(255, 255, 255, .3);
+  --gs-chip-active-text: #fff;
+  --gs-chip-active-shadow: 0 6px 18px rgba(0, 0, 0, .28), inset 0 1px 0 rgba(255, 255, 255, .22);
+}
+
+.source-tab-btn, .tag-btn {
+  border: 1px solid var(--gs-chip-border);
+  border-radius: 9999px;
+  background: var(--gs-chip-bg);
+  color: var(--gs-chip-text);
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  backdrop-filter: blur(12px) saturate(140%);
+  transition: background-color .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease;
+}
+.source-tab-btn:hover:not(.active), .tag-btn:hover:not(.active):not(:disabled) {
+  background: var(--gs-chip-hover-bg);
+  color: var(--gs-chip-active-text);
+}
+.source-tab-btn.active, .tag-btn.active {
+  border-color: var(--gs-chip-active-border);
+  background: var(--gs-chip-active-bg);
+  color: var(--gs-chip-active-text);
+  font-weight: 600;
+  box-shadow: var(--gs-chip-active-shadow);
+}
+.source-tab-btn:focus-visible, .tag-btn:focus-visible { outline: 2px solid var(--gs-chip-active-text); outline-offset: 2px; }
+.tag-btn:disabled { cursor: not-allowed; opacity: .45; }
+
 .source-tab-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 14px;
-  border-radius: 9999px;
+  padding: 6px 14px;
   font-size: 12px;
   font-weight: 500;
-  border: 1px solid #e2e8f0;
-  background: transparent;
-  color: #64748b;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.dark .source-tab-btn {
-  border-color: #27272a;
-  color: #a1a1aa;
-}
-
-.source-tab-btn:hover {
-  border-color: #cbd5e1;
-  color: #0f172a;
-}
-
-.dark .source-tab-btn:hover {
-  border-color: #3f3f46;
-  color: #fff;
-}
-
-.source-tab-btn.active {
-  background: #10b981;
-  border-color: #10b981;
-  color: #fff;
-  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
 }
 
 .wallhaven-badge {
@@ -813,32 +855,23 @@ onMounted(() => {
 
 .tag-btn {
   padding: 7px 12px;
-  border-radius: 9999px;
   font-size: 11px;
-  background: rgba(0, 0, 0, 0.04);
-  border: 1px solid transparent;
-  color: #475569;
-  cursor: pointer;
-  transition: all 0.15s ease;
 }
 
-.dark .tag-btn {
-  background: rgba(255, 255, 255, 0.06);
-  color: #cbd5e1;
-}
-
-.tag-btn:hover {
-  background: rgba(16, 185, 129, 0.1);
-  color: #059669;
-}
-
-.dark .tag-btn:hover {
-  background: rgba(16, 185, 129, 0.2);
-  color: #34d399;
-}
-
-.tag-btn.active {
-  background: #10b981;
-  color: #fff;
+/* 搜索按钮与选中态同材质，避免一整块黑色压住磨砂面板 */
+.wallhaven-search-btn {
+  --n-color: var(--gs-chip-active-bg) !important;
+  --n-color-hover: var(--gs-chip-active-bg) !important;
+  --n-color-pressed: var(--gs-chip-hover-bg) !important;
+  --n-color-focus: var(--gs-chip-active-bg) !important;
+  --n-text-color: var(--gs-chip-active-text) !important;
+  --n-text-color-hover: var(--gs-chip-active-text) !important;
+  --n-text-color-pressed: var(--gs-chip-active-text) !important;
+  --n-text-color-focus: var(--gs-chip-active-text) !important;
+  --n-border: 1px solid var(--gs-chip-active-border) !important;
+  --n-border-hover: 1px solid var(--gs-chip-active-border) !important;
+  --n-border-pressed: 1px solid var(--gs-chip-active-border) !important;
+  --n-border-focus: 1px solid var(--gs-chip-active-border) !important;
+  font-weight: 600;
 }
 </style>
