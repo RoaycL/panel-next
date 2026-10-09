@@ -79,13 +79,17 @@ type SearchParams struct {
 type Endpoints struct {
 	Bing     string
 	Konachan string
-	Yandere  string
+	// KonachanMirror is konachan.net, Konachan's SFW-only mirror on the same API.
+	// Some server networks get a 403 from konachan.com but not from the mirror.
+	KonachanMirror string
+	Yandere        string
 }
 
 var DefaultEndpoints = Endpoints{
-	Bing:     "https://cn.bing.com",
-	Konachan: "https://konachan.com",
-	Yandere:  "https://yande.re",
+	Bing:           "https://cn.bing.com",
+	Konachan:       "https://konachan.com",
+	KonachanMirror: "https://konachan.net",
+	Yandere:        "https://yande.re",
 }
 
 type cacheEntry struct {
@@ -176,6 +180,10 @@ func (client *Client) Search(ctx context.Context, params SearchParams) (Result, 
 		result, err = client.searchBing(ctx)
 	case "konachan":
 		result, err = client.searchBooru(ctx, client.endpoints.Konachan, "Konachan", params)
+		var statusErr *upstreamStatusError
+		if errors.As(err, &statusErr) && statusErr.blocked() && client.endpoints.KonachanMirror != "" {
+			result, err = client.searchBooru(ctx, client.endpoints.KonachanMirror, "Konachan", params)
+		}
 	case "yandere":
 		result, err = client.searchBooru(ctx, client.endpoints.Yandere, "yande.re", params)
 	}
@@ -216,7 +224,24 @@ func (client *Client) get(ctx context.Context, source, fullURL string, headers m
 	if resp.StatusCode == http.StatusTooManyRequests {
 		return nil, ErrUpstreamRateLimit
 	}
-	return nil, fmt.Errorf("%s 返回异常状态 %d，请稍后重试", sourceLabels[source], resp.StatusCode)
+	return nil, &upstreamStatusError{source: source, code: resp.StatusCode}
+}
+
+type upstreamStatusError struct {
+	source string
+	code   int
+}
+
+// blocked reports a refusal (typically a CDN challenge against the server's IP) rather than a fault.
+func (e *upstreamStatusError) blocked() bool {
+	return e.code == http.StatusForbidden || e.code == http.StatusServiceUnavailable
+}
+
+func (e *upstreamStatusError) Error() string {
+	if e.blocked() {
+		return fmt.Sprintf("%s 拒绝了服务器的请求（HTTP %d），Panel Next 服务所在的网络可能被对方拦截，请换个壁纸源", sourceLabels[e.source], e.code)
+	}
+	return fmt.Sprintf("%s 返回异常状态 %d，请稍后重试", sourceLabels[e.source], e.code)
 }
 
 func decodeJSON(resp *http.Response, target any) error {

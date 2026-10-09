@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -93,5 +94,25 @@ func TestBooruTagsRatingsAndCount(t *testing.T) {
 	cached, err := client.Search(context.Background(), SearchParams{Source: "konachan"})
 	if err != nil || !cached.Cached || calls != 2 {
 		t.Fatalf("second identical search must hit the cache: calls=%d cached=%v", calls, cached.Cached)
+	}
+}
+
+func TestKonachanFallsBackToMirrorWhenBlocked(t *testing.T) {
+	blocked := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusForbidden) }))
+	defer blocked.Close()
+	mirror := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`<posts count="1"><post id="5" jpeg_url="https://konachan.net/image/5.jpg" width="1920" height="1080" rating="s"/></posts>`))
+	}))
+	defer mirror.Close()
+	client := NewClient(nil, Endpoints{Konachan: blocked.URL, KonachanMirror: mirror.URL}, time.Minute)
+	result, err := client.Search(context.Background(), SearchParams{Source: "konachan"})
+	if err != nil || len(result.Items) != 1 || result.Items[0].URL != mirror.URL+"/post/show/5" {
+		t.Fatalf("mirror fallback: %+v %v", result, err)
+	}
+
+	client = NewClient(nil, Endpoints{Yandere: blocked.URL}, time.Minute)
+	_, err = client.Search(context.Background(), SearchParams{Source: "yandere"})
+	if err == nil || !strings.Contains(err.Error(), "HTTP 403") || strings.Contains(err.Error(), "API Key") {
+		t.Fatalf("a blocked source must say so, not ask for a key: %v", err)
 	}
 }
