@@ -13,6 +13,8 @@ import {
 } from 'naive-ui'
 import { getList as getPrivateList } from '@/api/system/file'
 import { getList as getPublicList } from '@/api/system/publicFile'
+import { getImgbedList, getImgbedStatus } from '@/api/imgbed'
+import type { ImgbedListItem } from '@/api/imgbed'
 import { getWallhavenWallpapers   } from '@/api/wallhaven'
 import type {WallhavenItem, WallhavenSearchParams} from '@/api/wallhaven';
 import { SvgIcon } from '@/components/common'
@@ -124,7 +126,28 @@ const failedImages = ref(new Set<string>())
 onBeforeUnmount(() => { requestGeneration++; selectionGeneration++ })
 const loading = ref(false)
 const resultsRef = ref<HTMLElement | null>(null)
-const source = ref<'private' | 'public' | 'wallhaven' | 'favorites'>('private')
+const source = ref<'private' | 'public' | 'wallhaven' | 'favorites' | 'imgbed'>('private')
+
+// 外部图床：仅在服务端已配置图床（且当前账号是管理员）时显示这一栏
+const imgbedAvailable = ref(false)
+const imgbedList = ref<ImgbedListItem[]>([])
+const imgbedPage = ref(1)
+const imgbedTotal = ref(0)
+const IMGBED_PAGE_SIZE = 40
+const imgbedPageCount = computed(() => Math.max(1, Math.ceil(imgbedTotal.value / IMGBED_PAGE_SIZE)))
+const imgbedError = ref('')
+let imgbedStatusGeneration = 0
+async function refreshImgbedStatus() {
+  const generation = ++imgbedStatusGeneration
+  let available = false
+  if (auth.token) {
+    try { available = (await getImgbedStatus()).data?.available === true }
+    catch { available = false }
+  }
+  if (generation !== imgbedStatusGeneration) return
+  imgbedAvailable.value = available
+  if (!available && source.value === 'imgbed') source.value = 'private'
+}
 
 // 1. 本地/公共图库
 const imageList = ref<File.Info[]>([])
@@ -140,7 +163,7 @@ const sourceOptions = [
 // 2. Wallhaven 壁纸库
 const wallhavenList = ref<WallhavenItem[]>([])
 const wallhavenPage = ref(1)
-watch([source, wallhavenPage], () => { resultsRef.value?.scrollTo({ top: 0 }) }, { flush: 'post' })
+watch([source, wallhavenPage, imgbedPage], () => { resultsRef.value?.scrollTo({ top: 0 }) }, { flush: 'post' })
 const wallhavenTotalPages = ref(1)
 const wallhavenTotal = ref(0)
 const wallhavenQuery = ref('')
@@ -184,8 +207,33 @@ const quickTags = [
   { label: '🎭 Cosplay', q: 'cosplay', cat: '011' },
 ]
 
+async function fetchImgbed() {
+  const generation = ++requestGeneration
+  loading.value = true
+  imgbedList.value = []
+  imgbedError.value = ''
+  failedImages.value = new Set()
+  try {
+    const res = await getImgbedList(imgbedPage.value, IMGBED_PAGE_SIZE)
+    if (generation !== requestGeneration) return
+    if (res.code !== 0 || !res.data) { imgbedError.value = res.msg || '读取图床图片失败'; return }
+    imgbedList.value = res.data.items || []
+    imgbedTotal.value = res.data.total || 0
+  }
+  catch { if (generation === requestGeneration) imgbedError.value = '读取图床图片失败，请检查网络后重试' }
+  finally { if (generation === requestGeneration) loading.value = false }
+}
+function handleImgbedPageChange(page: number) {
+  imgbedPage.value = page
+  void fetchImgbed()
+}
+function imgbedTitle(item: ImgbedListItem) {
+  return item.name.split('/').pop() || item.name
+}
+
 async function fetchImages() {
   if (source.value === 'favorites') { requestGeneration++; loading.value = false; return }
+  if (source.value === 'imgbed') { await fetchImgbed(); return }
   if (source.value === 'wallhaven') { await fetchWallhaven(); return }
   const generation = ++requestGeneration
   const selectedSource = source.value
@@ -349,6 +397,7 @@ watch(source, () => {
     void fetchImages()
   }
 })
+watch(() => [auth.token, auth.userInfo?.id], () => { void refreshImgbedStatus() })
 watch(apiKeyStorageKey, () => {
   requestGeneration++
   selectionGeneration++
@@ -358,6 +407,7 @@ watch(apiKeyStorageKey, () => {
 })
 
 onMounted(() => {
+  void refreshImgbedStatus()
   if (source.value === 'wallhaven')
     void fetchWallhaven()
   else
@@ -382,6 +432,17 @@ onMounted(() => {
         >
           <SvgIcon icon="material-symbols:folder-shared-outline" class="text-sm" />
           <span>个人图库</span>
+        </button>
+
+        <button
+          v-if="imgbedAvailable"
+          type="button"
+          class="source-tab-btn"
+          :class="{ active: source === 'imgbed' }"
+          @click="source = 'imgbed'"
+        >
+          <SvgIcon icon="mdi:cloud-outline" class="text-sm" />
+          <span>外部图床</span>
         </button>
 
         <button
@@ -560,7 +621,33 @@ onMounted(() => {
               <SvgIcon icon="material-symbols:favorite" />
             </button>
             <div class="favorite-card-caption">
-              <span>{{ item.title }}</span><small>{{ item.source === 'wallhaven' ? 'Wallhaven' : item.source === 'public' ? '公共图库' : '个人图库' }}</small>
+              <span>{{ item.title }}</span><small>{{ item.source === 'wallhaven' ? 'Wallhaven' : item.source === 'public' ? '公共图库' : item.source === 'imgbed' ? '外部图床' : '个人图库' }}</small>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div v-else-if="source === 'imgbed'" class="flex-1">
+        <div v-if="imgbedError" class="favorites-empty">
+          <SvgIcon icon="mdi:cloud-outline" />
+          <strong>{{ imgbedError }}</strong>
+          <NButton secondary @click="fetchImgbed">
+            重试
+          </NButton>
+        </div>
+        <div v-else-if="!imgbedList.length" class="text-center text-slate-400 py-12">
+          图床里还没有图片
+        </div>
+        <div v-else class="gallery-local-grid">
+          <div v-for="item in imgbedList" :key="item.url" class="gallery-item-card favorite-card">
+            <button type="button" class="gallery-image-action" :aria-label="`使用图片：${imgbedTitle(item)}`" @click="handleSelect(item.url)">
+              <img v-if="!failedImages.has(item.url)" :src="item.url" :alt="imgbedTitle(item)" loading="lazy" class="gallery-thumbnail" @error="failedImages.add(item.url)">
+              <span v-else class="gallery-image-failure">预览加载失败，点击尝试原图</span>
+            </button>
+            <button v-if="isWallpaperPicker" type="button" class="favorite-button" :class="{ 'is-favorite': isFavorite(item.url) }" :aria-pressed="isFavorite(item.url)" :aria-label="`${isFavorite(item.url) ? '取消喜欢' : '喜欢'}：${imgbedTitle(item)}`" :title="isFavorite(item.url) ? '取消喜欢' : '加入我的喜欢'" :disabled="savingFavorite" @click.stop="toggleFavorite({ url: item.url, thumbnail: item.url, title: imgbedTitle(item), source: 'imgbed' })">
+              <SvgIcon :icon="isFavorite(item.url) ? 'material-symbols:favorite' : 'mdi:heart-outline'" />
+            </button>
+            <div class="favorite-card-caption">
+              <span>{{ imgbedTitle(item) }}</span><small>{{ item.name }}</small>
             </div>
           </div>
         </div>
@@ -647,6 +734,9 @@ onMounted(() => {
         size="small"
         @update-page="handlePageChange"
       />
+    </div>
+    <div v-if="source === 'imgbed' && imgbedPageCount > 1" class="gallery-pagination">
+      <NPagination :page="imgbedPage" :page-count="imgbedPageCount" :page-slot="5" size="small" @update-page="handleImgbedPageChange" />
     </div>
     <NModal v-if="previewItem" v-model:show="showPreview" :auto-focus="false">
       <div ref="previewDialog" class="wallhaven-preview" role="dialog" aria-modal="true" :aria-label="`壁纸预览：Wallhaven ${previewItem.id}`" tabindex="-1" @keydown="handlePreviewKeydown">

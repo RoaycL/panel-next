@@ -5,7 +5,7 @@ export interface FavoriteWallpaper {
   url: string
   thumbnail: string
   title: string
-  source: 'private' | 'public' | 'wallhaven'
+  source: 'private' | 'public' | 'wallhaven' | 'imgbed'
   savedAt: string
 }
 
@@ -38,7 +38,7 @@ export function readWallpaperFavorites(storage: StorageAdapter, key: string, ori
     return saved.filter((item): item is FavoriteWallpaper => {
       if (!item || !safeImageUrl(item.url) || !safeImageUrl(item.thumbnail)
         || typeof item.title !== 'string' || item.title.length > 160
-        || !['private', 'public', 'wallhaven'].includes(item.source)
+        || !['private', 'public', 'wallhaven', 'imgbed'].includes(item.source)
         || typeof item.savedAt !== 'string' || !Number.isFinite(Date.parse(item.savedAt))) return false
       const id = wallpaperIdentity(item.url, origin)
       if (seen.has(id)) return false

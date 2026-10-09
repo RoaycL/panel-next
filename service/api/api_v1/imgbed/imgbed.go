@@ -2,6 +2,7 @@ package imgbed
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -167,6 +168,51 @@ func (a *ImgbedApi) Upload(c *gin.Context) {
 		"imageUrl": results[0].PublicURL,
 		"userId":   userInfo.ID,
 	})
+}
+
+// Status 当前用户能否在图库中浏览外部图床（已配置且为管理员）
+func (a *ImgbedApi) Status(c *gin.Context) {
+	userInfo, _ := base.GetCurrentUserInfo(c)
+	apiReturn.SuccessData(c, gin.H{"available": userInfo.Role == 1 && readImgbedConfig().IsValid()})
+}
+
+type imgbedListRequest struct {
+	Page  int `form:"page"`
+	Limit int `form:"limit"`
+}
+
+// List 管理员分页浏览图床中的图片
+func (a *ImgbedApi) List(c *gin.Context) {
+	req := imgbedListRequest{}
+	if err := c.ShouldBindQuery(&req); err != nil {
+		apiReturn.ErrorParamFomat(c, err.Error())
+		return
+	}
+	if req.Page < 1 {
+		req.Page = 1
+	}
+	if req.Limit < 1 || req.Limit > 100 {
+		req.Limit = 40
+	}
+	cfg := readImgbedConfig()
+	if !cfg.IsValid() {
+		apiReturn.Error(c, "imgbed not configured")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 20*time.Second)
+	defer cancel()
+	result, err := defaultClient.List(ctx, cfg, (req.Page-1)*req.Limit, req.Limit)
+	if errors.Is(err, imgbed.ErrListForbidden) {
+		apiReturn.Error(c, "图床 Token 没有读取列表的权限，请在图床管理面板给 Token 勾选 list 权限")
+		return
+	}
+	if err != nil {
+		global.Logger.Errorln("imgbed list failed:", err)
+		apiReturn.Error(c, "读取图床图片失败，请稍后重试")
+		return
+	}
+	apiReturn.SuccessData(c, result)
 }
 
 func maskToken(token string) string {
