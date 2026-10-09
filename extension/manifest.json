@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Panel Next",
-  "version": "0.0.58",
-  "version_name": "0.0.58 测试版",
+  "version": "0.0.59",
+  "version_name": "0.0.59 测试版",
   "description": "A self-hosted new-tab dashboard backed by your Panel Next server.",
   "permissions": [
     "storage",
