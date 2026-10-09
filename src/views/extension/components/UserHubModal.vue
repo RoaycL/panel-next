@@ -186,6 +186,7 @@ interface HubNavItem {
   icon: string
 }
 const currentTab = ref<NavKey>('profile')
+const wallpaperBrowsing = ref(false)
 const contentBodyRef = ref<HTMLElement | null>(null)
 
 watch(currentTab, async () => {
@@ -210,11 +211,6 @@ async function onThemeSaved(selection: import('@/themes').ThemeSelection) {
     ms.error('主题保存失败，已恢复原设置')
     console.error('Failed to save extension theme selection.', error)
   }
-}
-
-function openWallpaperSettings() {
-  visible.value = false
-  emit('openWallpaper')
 }
 
 function openWidgetManager() {
@@ -419,7 +415,8 @@ async function handleLogout() {
 
 <template>
   <NModal
-    v-model:show="visible"
+    :show="visible && !wallpaperBrowsing"
+    :display-directive="wallpaperBrowsing ? 'show' : 'if'"
     to=".pn-theme-root"
     preset="card"
     :bordered="false"
@@ -428,6 +425,7 @@ async function handleLogout() {
     :auto-focus="true"
     class="user-hub-modal"
     content-style="padding: 0; height: 100%; display: flex;"
+    @update:show="visible = $event"
   >
     <div class="user-hub-container flex w-full h-full">
       <!-- 左侧边栏：品牌、账号身份、功能导航与登录状态。 -->
@@ -670,7 +668,7 @@ async function handleLogout() {
                 </button>
               </div>
             </section>
-            <WallpaperSettingsPanel @browse="openWallpaperSettings" />
+            <WallpaperSettingsPanel @browse="wallpaperBrowsing = $event" />
             <ThemeSettingsModal
               :show="themeCenterVisible"
               surface="extension"

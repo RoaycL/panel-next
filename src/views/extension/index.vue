@@ -69,7 +69,7 @@ import SvgSrcGoogle from '@/assets/search_engine_svg/google.svg'
 const UserHubModal = defineAsyncComponent(() => import('./components/UserHubModal.vue'))
 const EditItem = defineAsyncComponent(() => import('@/views/home/components/EditItem/index.vue'))
 const ItemGroupManage = defineAsyncComponent(() => import('@/components/apps/ItemGroupManage/index.vue'))
-const GallerySelector = defineAsyncComponent(() => import('@/components/common/GallerySelector/index.vue'))
+const WallpaperLibraryModal = defineAsyncComponent(() => import('@/components/common/WallpaperLibraryModal/index.vue'))
 const WidgetSettingsModal = defineAsyncComponent(() => import('@/widgets/WidgetSettingsModal.vue'))
 const IconGalleryModal = defineAsyncComponent(() => import('./components/IconGalleryModal.vue'))
 const ConflictResolverModal = defineAsyncComponent(() => import('@/components/common/ConflictResolverModal/index.vue'))
@@ -2688,18 +2688,10 @@ onUnmounted(() => {
     <WidgetSettingsModal v-model:show="extensionWidgetSettingsVisible" :instance="extensionWidgetSettingsInstance" @save="applyExtensionWidgetSettings" />
 
     <!-- 壁纸库 / Wallhaven 选择弹窗 -->
-    <NModal
+    <WallpaperLibraryModal
       v-model:show="showWallpaperModal"
-      preset="card"
-      title="高清壁纸库 (Wallhaven 4K / 图库)"
-      class="wallpaper-manager-modal extension-surface-modal"
-      style="width: min(960px, calc(100vw - 24px)); height: min(680px, calc(100vh - 24px)); border-radius: 20px;"
-      size="small"
-      role="dialog"
-      aria-modal="true"
-    >
-      <GallerySelector type="wallpaper" @select="handleWallpaperSelect" />
-    </NModal>
+      @select="handleWallpaperSelect"
+    />
 
     <!-- 离线冲突裁决弹窗 -->
     <ConflictResolverModal

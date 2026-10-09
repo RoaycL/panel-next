@@ -388,7 +388,8 @@ onMounted(() => {
 .material-results { min-width: 0; }
 .material-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 16px; }
 .material-grid .pn-app-card { overflow: hidden; border-radius: 16px; background: var(--pn-glass-panel); border-color: var(--pn-glass-border); }
-.material-image-preview { display: grid; place-items: center; height: 138px; padding: 16px; background: var(--pn-glass-control); }
+.material-grid .pn-app-card > :deep(.n-card-cover) { border-top-left-radius: inherit; border-top-right-radius: inherit; }
+.material-image-preview { display: grid; place-items: center; height: 138px; padding: 16px; border-top-left-radius: inherit; border-top-right-radius: inherit; background: var(--pn-glass-control); }
 .material-image-preview :deep(.n-image), .material-image-preview :deep(img) { max-width: 100%; max-height: 100%; }
 .material-type { display: block; margin-top: 6px; color: var(--pn-color-text-muted); font-size: 11px; }
 .wallpaper-manager .material-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }

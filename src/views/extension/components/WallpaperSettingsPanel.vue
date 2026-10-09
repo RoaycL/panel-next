@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { NButton, NInput, NModal, NRadioButton, NRadioGroup, NSlider, NSwitch, useMessage } from 'naive-ui'
+import { NButton, NInput, NRadioButton, NRadioGroup, NSlider, NSwitch, useMessage } from 'naive-ui'
 import { useTheme } from '@/themes/context'
 import { themeRegistry } from '@/themes/registry'
 import { resolveThemeWallpaper, withThemeWallpaper } from '@/themes/wallpaper'
@@ -12,12 +12,13 @@ import { getRuntime } from '@/runtime'
 import { saveAndSyncExtensionWallpaper } from '@/runtime/extensionWallpaper'
 import { enqueueAppearanceSave } from '@/themes/appearanceSaveQueue'
 import { set as setUserConfig } from '@/api/panel/userConfig'
-import GallerySelector from '@/components/common/GallerySelector/index.vue'
+import WallpaperLibraryModal from '@/components/common/WallpaperLibraryModal/index.vue'
 import { preloadWallpaper } from '@/runtime/wallpaperLoader'
 import { MAX_NIGHT_DIM, clampNightDim } from '@/themes/nightDim'
 
-defineEmits<{ (event: 'browse'): void }>()
+const emit = defineEmits<{ (event: 'browse', active: boolean): void }>()
 const showGallery = ref(false)
+watch(showGallery, active => emit('browse', active))
 const panel = usePanelState()
 const auth = useAuthStore()
 let selectionGeneration = 0
@@ -164,9 +165,7 @@ onBeforeUnmount(() => { selectionGeneration++; if (timer) void save() })
       <UploadFileManager mode="wallpaper" :wallpaper-url="selectedUrl" @select-wallpaper="selectWallpaper" />
     </section>
   </section>
-  <NModal v-if="showGallery" v-model:show="showGallery" to=".pn-theme-root" preset="card" title="选择壁纸" style="width: min(960px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow: auto;">
-    <GallerySelector type="wallpaper" @select="selectWallpaper" />
-  </NModal>
+  <WallpaperLibraryModal v-if="showGallery" v-model:show="showGallery" @select="selectWallpaper" />
 </template>
 
 <style scoped>
