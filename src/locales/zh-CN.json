@@ -576,7 +576,7 @@
     "startsAt": "{time} 上班",
     "today": "今天",
     "days": "{count}天",
-    "money": "{amount} ¥",
+    "money": "¥{amount}",
     "state": {
       "before": "还没上班",
       "working": "工作中",

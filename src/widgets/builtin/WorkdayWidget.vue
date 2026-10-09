@@ -80,7 +80,7 @@ const chips = computed(() => enabledExtras.value.flatMap((extra): { key: string;
       return festival ? [{ key: extra, label: festival.name, value: inDays(festival.days) }] : []
     }
     case 'income':
-      return [{ key: extra, label: t('workdayWidget.extras.earned'), value: t('workdayWidget.money', { amount: state.value.earned.toFixed(3) }) }]
+      return [{ key: extra, label: t('workdayWidget.extras.earned'), value: t('workdayWidget.money', { amount: state.value.earned.toFixed(2) }) }]
     default:
       return []
   }
@@ -207,13 +207,13 @@ const week = computed(() => {
 </template>
 
 <style scoped>
-.workday-card { --wd-muted: color-mix(in srgb, currentColor 66%, transparent); --wd-chip: color-mix(in srgb, currentColor 13%, transparent); position: relative; display: grid; grid-template: "main mood" minmax(0, 1fr) "chips chips" auto / minmax(0, 1fr) auto; gap: 8px 10px; width: 100%; height: 100%; min-height: 0; overflow: hidden; padding: 12px 16px; border: 1px solid var(--pn-widget-border, rgb(255 255 255 / 16%)); border-radius: var(--pn-radius-large, 16px); color: var(--pn-widget-text-color, white); background: linear-gradient(135deg, color-mix(in srgb, var(--pn-color-accent, #10b981) 10%, transparent), transparent 54%), var(--pn-widget-background, rgb(18 25 39 / 42%)); box-shadow: var(--pn-widget-shadow, 0 10px 30px rgb(0 0 0 / 14%)); backdrop-filter: blur(var(--pn-effect-blur, 14px)); }
+.workday-card { --wd-muted: color-mix(in srgb, currentColor 66%, transparent); --wd-chip: color-mix(in srgb, currentColor 13%, transparent); position: relative; display: grid; grid-template: "main mood" minmax(0, 1fr) "chips chips" auto / minmax(0, 1fr) auto; gap: 8px 10px; width: 100%; height: 100%; min-height: 0; overflow: hidden; padding: 12px 16px; border: 1px solid var(--pn-widget-border, rgb(255 255 255 / 16%)); border-radius: var(--pn-radius-large, 16px); color: var(--pn-widget-text-color, white); background: linear-gradient(135deg, color-mix(in srgb, var(--pn-color-accent, #10b981) 10%, transparent), transparent 54%), var(--pn-widget-background, rgb(18 25 39 / 42%)); box-shadow: var(--pn-widget-shadow, 0 10px 30px rgb(0 0 0 / 14%)); backdrop-filter: blur(var(--pn-effect-blur, 14px)); font-synthesis: none; }
 .workday-card.has-color { border-color: transparent; background: var(--wd-background); backdrop-filter: none; }
 .workday-card.has-image { border-color: transparent; color: white; background: linear-gradient(180deg, rgb(0 0 0 / 8%), rgb(0 0 0 / 42%)), var(--wd-image) center / cover no-repeat; backdrop-filter: none; text-shadow: 0 1px 3px rgb(0 0 0 / 35%); }
 .workday-main { grid-area: main; display: flex; flex: 1; min-width: 0; min-height: 0; flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px; }
 .workday-label { overflow: hidden; max-width: 100%; color: var(--wd-muted); font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .workday-main strong { max-width: 100%; font-variant-numeric: tabular-nums; font-size: clamp(22px, 11cqw, 40px); font-weight: 700; letter-spacing: -.02em; line-height: 1.1; white-space: nowrap; }
-.workday-main strong.workday-message { overflow: hidden; line-height: 1.25; text-overflow: ellipsis; }
+.workday-main strong.workday-message { overflow: hidden; line-height: 1.25; letter-spacing: normal; text-overflow: ellipsis; }
 .workday-caption { color: var(--wd-muted); font-size: 12px; }
 .workday-progress, .wd-progress { overflow: hidden; width: min(100%, 220px); height: 5px; margin-top: 4px; border-radius: 999px; background: var(--wd-chip); }
 .workday-progress i, .wd-progress i { display: block; height: 100%; border-radius: inherit; background: currentColor; opacity: .85; }
